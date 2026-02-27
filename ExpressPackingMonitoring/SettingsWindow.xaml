@@ -1,0 +1,104 @@
+﻿<Window x:Class="ExpressPackingMonitoring.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="系统参数设置" Height="600" Width="420"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="#F9F9F9">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" Margin="0,0,0,15" Padding="0,0,10,0">
+            <StackPanel>
+
+                <TextBlock Text="摄像头与画质" FontWeight="Bold" FontSize="14" Foreground="#0078D7" Margin="0,0,0,10"/>
+                <Grid Margin="0,0,0,5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="摄像头选择:" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="CameraComboBox" Grid.Column="1" SelectedValuePath="Index" DisplayMemberPath="Name" SelectedValue="{Binding CameraIndex}" Padding="3"/>
+                </Grid>
+                <Grid Margin="0,0,0,5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="录像分辨率:" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="ResComboBox" Grid.Column="1" DisplayMemberPath="Name" Padding="3" Cursor="Hand"/>
+                </Grid>
+                <Grid Margin="0,0,0,15">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="录制帧率 (FPS):" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="FpsComboBox" Grid.Column="1" SelectedItem="{Binding Fps}" Padding="3" Cursor="Hand"/>
+                </Grid>
+
+                <TextBlock Text="扫码特写设置 (中心自动缩放)" FontWeight="Bold" FontSize="14" Foreground="#0078D7" Margin="0,0,0,10"/>
+                <Grid Margin="0,0,0,15">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="特写放大倍数:" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="ZoomScaleComboBox" Grid.Column="1" SelectedItem="{Binding ZoomScale}" Padding="3" Cursor="Hand"/>
+                </Grid>
+
+                <TextBlock Text="业务录制参数" FontWeight="Bold" FontSize="14" Foreground="#0078D7" Margin="0,0,0,10"/>
+                <Grid Margin="0,0,0,5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="防呆正则(单号规则):" VerticalAlignment="Center"/>
+                    <TextBox Grid.Column="1" Text="{Binding OrderIdRegex}" Padding="3" ToolTip="例如 ^[A-Za-z0-9]{8,20}$ 表示只能是8-20位字母数字"/>
+                </Grid>
+                <Grid Margin="0,0,0,5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="视频存储路径:" VerticalAlignment="Center"/>
+                    <TextBox x:Name="PathTextBox" Grid.Column="1" Text="{Binding VideoStoragePath}" Padding="3" IsReadOnly="True" Background="#EEEEEE"/>
+                    <Button Grid.Column="2" Content="浏览..." Width="60" Margin="5,0,0,0" Click="BtnBrowsePath_Click" Cursor="Hand"/>
+                </Grid>
+                <Grid Margin="0,0,0,5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="扫码后延迟放大(ms):" VerticalAlignment="Center"/>
+                    <TextBox Grid.Column="1" Text="{Binding ZoomDelayMs}" Padding="3"/>
+                </Grid>
+                <Grid Margin="0,0,0,5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="特写保持时间(ms):" VerticalAlignment="Center"/>
+                    <TextBox Grid.Column="1" Text="{Binding ZoomDurationMs}" Padding="3"/>
+                </Grid>
+                <Grid Margin="0,0,0,15">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="最大磁盘占用(GB):" VerticalAlignment="Center"/>
+                    <TextBox Grid.Column="1" Text="{Binding MaxDiskSpaceGB}" Padding="3"/>
+                </Grid>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="取消" Width="80" Height="30" Margin="0,0,10,0" Click="BtnCancel_Click" Background="White"/>
+            <Button Content="保存并应用" Width="100" Height="30" Click="BtnSave_Click" Background="#0078D7" Foreground="White" FontWeight="Bold"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -1,0 +1,4 @@
+.vs/*
+ExpressPackingMonitoring/bin/*
+ExpressPackingMonitoring/obj/*
+ExpressPackingMonitoring/ExpressPackingMonitoring.csproj.user
