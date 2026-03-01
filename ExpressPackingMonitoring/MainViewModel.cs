@@ -20,6 +20,7 @@ using AForge.Video;
 using AForge.Video.DirectShow;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Speech.Synthesis;
 
 namespace ExpressPackingMonitoring.ViewModels
 {
@@ -66,6 +67,8 @@ namespace ExpressPackingMonitoring.ViewModels
         public double MotionDetectThreshold { get; set; } = 15.0;
         public string VideoStoragePath { get; set; } = "打包监控视频";
         public string OrderIdRegex { get; set; } = "^[a-zA-Z0-9]{6,30}$";
+        public bool EnableSoundPrompt { get; set; } = false;
+        public double TimeoutWarningSeconds { get; set; } = 10.0;
     }
 
     public class MainViewModel : ObservableObject, IDisposable
@@ -84,10 +87,13 @@ namespace ExpressPackingMonitoring.ViewModels
         private CancellationTokenSource _writeCts;
 
         private Mat _previousCheckFrame = new Mat();
-        private WriteableBitmap _videoFrame;
+        private BitmapSource _videoFrame;
         private CancellationTokenSource _cts;
         private Task _videoTask;
         private object _videoLock = new object();
+
+        private SpeechSynthesizer _speechSynth;
+        private readonly object _speechLock = new object();
 
         private string _currentMode = "发货";
         private string _currentOrderId = "";
@@ -106,6 +112,8 @@ namespace ExpressPackingMonitoring.ViewModels
         private bool _delayBeforeZooming = false;
 
         private ScanRecord _currentScanRecord;
+        private bool _autoStopWarned = false;
+        private bool _maxDurationWarned = false;
 
         private int _totalPieces;
         private TimeSpan _totalPackTime;
@@ -124,7 +132,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private ObservableCollection<ScanRecord> _allLogs = new ObservableCollection<ScanRecord>();
         public ObservableCollection<ScanRecord> FilteredLogs { get; } = new ObservableCollection<ScanRecord>();
 
-        public WriteableBitmap VideoFrame { get => _videoFrame; set => SetProperty(ref _videoFrame, value); }
+        public BitmapSource VideoFrame { get => _videoFrame; set => SetProperty(ref _videoFrame, value); }
         public string CurrentMode { get => _currentMode; set => SetProperty(ref _currentMode, value); }
         public string CurrentOrderId { get => _currentOrderId; set => SetProperty(ref _currentOrderId, value); }
         public bool IsRecording { get => _isRecording; set => SetProperty(ref _isRecording, value); }
@@ -142,7 +150,8 @@ namespace ExpressPackingMonitoring.ViewModels
         public MainViewModel()
         {
             LoadConfig();
-            LoadTodayStats(); // 【新增】：启动时加载今日统计数据
+            LoadTodayStats();
+            InitSpeechSynthesizer();
             ScanCommand = new RelayCommand<string>(HandleScan);
             OpenSettingsCommand = new RelayCommand(OpenSettings);
             OpenPlaybackCommand = new RelayCommand(OpenPlaybackWindow);
@@ -190,7 +199,7 @@ namespace ExpressPackingMonitoring.ViewModels
             catch { }
         }
 
-        private void ToggleMode() { CurrentMode = CurrentMode == "发货" ? "退货" : "发货"; ShowToast($"已切换为: {CurrentMode}"); }
+        private void ToggleMode() { CurrentMode = CurrentMode == "发货" ? "退货" : "发货"; ShowToast($"已切换为: {CurrentMode}"); Speak(CurrentMode == "发货" ? "切换发货" : "切换退货"); }
         private void ToggleRecording() { if (IsRecording) StopRecordingManual(); else StartRecordingManual(); }
 
         public void ShowToast(string message) { Application.Current.Dispatcher.InvokeAsync(async () => { _toastCts?.Cancel(); _toastCts = new CancellationTokenSource(); var token = _toastCts.Token; ToastMessage = message; IsToastVisible = true; try { await Task.Delay(2500, token); } catch (OperationCanceledException) { return; } IsToastVisible = false; }); }
@@ -203,6 +212,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
         public void OpenSettings()
         {
+            if (IsRecording) { ShowToast("录制中，请先停止录像再修改设置"); Speak("请先停止录像"); return; }
             try
             {
                 var clonedConfig = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(Config)) ?? new AppConfig();
@@ -230,7 +240,7 @@ namespace ExpressPackingMonitoring.ViewModels
             StartRecordingProcess();
         }
 
-        private void StopRecordingManual() { if (!IsRecording) return; StopRecording(); CurrentOrderId = ""; ScanInputText = ""; ShowToast("已手动停止录制"); }
+        private void StopRecordingManual() { if (!IsRecording) return; StopRecording(); CurrentOrderId = ""; ScanInputText = ""; ShowToast("已手动停止录制"); Speak("停止录制"); }
 
         private void OpenPlaybackWindow()
         {
@@ -258,7 +268,22 @@ namespace ExpressPackingMonitoring.ViewModels
             catch { ShowToast("摄像头启动失败"); }
         }
 
-        private void StopCamera() { if (_videoSource != null) { if (_videoSource.IsRunning) { _videoSource.SignalToStop(); _videoSource.WaitForStop(); } _videoSource.NewFrame -= VideoSource_NewFrame; _videoSource = null; } lock (_frameLock) { _latestFrame?.Dispose(); _latestFrame = null; } }
+        private void StopCamera()
+        {
+            if (_videoSource != null)
+            {
+                _videoSource.NewFrame -= VideoSource_NewFrame;
+                if (_videoSource.IsRunning)
+                {
+                    _videoSource.SignalToStop();
+                    // AForge WaitForStop can hang indefinitely — use a timeout
+                    for (int i = 0; i < 50 && _videoSource.IsRunning; i++)
+                        Thread.Sleep(100);
+                }
+                _videoSource = null;
+            }
+            lock (_frameLock) { _latestFrame?.Dispose(); _latestFrame = null; }
+        }
         private void VideoSource_NewFrame(object sender, NewFrameEventArgs eventArgs) { try { Mat newMat = BitmapToMat(eventArgs.Frame); lock (_frameLock) { _latestFrame?.Dispose(); _latestFrame = newMat; } } catch { } }
 
         private Mat BitmapToMat(Bitmap bitmap)
@@ -275,63 +300,104 @@ namespace ExpressPackingMonitoring.ViewModels
             double frameDurationMs = 1000.0 / (Config.Fps > 0 ? Config.Fps : 15);
             int frameTickCounter = 0;
 
-            while (!token.IsCancellationRequested)
+            try
             {
-                DateTime startTime = DateTime.Now; Mat currentFrame = null;
-                lock (_frameLock) { if (_latestFrame != null && !_latestFrame.IsDisposed) currentFrame = _latestFrame.Clone(); }
-
-                if (currentFrame != null && !currentFrame.Empty())
+                while (!token.IsCancellationRequested)
                 {
-                    if (Config.FrameWidth != currentFrame.Width || Config.FrameHeight != currentFrame.Height) { Config.FrameWidth = currentFrame.Width; Config.FrameHeight = currentFrame.Height; }
-                    Mat processedFrame = currentFrame;
+                    DateTime startTime = DateTime.Now; Mat currentFrame = null;
+                    lock (_frameLock) { if (_latestFrame != null && !_latestFrame.IsDisposed) currentFrame = _latestFrame.Clone(); }
 
-                    if (_isScanning && Config.EnableSmartZoom)
+                    if (currentFrame != null && !currentFrame.Empty())
                     {
-                        if (_delayBeforeZooming && (DateTime.Now - _lastScanTime).TotalMilliseconds >= Config.ZoomDelaySeconds * 1000.0) { _delayBeforeZooming = false; _isZooming = true; _zoomStartTime = DateTime.Now; }
-                        if (_isZooming)
+                        if (Config.FrameWidth != currentFrame.Width || Config.FrameHeight != currentFrame.Height) { Config.FrameWidth = currentFrame.Width; Config.FrameHeight = currentFrame.Height; }
+                        Mat processedFrame = currentFrame;
+
+                        if (_isScanning && Config.EnableSmartZoom)
                         {
-                            int zoomW = (int)(currentFrame.Width / Config.ZoomScale), zoomH = (int)(currentFrame.Height / Config.ZoomScale);
-                            if (zoomW <= 0 || zoomW > currentFrame.Width) zoomW = currentFrame.Width; if (zoomH <= 0 || zoomH > currentFrame.Height) zoomH = currentFrame.Height;
-                            OpenCvSharp.Rect zoomRect = new OpenCvSharp.Rect((currentFrame.Width - zoomW) / 2, (currentFrame.Height - zoomH) / 2, zoomW, zoomH).Intersect(new OpenCvSharp.Rect(0, 0, currentFrame.Width, currentFrame.Height));
-                            if (zoomRect.Width > 0 && zoomRect.Height > 0) { processedFrame = currentFrame.Clone(zoomRect); Cv2.Resize(processedFrame, processedFrame, new OpenCvSharp.Size(Config.FrameWidth, Config.FrameHeight)); }
-                            if ((DateTime.Now - _zoomStartTime).TotalMilliseconds >= Config.ZoomDurationSeconds * 1000.0) { _isZooming = false; _isScanning = false; processedFrame = currentFrame; }
-                        }
-                    }
-                    else if (_isScanning) { _isScanning = false; }
-
-                    if (IsRecording && _videoWriteQueue != null && !_videoWriteQueue.IsAddingCompleted) { _videoWriteQueue.Add(processedFrame.Clone()); }
-
-                    Application.Current.Dispatcher.Invoke(() => { VideoFrame = processedFrame.ToWriteableBitmap(); });
-                    if (frameTickCounter % 30 == 0) PerformMotionDetection(currentFrame);
-                    if (processedFrame != currentFrame) processedFrame.Dispose(); currentFrame.Dispose();
-                }
-
-                if (IsRecording)
-                {
-                    double elapsedSec = (DateTime.Now - _recordStartTime).TotalSeconds;
-
-                    if (frameTickCounter % 15 == 0 && _currentScanRecord != null)
-                    {
-                        _ = Application.Current.Dispatcher.InvokeAsync(() => {
-                            if (_currentScanRecord != null)
+                            if (_delayBeforeZooming && (DateTime.Now - _lastScanTime).TotalMilliseconds >= Config.ZoomDelaySeconds * 1000.0) { _delayBeforeZooming = false; _isZooming = true; _zoomStartTime = DateTime.Now; }
+                            if (_isZooming)
                             {
-                                int maxSec = (int)(Config.MaxDurationMinutes * 60);
-                                _currentScanRecord.Duration = Config.EnableMaxDuration ? $"{(int)elapsedSec}s / {maxSec}s" : $"{(int)elapsedSec}s";
+                                int zoomW = (int)(currentFrame.Width / Config.ZoomScale), zoomH = (int)(currentFrame.Height / Config.ZoomScale);
+                                if (zoomW <= 0 || zoomW > currentFrame.Width) zoomW = currentFrame.Width; if (zoomH <= 0 || zoomH > currentFrame.Height) zoomH = currentFrame.Height;
+                                OpenCvSharp.Rect zoomRect = new OpenCvSharp.Rect((currentFrame.Width - zoomW) / 2, (currentFrame.Height - zoomH) / 2, zoomW, zoomH).Intersect(new OpenCvSharp.Rect(0, 0, currentFrame.Width, currentFrame.Height));
+                                if (zoomRect.Width > 0 && zoomRect.Height > 0) { processedFrame = currentFrame.Clone(zoomRect); Cv2.Resize(processedFrame, processedFrame, new OpenCvSharp.Size(Config.FrameWidth, Config.FrameHeight)); }
+                                if ((DateTime.Now - _zoomStartTime).TotalMilliseconds >= Config.ZoomDurationSeconds * 1000.0) { _isZooming = false; _isScanning = false; processedFrame = currentFrame; }
                             }
-                        });
+                        }
+                        else if (_isScanning) { _isScanning = false; }
+
+                        if (IsRecording && _videoWriteQueue != null && !_videoWriteQueue.IsAddingCompleted) { _videoWriteQueue.Add(processedFrame.Clone()); }
+
+                        var bitmap = processedFrame.ToWriteableBitmap();
+                        bitmap.Freeze();
+                        _ = Application.Current.Dispatcher.BeginInvoke(() => { VideoFrame = bitmap; });
+                        if (frameTickCounter % 30 == 0) PerformMotionDetection(currentFrame);
+                        if (processedFrame != currentFrame) processedFrame.Dispose(); currentFrame.Dispose();
                     }
 
-                    if (Config.EnableAutoStop && (DateTime.Now - _lastMotionTime).TotalSeconds >= Config.AutoStopMinutes * 60.0)
-                    { _ = Application.Current.Dispatcher.InvokeAsync(() => { StopRecording(); ShowToast("画面静止超时，自动停录"); CurrentOrderId = ""; ScanInputText = ""; }); }
+                    if (IsRecording)
+                    {
+                        double elapsedSec = (DateTime.Now - _recordStartTime).TotalSeconds;
+                        double motionIdleSec = (DateTime.Now - _lastMotionTime).TotalSeconds;
+                        double warnSec = Config.TimeoutWarningSeconds;
 
-                    if (Config.EnableMaxDuration && elapsedSec >= Config.MaxDurationMinutes * 60.0)
-                    { _ = Application.Current.Dispatcher.InvokeAsync(() => { StopRecording(); ShowToast("⏳ 已达最大录像限制时长"); CurrentOrderId = ""; ScanInputText = ""; }); }
+                        // 录制前 5 秒为采集期，跳过超时与预警检测
+                        bool inGracePeriod = elapsedSec < 5.0;
+
+                        double autoStopTotalSec = Config.AutoStopMinutes * 60.0;
+                        double maxDurTotalSec = Config.MaxDurationMinutes * 60.0;
+
+                        if (!inGracePeriod)
+                        {
+                            // 有活跃运动时重置预警标记（滞后重置，防止反复播报）
+                            if (_autoStopWarned && motionIdleSec < warnSec)
+                            {
+                                _autoStopWarned = false;
+                                Speak("检测到画面运动，重置超时");
+                            }
+
+                            // 即将超时语音提示（确保预警阈值合理：超时总时长 + 5s）
+                            if (!_autoStopWarned && Config.EnableAutoStop
+                                && autoStopTotalSec > warnSec + 5
+                                && motionIdleSec >= autoStopTotalSec - warnSec)
+                            {
+                                _autoStopWarned = true;
+                                Speak("画面即将静止超时");
+                            }
+                            if (!_maxDurationWarned && Config.EnableMaxDuration
+                                && maxDurTotalSec > warnSec * 2
+                                && elapsedSec >= maxDurTotalSec - warnSec)
+                            {
+                                _maxDurationWarned = true;
+                                Speak("录制即将达到最大时长");
+                            }
+                        }
+
+                        if (frameTickCounter % 15 == 0 && _currentScanRecord != null)
+                        {
+                            _ = Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                if (_currentScanRecord != null)
+                                {
+                                    int maxSec = (int)(Config.MaxDurationMinutes * 60);
+                                    _currentScanRecord.Duration = Config.EnableMaxDuration ? $"{(int)elapsedSec}s / {maxSec}s" : $"{(int)elapsedSec}s";
+                                }
+                            });
+                        }
+
+                        if (!inGracePeriod && Config.EnableAutoStop && (DateTime.Now - _lastMotionTime).TotalSeconds >= Config.AutoStopMinutes * 60.0)
+                        { _ = Application.Current.Dispatcher.InvokeAsync(() => { StopRecording(); ShowToast("画面静止超时，自动停录"); Speak("静止超时，停止录制"); CurrentOrderId = ""; ScanInputText = ""; }); }
+
+                        if (!inGracePeriod && Config.EnableMaxDuration && elapsedSec >= Config.MaxDurationMinutes * 60.0)
+                        { _ = Application.Current.Dispatcher.InvokeAsync(() => { StopRecording(); ShowToast("⏳ 已达最大录像限制时长"); Speak("时长超时，停止录制"); CurrentOrderId = ""; ScanInputText = ""; }); }
+                    }
+
+                    frameTickCounter++;
+                    int sleepMs = (int)Math.Max(0, frameDurationMs - (DateTime.Now - startTime).TotalMilliseconds);
+                    if (sleepMs > 0) await Task.Delay(sleepMs, token);
                 }
-
-                frameTickCounter++;
-                int sleepMs = (int)Math.Max(0, frameDurationMs - (DateTime.Now - startTime).TotalMilliseconds);
-                if (sleepMs > 0) await Task.Delay(sleepMs, token);
             }
+            catch (OperationCanceledException) { }
         }
 
         private void PerformMotionDetection(Mat currentFrame)
@@ -340,8 +406,12 @@ namespace ExpressPackingMonitoring.ViewModels
             using var cGray = currentFrame.Resize(new OpenCvSharp.Size(320, 240)).CvtColor(ColorConversionCodes.BGR2GRAY);
             using var pGray = _previousCheckFrame.Resize(new OpenCvSharp.Size(320, 240)).CvtColor(ColorConversionCodes.BGR2GRAY);
             using var diff = new Mat(); using var thresh = new Mat();
-            Cv2.Absdiff(cGray, pGray, diff); Cv2.Threshold(diff, thresh, 10.0, 255, ThresholdTypes.Binary);
-            if (((double)Cv2.CountNonZero(thresh) / (thresh.Width * thresh.Height)) > 0.001) _lastMotionTime = DateTime.Now;
+            Cv2.Absdiff(cGray, pGray, diff); Cv2.Threshold(diff, thresh, Config.MotionDetectThreshold, 255, ThresholdTypes.Binary);
+            double changeRatio = (double)Cv2.CountNonZero(thresh) / (thresh.Width * thresh.Height);
+            if (changeRatio > 0.01)
+            {
+                _lastMotionTime = DateTime.Now;
+            }
             currentFrame.CopyTo(_previousCheckFrame);
         }
 
@@ -351,8 +421,8 @@ namespace ExpressPackingMonitoring.ViewModels
             string upperResult = scanResult.ToUpper().Trim();
 
             if (upperResult.Contains("CMD_CLEAR") || upperResult.Contains("清除")) { ScanInputText = ""; ShowToast("🧹 扫码框已清除"); return; }
-            if (upperResult.Contains("MODE_FAHUO") || upperResult.Contains("发货")) { CurrentMode = "发货"; ScanInputText = ""; ShowToast("切换为发货模式"); return; }
-            if (upperResult.Contains("MODE_TUIHUO") || upperResult.Contains("退货")) { CurrentMode = "退货"; ScanInputText = ""; ShowToast("切换为退货模式"); return; }
+            if (upperResult.Contains("MODE_FAHUO") || upperResult.Contains("发货")) { CurrentMode = "发货"; ScanInputText = ""; ShowToast("切换为发货模式"); Speak("切换发货"); return; }
+            if (upperResult.Contains("MODE_TUIHUO") || upperResult.Contains("退货")) { CurrentMode = "退货"; ScanInputText = ""; ShowToast("切换为退货模式"); Speak("切换退货"); return; }
             if (upperResult.Contains("CMD_START") || upperResult.Contains("开始录制")) { ToggleRecording(); return; }
             if (upperResult.Contains("CMD_STOP") || upperResult.Contains("停止录制")) { StopRecordingManual(); return; }
 
@@ -367,6 +437,11 @@ namespace ExpressPackingMonitoring.ViewModels
             if (IsRecording) StopRecording();
             IsRecording = true; _lastMotionTime = DateTime.Now; _lastScanTime = DateTime.Now; _recordStartTime = DateTime.Now;
             _isScanning = true; _delayBeforeZooming = true; _isZooming = false;
+            _autoStopWarned = false;
+            _maxDurationWarned = false;
+            // 重置参考帧，避免旧帧与新帧比较产生假运动
+            _previousCheckFrame?.Dispose();
+            _previousCheckFrame = new Mat();
             ScanInputText = "";
 
             string baseFolder = Path.IsPathRooted(Config.VideoStoragePath) ? Config.VideoStoragePath : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Config.VideoStoragePath);
@@ -392,6 +467,7 @@ namespace ExpressPackingMonitoring.ViewModels
             }
 
             ShowToast("▶ 开始录像");
+            Speak("开始录制");
             // 【需求2】：设置 IsActive 为 true，触发红色高亮
             _currentScanRecord = new ScanRecord(CurrentOrderId, "0s", DateTime.Now.ToString("HH:mm:ss"), CurrentMode, true);
             AddRecord(_currentScanRecord);
@@ -423,6 +499,7 @@ namespace ExpressPackingMonitoring.ViewModels
         {
             if (!IsRecording) return;
             IsRecording = false; _isScanning = false; _delayBeforeZooming = false; _isZooming = false;
+            _autoStopWarned = false; _maxDurationWarned = false;
 
             lock (_videoLock)
             {
@@ -455,32 +532,86 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private void ForceCheckDiskAndCleanup()
         {
-            Task.Run(() => {
+            Task.Run(() =>
+            {
                 try
                 {
                     string folderPath = Path.IsPathRooted(Config.VideoStoragePath) ? Config.VideoStoragePath : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Config.VideoStoragePath);
                     if (Directory.Exists(folderPath))
                     {
                         var dirInfo = new DirectoryInfo(folderPath);
-                        long currentSizeBytes = dirInfo.GetFiles("*.mp4", SearchOption.AllDirectories).Sum(fi => fi.Length);
+                        // 使用 EnumerateFiles 懒加载，避免一次性加载 50k+ 文件元数据到内存
+                        long currentSizeBytes = 0;
+                        foreach (var fi in dirInfo.EnumerateFiles("*.mp4", SearchOption.AllDirectories))
+                            currentSizeBytes += fi.Length;
+
                         long maxSizeBytes = (long)(Config.MaxDiskSpaceGB * 1024 * 1024 * 1024);
                         if (currentSizeBytes > maxSizeBytes)
                         {
-                            var oldestFiles = dirInfo.GetFiles("*.mp4", SearchOption.AllDirectories).OrderBy(fi => fi.LastWriteTime).ToList();
                             long bytesToDelete = currentSizeBytes - (long)(maxSizeBytes * 0.9);
                             long deletedBytes = 0;
-                            foreach (var file in oldestFiles) { try { long len = file.Length; file.Delete(); deletedBytes += len; if (deletedBytes >= bytesToDelete) break; } catch { } }
-                            currentSizeBytes = dirInfo.GetFiles("*.mp4", SearchOption.AllDirectories).Sum(fi => fi.Length);
+                            // 流式枚举 + 排序，只取需要删除的部分
+                            foreach (var file in dirInfo.EnumerateFiles("*.mp4", SearchOption.AllDirectories).OrderBy(fi => fi.LastWriteTime))
+                            {
+                                try { long len = file.Length; file.Delete(); deletedBytes += len; currentSizeBytes -= len; if (deletedBytes >= bytesToDelete) break; } catch { }
+                            }
                         }
                         double currentGB = currentSizeBytes / (1024.0 * 1024.0 * 1024.0);
                         double maxGB = Config.MaxDiskSpaceGB > 0 ? Config.MaxDiskSpaceGB : 1.0;
-                        Application.Current.Dispatcher.InvokeAsync(() => { DiskUsagePercent = Math.Min(100.0, (currentGB / maxGB) * 100.0); DiskUsageText = $"{currentGB:F1} / {maxGB:F1} GB"; });
+                        _ = Application.Current.Dispatcher.InvokeAsync(() => { DiskUsagePercent = Math.Min(100.0, (currentGB / maxGB) * 100.0); DiskUsageText = $"{currentGB:F1} / {maxGB:F1} GB"; });
                     }
                 }
                 catch { }
             });
         }
         private async Task CheckDiskAndCleanup() { while (!_cts.Token.IsCancellationRequested) { ForceCheckDiskAndCleanup(); await Task.Delay(20000, _cts.Token); } }
-        public void Dispose() { StopRecording(); _cts?.Cancel(); StopCamera(); try { _videoTask?.Wait(); } catch { } _cts?.Dispose(); lock (_videoLock) { _writer?.Dispose(); _previousCheckFrame?.Dispose(); } }
+        public void Dispose()
+        {
+            _cts?.Cancel();
+            StopRecording();
+            StopCamera();
+            try { _videoTask?.Wait(3000); } catch { }
+            _cts?.Dispose();
+            lock (_videoLock) { _writer?.Dispose(); _previousCheckFrame?.Dispose(); }
+            lock (_speechLock) { _speechSynth?.Dispose(); _speechSynth = null; }
+        }
+
+        private void InitSpeechSynthesizer()
+        {
+            try
+            {
+                _speechSynth = new SpeechSynthesizer();
+                _speechSynth.SetOutputToDefaultAudioDevice();
+                // 尝试使用中文语音
+                foreach (var voice in _speechSynth.GetInstalledVoices())
+                {
+                    if (voice.VoiceInfo.Culture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _speechSynth.SelectVoice(voice.VoiceInfo.Name);
+                        break;
+                    }
+                }
+                _speechSynth.Rate = 2; // 语速稍快
+                _speechSynth.Volume = 100;
+            }
+            catch { _speechSynth = null; }
+        }
+
+        private void Speak(string text)
+        {
+            if (!Config.EnableSoundPrompt) return;
+            Task.Run(() =>
+            {
+                lock (_speechLock)
+                {
+                    try
+                    {
+                        _speechSynth?.SpeakAsyncCancelAll();
+                        _speechSynth?.SpeakAsync(text);
+                    }
+                    catch { }
+                }
+            });
+        }
     }
 }
