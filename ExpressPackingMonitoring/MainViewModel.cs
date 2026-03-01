@@ -701,6 +701,30 @@ namespace ExpressPackingMonitoring.ViewModels
                     }
 
                     long maxSizeBytes = (long)(Config.MaxDiskSpaceGB * 1024 * 1024 * 1024);
+
+                    // 检查视频存储所在磁盘的实际剩余空间，取配额和磁盘剩余中较小者
+                    try
+                    {
+                        string storagePath = Path.IsPathRooted(Config.VideoStoragePath) ? Config.VideoStoragePath : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Config.VideoStoragePath);
+                        string rootDrive = Path.GetPathRoot(Path.GetFullPath(storagePath)) ?? "";
+                        if (!string.IsNullOrEmpty(rootDrive))
+                        {
+                            var driveInfo = new DriveInfo(rootDrive);
+                            if (driveInfo.IsReady)
+                            {
+                                // 磁盘可用于视频的总容量 = 当前已用 + 磁盘剩余可用空间
+                                long diskAvailableForVideos = currentSizeBytes + driveInfo.AvailableFreeSpace;
+                                // 保留空间 = min(2GB, 磁盘总容量的5%)，最少500MB
+                                long reserveBytes = Math.Min(2L * 1024 * 1024 * 1024, (long)(driveInfo.TotalSize * 0.05));
+                                reserveBytes = Math.Max(reserveBytes, 500L * 1024 * 1024);
+                                long diskLimit = diskAvailableForVideos - reserveBytes;
+                                if (diskLimit < maxSizeBytes)
+                                    maxSizeBytes = Math.Max(diskLimit, 0);
+                            }
+                        }
+                    }
+                    catch { }
+
                     if (currentSizeBytes > maxSizeBytes)
                     {
                         long bytesToDelete = currentSizeBytes - (long)(maxSizeBytes * 0.9);
@@ -767,8 +791,11 @@ namespace ExpressPackingMonitoring.ViewModels
                     }
 
                     double currentGB = currentSizeBytes / (1024.0 * 1024.0 * 1024.0);
-                    double maxGB = Config.MaxDiskSpaceGB > 0 ? Config.MaxDiskSpaceGB : 1.0;
-                    _ = Application.Current.Dispatcher.InvokeAsync(() => { DiskUsagePercent = Math.Min(100.0, (currentGB / maxGB) * 100.0); DiskUsageText = $"{currentGB:F1} / {maxGB:F1} GB"; });
+                    double effectiveMaxGB = maxSizeBytes / (1024.0 * 1024.0 * 1024.0);
+                    if (effectiveMaxGB < 0.1) effectiveMaxGB = 0.1;
+                    double configMaxGB = Config.MaxDiskSpaceGB > 0 ? Config.MaxDiskSpaceGB : 1.0;
+                    string limitNote = effectiveMaxGB < configMaxGB - 0.1 ? $" (磁盘仅剩{effectiveMaxGB:F1}GB可用)" : "";
+                    _ = Application.Current.Dispatcher.InvokeAsync(() => { DiskUsagePercent = Math.Min(100.0, (currentGB / effectiveMaxGB) * 100.0); DiskUsageText = $"{currentGB:F1} / {effectiveMaxGB:F1} GB{limitNote}"; });
                 }
                 catch { }
             });
