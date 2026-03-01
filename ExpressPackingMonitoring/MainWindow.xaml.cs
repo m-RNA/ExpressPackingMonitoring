@@ -13,9 +13,17 @@ namespace ExpressPackingMonitoring
             Loaded += (s, e) => {
                 ScanInputTextBox.Focus();
 
-                // 【需求4修复】：抓取编译时间并显示在标题
-                var buildTime = System.IO.File.GetLastWriteTime(System.Reflection.Assembly.GetExecutingAssembly().Location);
-                this.Title = $"📦 极简打包监控终端 v6.2 (编译于: {buildTime:yyyy-MM-dd HH:mm})";
+                // 【单文件打包兼容修复】：改用 AppContext.BaseDirectory 或 Process.GetCurrentProcess().MainModule.FileName 取代 Assembly.GetExecutingAssembly().Location
+                try
+                {
+                    string processObjPath = System.Diagnostics.Process.GetCurrentProcess()?.MainModule?.FileName ?? AppContext.BaseDirectory;
+                    var buildTime = System.IO.File.GetLastWriteTime(processObjPath);
+                    this.Title = $"📦 极简打包监控终端 v6.2 (编译于: {buildTime:yyyy-MM-dd HH:mm})";
+                }
+                catch
+                {
+                    this.Title = "📦 极简打包监控终端 v6.2";
+                }
             };
         }
 

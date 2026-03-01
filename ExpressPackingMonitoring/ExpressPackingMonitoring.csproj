@@ -7,6 +7,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <NoWarn>$(NoWarn);NU1701</NoWarn>
+    
+    <!-- 单文件打包相关配置 -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <!-- 对于包含原生库的项目，设为 false 可以将 C++ dll 解压，以防止DllNotFoundException -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract> 
   </PropertyGroup>
 
   <ItemGroup>

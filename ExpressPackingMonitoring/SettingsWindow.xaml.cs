@@ -73,7 +73,7 @@ namespace ExpressPackingMonitoring
                 InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyComputer)
             };
 
-            // 【需求3修复】：加上 this，强行把弹窗绑定在设置界面正上方，绝对不会跑到后台导致假死！
+            // 加上 this，强行把弹窗绑定在设置界面正上方，绝对不会跑到后台导致假死！
             if (dialog.ShowDialog(this) == true)
             {
                 Config.VideoStoragePath = dialog.FolderName;
