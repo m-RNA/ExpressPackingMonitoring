@@ -1,4 +1,5 @@
 ﻿#nullable disable
+using System;
 using System.Windows;
 using System.Collections.Generic;
 using ExpressPackingMonitoring.ViewModels;
@@ -11,10 +12,20 @@ namespace ExpressPackingMonitoring
 
     public partial class SettingsWindow : Window
     {
-        public SettingsWindow(AppConfig clonedConfig)
+        public AppConfig Config { get; set; }
+        public double CurrentDiskUsagePercent { get; set; }
+        public string CurrentDiskUsageText { get; set; }
+
+        public SettingsWindow(AppConfig clonedConfig, double diskUsagePercent, string diskUsageText)
         {
             InitializeComponent();
-            this.DataContext = clonedConfig;
+            Config = clonedConfig;
+
+            CurrentDiskUsagePercent = diskUsagePercent;
+            CurrentDiskUsageText = diskUsageText;
+
+            this.DataContext = this;
+
             LoadCameras();
             LoadPresets(clonedConfig);
         }
@@ -27,7 +38,6 @@ namespace ExpressPackingMonitoring
                 new ResOption { Name = "4K (3840x2160) - 极清画质", Width = 3840, Height = 2160 }
             };
             ResComboBox.ItemsSource = resOptions;
-
             foreach (var item in resOptions)
             {
                 if (item.Width == config.FrameWidth && item.Height == config.FrameHeight)
@@ -37,12 +47,8 @@ namespace ExpressPackingMonitoring
             }
             if (ResComboBox.SelectedItem == null) ResComboBox.SelectedIndex = 0;
 
-            FpsComboBox.ItemsSource = new List<int> { 12, 15, 24, 25, 30, 60 };
-
-            // 【新增】：放大倍数预设
             ZoomScaleComboBox.ItemsSource = new List<double> { 1.2, 1.5, 2.0, 2.5, 3.0, 4.0 };
-            if (!ZoomScaleComboBox.Items.Contains(config.ZoomScale))
-                config.ZoomScale = 2.0;
+            if (!ZoomScaleComboBox.Items.Contains(config.ZoomScale)) config.ZoomScale = 1.5;
         }
 
         private void LoadCameras()
@@ -51,17 +57,10 @@ namespace ExpressPackingMonitoring
             try
             {
                 var videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
-                for (int i = 0; i < videoDevices.Count; i++)
-                {
-                    cameraList.Add(new CameraInfo { Index = i, Name = $"[{i}] {videoDevices[i].Name}" });
-                }
+                for (int i = 0; i < videoDevices.Count; i++) { cameraList.Add(new CameraInfo { Index = i, Name = $"[{i}] {videoDevices[i].Name}" }); }
             }
             catch { }
-
-            if (cameraList.Count == 0)
-            {
-                cameraList.Add(new CameraInfo { Index = 0, Name = "[0] 未检测到摄像头" });
-            }
+            if (cameraList.Count == 0) { cameraList.Add(new CameraInfo { Index = 0, Name = "[0] 未检测到摄像头" }); }
             CameraComboBox.ItemsSource = cameraList;
         }
 
@@ -69,32 +68,25 @@ namespace ExpressPackingMonitoring
         {
             var dialog = new Microsoft.Win32.OpenFolderDialog
             {
-                Title = "请选择视频保存的文件夹"
+                Title = "请选择视频保存的文件夹",
+                // 指向我的电脑，避免网络驱动器引发卡顿
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyComputer)
             };
-            if (dialog.ShowDialog() == true)
+
+            // 【需求3修复】：加上 this，强行把弹窗绑定在设置界面正上方，绝对不会跑到后台导致假死！
+            if (dialog.ShowDialog(this) == true)
             {
-                var config = (AppConfig)this.DataContext;
-                config.VideoStoragePath = dialog.FolderName;
+                Config.VideoStoragePath = dialog.FolderName;
                 PathTextBox.Text = dialog.FolderName;
             }
         }
 
         private void BtnSave_Click(object sender, RoutedEventArgs e)
         {
-            if (ResComboBox.SelectedItem is ResOption selectedRes)
-            {
-                var config = (AppConfig)this.DataContext;
-                config.FrameWidth = selectedRes.Width;
-                config.FrameHeight = selectedRes.Height;
-            }
-            this.DialogResult = true;
-            this.Close();
+            if (ResComboBox.SelectedItem is ResOption selectedRes) { Config.FrameWidth = selectedRes.Width; Config.FrameHeight = selectedRes.Height; }
+            this.DialogResult = true; this.Close();
         }
 
-        private void BtnCancel_Click(object sender, RoutedEventArgs e)
-        {
-            this.DialogResult = false;
-            this.Close();
-        }
+        private void BtnCancel_Click(object sender, RoutedEventArgs e) { this.DialogResult = false; this.Close(); }
     }
 }
