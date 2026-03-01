@@ -202,8 +202,7 @@
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="📦" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding OrderId}" FontWeight="Bold" FontSize="16" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="0" Text="{Binding OrderId}" FontWeight="Bold" FontSize="16" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                             <Border Grid.Column="2" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
                                                 <Border.Style>
                                                     <Style TargetType="Border">

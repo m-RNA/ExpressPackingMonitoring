@@ -61,6 +61,7 @@ namespace ExpressPackingMonitoring.ViewModels
         public bool EnableSoundPrompt { get; set; } = true;
         public double TimeoutWarningSeconds { get; set; } = 10.0;
         public string Theme { get; set; } = "Auto";
+        public bool ShowDeletedVideos { get; set; } = true;
     }
 
     public class MainViewModel : ObservableObject, IDisposable
@@ -264,7 +265,7 @@ namespace ExpressPackingMonitoring.ViewModels
         {
             string folderPath = Path.IsPathRooted(Config.VideoStoragePath) ? Config.VideoStoragePath : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Config.VideoStoragePath);
             if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
-            var playbackWin = new PlaybackWindow(folderPath, _db);
+            var playbackWin = new PlaybackWindow(folderPath, _db, Config.ShowDeletedVideos);
             if (Application.Current?.MainWindow != null) playbackWin.Owner = Application.Current.MainWindow;
             playbackWin.ShowDialog();
         }
@@ -710,7 +711,7 @@ namespace ExpressPackingMonitoring.ViewModels
                                         File.Delete(video.FilePath);
                                     }
                                     // 数据库记录删除日志
-                                    _db?.MarkVideoDeleted(video.FilePath, "磁盘空间清理");
+                                    _db?.MarkVideoDeleted(video.FilePath, "磁盘清理");
                                     deletedBytes += len;
                                     currentSizeBytes -= len;
                                     deletedCount++;
@@ -732,7 +733,7 @@ namespace ExpressPackingMonitoring.ViewModels
                                         long len = file.Length;
                                         string fp = file.FullName;
                                         file.Delete();
-                                        _db?.MarkVideoDeleted(fp, "磁盘空间清理");
+                                        _db?.MarkVideoDeleted(fp, "磁盘清理");
                                         deletedBytes += len;
                                         currentSizeBytes -= len;
                                         deletedCount++;

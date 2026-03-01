@@ -102,13 +102,14 @@
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
                                     <TextBlock Grid.Row="0" Text="{Binding DisplayName}" FontWeight="Medium" TextTrimming="CharacterEllipsis">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                                                 <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                                                    <DataTrigger Binding="{Binding IsUnavailable}" Value="True">
                                                         <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
@@ -119,8 +120,25 @@
                                         <TextBlock Text="{Binding Duration}" FontSize="11" Foreground="{DynamicResource TextSecondary}" Margin="0,0,8,0"/>
                                         <TextBlock Text="{Binding FileSize}" FontSize="11" Foreground="{DynamicResource TextSecondary}" Margin="0,0,8,0"/>
                                         <TextBlock Text="{Binding StopReason}" FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,0,8,0"/>
-                                        <TextBlock Text="{Binding MissingText}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource AccentRed}"/>
                                     </StackPanel>
+                                    <TextBlock Grid.Row="2" Text="{Binding StatusText}" FontSize="11" FontWeight="Bold" Margin="0,3,0,0">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource AccentRed}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsDeleted}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource AccentRed}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </Grid>
                         </DataTemplate>
                     </ListView.ItemTemplate>

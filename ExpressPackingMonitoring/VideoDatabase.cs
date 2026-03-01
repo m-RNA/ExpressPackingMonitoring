@@ -204,7 +204,7 @@ namespace ExpressPackingMonitoring
         }
 
         /// <summary>
-        /// 查询视频列表（支持日期范围 + 关键词过滤）
+        /// 查询视频列表（支持日期范围 + 关键词过滤，包含已删除记录）
         /// </summary>
         public List<VideoRecord> QueryVideos(DateTime startDate, DateTime endDate, string keyword = null)
         {
@@ -215,10 +215,10 @@ namespace ExpressPackingMonitoring
 
                 string sql = @"
                     SELECT Id, OrderId, Mode, FilePath, FileName, FileSizeBytes, 
-                           StartTime, EndTime, DurationSeconds, StopReason
+                           StartTime, EndTime, DurationSeconds, StopReason,
+                           IsDeleted, DeletedAt, DeleteReason
                     FROM VideoRecords 
-                    WHERE IsDeleted = 0 
-                      AND StartTime >= @startDate 
+                    WHERE StartTime >= @startDate 
                       AND StartTime < @endDate";
 
                 if (!string.IsNullOrWhiteSpace(keyword))
@@ -246,7 +246,10 @@ namespace ExpressPackingMonitoring
                         StartTime = DateTime.Parse(reader.GetString(6)),
                         EndTime = reader.IsDBNull(7) ? DateTime.MinValue : DateTime.Parse(reader.GetString(7)),
                         DurationSeconds = reader.GetDouble(8),
-                        StopReason = reader.IsDBNull(9) ? "" : reader.GetString(9)
+                        StopReason = reader.IsDBNull(9) ? "" : reader.GetString(9),
+                        IsDeleted = reader.GetInt64(10) == 1,
+                        DeletedAt = reader.IsDBNull(11) ? null : DateTime.Parse(reader.GetString(11)),
+                        DeleteReason = reader.IsDBNull(12) ? "" : reader.GetString(12)
                     });
                 }
                 return results;
