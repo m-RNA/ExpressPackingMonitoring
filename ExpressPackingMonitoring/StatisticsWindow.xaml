@@ -56,8 +56,15 @@
                                 </Border.ToolTip>
                             </Border>
 
+                            <!-- 修改：设置 Margin 时不再用 Padding 强顶，避免超出裁剪 -->
+                            <!-- 设置上外边距给数字留出空间，移除硬性的 Margin 绑定 -->
+                            <!-- 加上 RenderTransform 来实现纯相对位移，并且确保整体上层留出空间 -->
                             <TextBlock Grid.Row="0" Text="{Binding Pieces}" VerticalAlignment="Bottom" HorizontalAlignment="Center" 
-                                       Margin="{Binding LabelMargin}" FontWeight="Bold" Foreground="#475569" FontSize="14"/>
+                                       Margin="{Binding LabelMargin}" FontWeight="Bold" Foreground="#475569" FontSize="14">
+                                <TextBlock.RenderTransform>
+                                    <TranslateTransform Y="-5"/> <!-- 微调文字和柱子的距离 -->
+                                </TextBlock.RenderTransform>
+                            </TextBlock>
 
                             <StackPanel Grid.Row="1" Margin="0,15,0,0" HorizontalAlignment="Center">
                                 <TextBlock Text="{Binding DateLabel}" Foreground="#1E293B" FontWeight="SemiBold" FontSize="14" HorizontalAlignment="Center"/>

@@ -4,6 +4,31 @@
         Title="🎬 历史录像检索与回放" Height="700" Width="1100"
         WindowStartupLocation="CenterOwner" Background="#F0F2F5"
         Closing="Window_Closing">
+    <Window.Resources>
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="8"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="BorderBrush" Value="#CBD5E1"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#1E293B"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border CornerRadius="6" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Background="{TemplateBinding Background}">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="0"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter Property="BorderBrush" Value="#3B82F6"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <Grid Margin="15">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="320"/>
@@ -37,11 +62,43 @@
                     <TextBox x:Name="SearchBox" FontSize="14" Padding="5" TextChanged="TextFilterChanged" BorderBrush="#0078D7" BorderThickness="2"/>
                 </StackPanel>
 
-                <ListView x:Name="VideoList" Grid.Row="1" FontSize="14" SelectionChanged="VideoList_SelectionChanged" BorderThickness="1" BorderBrush="#E2E8F0" Background="#F8FAFC">
+                <ListView x:Name="VideoList" Grid.Row="1" FontSize="14" SelectionChanged="VideoList_SelectionChanged" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="Margin" Value="0,0,0,8"/>
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="Background" Value="White"/>
+                            <Setter Property="BorderBrush" Value="#E2E8F0"/>
+                            <Setter Property="BorderThickness" Value="1"/>
+                            <Setter Property="Cursor" Value="Hand"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListViewItem">
+                                        <Border CornerRadius="8" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                                            <Border.Effect>
+                                                <DropShadowEffect BlurRadius="4" ShadowDepth="1" Opacity="0.05" Direction="270"/>
+                                            </Border.Effect>
+                                            <ContentPresenter Margin="12,10"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="BorderBrush" Value="#93C5FD"/>
+                                                <Setter Property="Background" Value="#EFF6FF"/>
+                                            </Trigger>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter Property="BorderBrush" Value="#3B82F6"/>
+                                                <Setter Property="Background" Value="#DBEAFE"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListView.ItemContainerStyle>
                     <ListView.ItemTemplate>
                         <DataTemplate>
-                            <Border BorderBrush="#E2E8F0" BorderThickness="0,0,0,1" Padding="8,6">
-                                <Grid>
+                            <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
@@ -65,7 +122,6 @@
                                         <TextBlock Text="{Binding MissingText}" FontSize="11" FontWeight="Bold" Foreground="#EF4444"/>
                                     </StackPanel>
                                 </Grid>
-                            </Border>
                         </DataTemplate>
                     </ListView.ItemTemplate>
                 </ListView>
