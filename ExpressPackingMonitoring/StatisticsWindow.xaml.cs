@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Windows;
 
 namespace ExpressPackingMonitoring
@@ -26,17 +24,18 @@ namespace ExpressPackingMonitoring
         public List<ChartItem> ChartData { get; set; } = new();
         public int WeekTotalPieces { get; set; }
 
-        public StatisticsWindow(string statsFilePath)
+        public StatisticsWindow(VideoDatabase db)
         {
             InitializeComponent();
-            GenerateChartData(statsFilePath);
+            GenerateChartData(db);
             this.DataContext = this;
         }
 
-        private void GenerateChartData(string dbPath)
+        private void GenerateChartData(VideoDatabase db)
         {
-            List<ViewModels.DailyStatItem> history = new List<ViewModels.DailyStatItem>();
-            try { if (File.Exists(dbPath)) history = JsonSerializer.Deserialize<List<ViewModels.DailyStatItem>>(File.ReadAllText(dbPath)) ?? history; } catch { }
+            // 从 SQLite 数据库获取最近 7 天统计
+            List<DailyStat> history = new List<DailyStat>();
+            try { if (db != null) history = db.GetDailyStats(7); } catch { }
 
             ChartData = new List<ChartItem>();
             int maxPieces = 1; // 防除0

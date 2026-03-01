@@ -15,21 +15,30 @@ namespace ExpressPackingMonitoring
     {
         public string DisplayName { get; set; } = "";
         public string FullPath { get; set; } = "";
-        public required FileInfo File { get; set; }
+        public string OrderId { get; set; } = "";
+        public string Mode { get; set; } = "";
+        public string Duration { get; set; } = "";
+        public string FileSize { get; set; } = "";
+        public string StopReason { get; set; } = "";
+        public bool IsMissing { get; set; }
+        public string MissingText => IsMissing ? "⚠ 文件已丢失" : "";
+        public FileInfo? File { get; set; }
     }
 
     public partial class PlaybackWindow : Window
     {
         private readonly string _folderPath;
+        private readonly VideoDatabase? _db;
         private List<VideoItem> _allVideos = new List<VideoItem>();
         private DispatcherTimer _timer;
         private bool _isDragging = false;
         private bool _isPlaying = false;
 
-        public PlaybackWindow(string folderPath)
+        public PlaybackWindow(string folderPath, VideoDatabase? db = null)
         {
             InitializeComponent();
             _folderPath = folderPath;
+            _db = db;
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
             _timer.Tick += Timer_Tick!;
             DpEndDate.SelectedDate = DateTime.Now;
@@ -48,22 +57,74 @@ namespace ExpressPackingMonitoring
             DateTime end = DpEndDate.SelectedDate ?? DateTime.Now;
             if (start > end) { var temp = start; start = end; end = temp; }
 
-            // 【亿级数据检索优化】：不再全盘扫！只精确组合选中的日期文件夹去读取！
+            string? keyword = SearchBox?.Text.Trim();
+
+            // 优先从数据库查询（快速索引）
+            if (_db != null)
+            {
+                try
+                {
+                    var records = _db.QueryVideos(start, end, string.IsNullOrEmpty(keyword) ? null : keyword);
+                    foreach (var r in records)
+                    {
+                        bool missing = !File.Exists(r.FilePath);
+                        FileInfo? fi = missing ? null : new FileInfo(r.FilePath);
+                        _allVideos.Add(new VideoItem
+                        {
+                            DisplayName = Path.GetFileNameWithoutExtension(r.FileName),
+                            FullPath = r.FilePath,
+                            OrderId = r.OrderId,
+                            Mode = r.Mode,
+                            Duration = r.DurationSeconds > 0 ? $"{(int)r.DurationSeconds}s" : "",
+                            FileSize = missing ? FormatFileSize(r.FileSizeBytes) : FormatFileSize(fi!.Length),
+                            StopReason = r.StopReason,
+                            IsMissing = missing,
+                            File = fi
+                        });
+                    }
+                }
+                catch
+                {
+                    // 数据库查询失败，回退到文件系统
+                    LoadVideosFromFileSystem(start, end);
+                }
+            }
+            else
+            {
+                LoadVideosFromFileSystem(start, end);
+            }
+
+            ApplyFilters();
+        }
+
+        private void LoadVideosFromFileSystem(DateTime start, DateTime end)
+        {
             for (DateTime d = start.Date; d <= end.Date; d = d.AddDays(1))
             {
                 string dateFolder = Path.Combine(_folderPath, d.ToString("yyyy-MM-dd"));
                 if (Directory.Exists(dateFolder))
                 {
-                    // 只扫当前这一层的 mp4
                     var files = new DirectoryInfo(dateFolder).GetFiles("*.mp4");
                     foreach (var f in files)
                     {
-                        _allVideos.Add(new VideoItem { DisplayName = Path.GetFileNameWithoutExtension(f.Name), FullPath = f.FullName, File = f });
+                        _allVideos.Add(new VideoItem
+                        {
+                            DisplayName = Path.GetFileNameWithoutExtension(f.Name),
+                            FullPath = f.FullName,
+                            FileSize = FormatFileSize(f.Length),
+                            File = f
+                        });
                     }
                 }
             }
-            _allVideos = _allVideos.OrderByDescending(v => v.File.CreationTime).ToList();
-            ApplyFilters();
+            _allVideos = _allVideos.OrderByDescending(v => v.File?.CreationTime ?? DateTime.MinValue).ToList();
+        }
+
+        private static string FormatFileSize(long bytes)
+        {
+            if (bytes < 1024) return $"{bytes}B";
+            if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F0}KB";
+            return $"{bytes / (1024.0 * 1024.0):F1}MB";
         }
 
         private void ApplyFilters()
@@ -71,7 +132,9 @@ namespace ExpressPackingMonitoring
             if (_allVideos == null || VideoList == null) return;
             var filtered = _allVideos.AsEnumerable();
             string? keyword = SearchBox?.Text.Trim().ToUpper();
-            if (!string.IsNullOrEmpty(keyword)) filtered = filtered.Where(v => v.File.Name.ToUpper().Contains(keyword));
+            if (!string.IsNullOrEmpty(keyword)) filtered = filtered.Where(v =>
+                v.DisplayName.ToUpper().Contains(keyword) ||
+                (v.OrderId?.ToUpper().Contains(keyword) ?? false));
             VideoList.ItemsSource = filtered.ToList();
         }
 
@@ -86,6 +149,17 @@ namespace ExpressPackingMonitoring
         {
             if (VideoList.SelectedItem is VideoItem video)
             {
+                if (video.IsMissing)
+                {
+                    MessageBox.Show(
+                        $"视频文件已被外部删除或移动，无法播放。\n\n" +
+                        $"单号: {video.OrderId}\n" +
+                        $"路径: {video.FullPath}\n" +
+                        $"原始大小: {video.FileSize}\n" +
+                        $"录制时长: {video.Duration}",
+                        "文件丢失", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
                 MediaPlayer.Source = new Uri(video.FullPath);
                 MediaPlayer.Play();
                 _timer.Start();

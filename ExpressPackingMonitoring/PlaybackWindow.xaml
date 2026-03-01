@@ -41,7 +41,30 @@
                     <ListView.ItemTemplate>
                         <DataTemplate>
                             <Border BorderBrush="#E2E8F0" BorderThickness="0,0,0,1" Padding="8,6">
-                                <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" FontWeight="Medium" Foreground="#334155" TextTrimming="CharacterEllipsis"/>
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Text="{Binding DisplayName}" FontWeight="Medium" TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#334155"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                                                        <Setter Property="Foreground" Value="#94A3B8"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,3,0,0">
+                                        <TextBlock Text="{Binding Duration}" FontSize="11" Foreground="#64748B" Margin="0,0,8,0"/>
+                                        <TextBlock Text="{Binding FileSize}" FontSize="11" Foreground="#64748B" Margin="0,0,8,0"/>
+                                        <TextBlock Text="{Binding StopReason}" FontSize="11" Foreground="#94A3B8" Margin="0,0,8,0"/>
+                                        <TextBlock Text="{Binding MissingText}" FontSize="11" FontWeight="Bold" Foreground="#EF4444"/>
+                                    </StackPanel>
+                                </Grid>
                             </Border>
                         </DataTemplate>
                     </ListView.ItemTemplate>
