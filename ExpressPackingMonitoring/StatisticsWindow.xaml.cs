@@ -9,21 +9,21 @@ namespace ExpressPackingMonitoring
 {
     public class ChartItem
     {
-        public string DateLabel { get; set; }
-        public string DateSubLabel { get; set; }
+        public string DateLabel { get; set; } = "";
+        public string DateSubLabel { get; set; } = "";
         public int Pieces { get; set; }
         public double BarHeight { get; set; }
 
         // 【核心修复1】：改为 WPF 原生的 Thickness 类型
         public Thickness LabelMargin { get; set; }
 
-        public string AvgTime { get; set; }
-        public string TotalTime { get; set; }
+        public string AvgTime { get; set; } = "";
+        public string TotalTime { get; set; } = "";
     }
 
     public partial class StatisticsWindow : Window
     {
-        public List<ChartItem> ChartData { get; set; }
+        public List<ChartItem> ChartData { get; set; } = new();
         public int WeekTotalPieces { get; set; }
 
         public StatisticsWindow(string statsFilePath)
@@ -36,7 +36,7 @@ namespace ExpressPackingMonitoring
         private void GenerateChartData(string dbPath)
         {
             List<ViewModels.DailyStatItem> history = new List<ViewModels.DailyStatItem>();
-            try { if (File.Exists(dbPath)) history = JsonSerializer.Deserialize<List<ViewModels.DailyStatItem>>(File.ReadAllText(dbPath)); } catch { }
+            try { if (File.Exists(dbPath)) history = JsonSerializer.Deserialize<List<ViewModels.DailyStatItem>>(File.ReadAllText(dbPath)) ?? history; } catch { }
 
             ChartData = new List<ChartItem>();
             int maxPieces = 1; // 防除0
