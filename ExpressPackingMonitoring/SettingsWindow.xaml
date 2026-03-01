@@ -4,16 +4,16 @@
         xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
         Title="系统参数设置" Height="580" Width="480"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
-        Background="#F8FAFC" FontFamily="Microsoft YaHei UI, Segoe UI">
+        Background="{DynamicResource ControlBackground}" FontFamily="Microsoft YaHei UI, Segoe UI">
     
     <Window.Resources>
         <Style TargetType="TextBox">
             <Setter Property="Padding" Value="8"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="BorderBrush" Value="#CBD5E1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Background" Value="White"/>
-            <Setter Property="Foreground" Value="#1E293B"/>
+            <Setter Property="Background" Value="{DynamicResource PanelBackground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
@@ -22,11 +22,11 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter Property="BorderBrush" Value="#3B82F6"/>
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBlue}"/>
                             </Trigger>
                             <Trigger Property="IsReadOnly" Value="True">
-                                <Setter Property="Background" Value="#F1F5F9"/>
-                                <Setter Property="Foreground" Value="#64748B"/>
+                                <Setter Property="Background" Value="{DynamicResource BorderLight}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -40,8 +40,8 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="CheckBox">
                         <Grid x:Name="MainGrid" Width="44" Height="24" VerticalAlignment="Center">
-                            <Border x:Name="BorderUnchecked" CornerRadius="12" Background="#CBD5E1"/>
-                            <Border x:Name="BorderChecked" CornerRadius="12" Background="#3B82F6" Opacity="0"/>
+                            <Border x:Name="BorderUnchecked" CornerRadius="12" Background="{DynamicResource BorderStrong}"/>
+                            <Border x:Name="BorderChecked" CornerRadius="12" Background="{DynamicResource AccentBlue}" Opacity="0"/>
                             <Ellipse x:Name="Knob" Width="20" Height="20" Fill="White" HorizontalAlignment="Left" Margin="2,0,0,0">
                                 <Ellipse.RenderTransform>
                                     <TranslateTransform X="0"/>
@@ -106,27 +106,27 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="#F1F5F9" CornerRadius="6" Padding="16,12" Margin="0,0,0,16">
+        <Border Grid.Row="0" Background="{DynamicResource BorderLight}" CornerRadius="6" Padding="16,12" Margin="0,0,0,16">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="磁盘占用" FontWeight="SemiBold" Foreground="#475569" VerticalAlignment="Center"/>
-                <ProgressBar Grid.Column="1" Margin="12,0" Height="8" Minimum="0" Maximum="100" Value="{Binding CurrentDiskUsagePercent}" Foreground="#3B82F6" Background="#CBD5E1" BorderThickness="0"/>
+                <TextBlock Text="磁盘占用" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                <ProgressBar Grid.Column="1" Margin="12,0" Height="8" Minimum="0" Maximum="100" Value="{Binding CurrentDiskUsagePercent}" Foreground="{DynamicResource AccentBlue}" Background="{DynamicResource BorderStrong}" BorderThickness="0"/>
 
-                <TextBlock Grid.Column="2" Text="{Binding CurrentDiskUsageText}" FontWeight="Bold" Foreground="#1E293B" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="{Binding CurrentDiskUsageText}" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
             </Grid>
         </Border>
 
-        <TabControl Grid.Row="1" Background="Transparent" BorderThickness="0" Margin="0,0,0,16">
+                <TabControl Grid.Row="1" Background="Transparent" BorderThickness="0" Margin="0,0,0,16">
             <TabControl.Resources>
                 <Style TargetType="TabItem">
                     <Setter Property="FontSize" Value="15"/>
                     <Setter Property="FontWeight" Value="Bold"/>
                     <Setter Property="Padding" Value="16,10"/>
-                    <Setter Property="Foreground" Value="#64748B"/>
+                    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                     <Setter Property="Background" Value="Transparent"/>
                     <Setter Property="BorderThickness" Value="0,0,0,3"/>
                     <Setter Property="BorderBrush" Value="Transparent"/>
@@ -139,16 +139,16 @@
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsSelected" Value="True">
-                                        <Setter Property="Foreground" Value="#2563EB"/>
-                                        <Setter Property="BorderBrush" Value="#2563EB"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource AccentBlueDark}"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource AccentBlueDark}"/>
                                     </Trigger>
                                     <MultiTrigger>
                                         <MultiTrigger.Conditions>
                                             <Condition Property="IsMouseOver" Value="True"/>
                                             <Condition Property="IsSelected" Value="False"/>
                                         </MultiTrigger.Conditions>
-                                        <Setter Property="Foreground" Value="#3B82F6"/>
-                                        <Setter Property="Background" Value="#F1F5F9"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource AccentBlue}"/>
+                                        <Setter Property="Background" Value="{DynamicResource BorderLight}"/>
                                     </MultiTrigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -157,164 +157,182 @@
                 </Style>
             </TabControl.Resources>
 
-            <TabItem Header="🎥 基础设备">
-                <Border Background="White" CornerRadius="8" Padding="20">
+            <TabItem Header=" 基础设备">
+                <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" Padding="20">
                     <Border.Effect>
-                        <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.05"/>
+                        <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.05" Color="{DynamicResource ShadowColor}"/>
                     </Border.Effect>
-                    <StackPanel>
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="140"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="摄像头" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
-                        <ComboBox x:Name="CameraComboBox" Grid.Column="1" SelectedValuePath="Index" DisplayMemberPath="Name" SelectedValue="{Binding Config.CameraIndex}" Padding="6"/>
-                    </Grid>
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="140"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="分辨率" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
-                        <ComboBox x:Name="ResComboBox" Grid.Column="1" DisplayMemberPath="Name" Padding="6" Cursor="Hand"/>
-                    </Grid>
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="140"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="录制帧率/FPS" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
-                        <xctk:IntegerUpDown Grid.Column="1" Value="{Binding Config.Fps}" Minimum="5" Maximum="60" Padding="6"/>
-                    </Grid>
-                    </StackPanel>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="-10" Padding="10">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="外观主题" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <ComboBox x:Name="ThemeComboBox" Grid.Column="1" SelectedValue="{Binding Config.Theme}" SelectedValuePath="Content"  Cursor="Hand" SelectionChanged="ThemeComboBox_SelectionChanged">
+                                    <ComboBoxItem Content="Auto" />
+                                    <ComboBoxItem Content="Light" />
+                                    <ComboBoxItem Content="Dark" />
+                                </ComboBox>
+                            </Grid>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="摄像头" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <ComboBox x:Name="CameraComboBox" Grid.Column="1" SelectedValuePath="Index" DisplayMemberPath="Name" SelectedValue="{Binding Config.CameraIndex}" />
+                            </Grid>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="分辨率" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <ComboBox x:Name="ResComboBox" Grid.Column="1" DisplayMemberPath="Name"  Cursor="Hand"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="录制帧率/FPS" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <xctk:IntegerUpDown Grid.Column="1" Value="{Binding Config.Fps}" Minimum="5" Maximum="60" />
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
                 </Border>
             </TabItem>
 
-            <TabItem Header="🔍 智能特写">
-                <Border Background="White" CornerRadius="8" Padding="20">
+            <TabItem Header=" 智能特写">
+                <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" Padding="20">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.05"/>
                     </Border.Effect>
-                    <StackPanel>
-                        <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="140"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="启用智能特写" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
-                        <CheckBox Grid.Column="1" IsChecked="{Binding Config.EnableSmartZoom}" VerticalAlignment="Center" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Left"/>
-                    </Grid>
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="140"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="特写放大倍数" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
-                        <ComboBox x:Name="ZoomScaleComboBox" Grid.Column="1" SelectedItem="{Binding Config.ZoomScale}" Padding="6" Cursor="Hand"/>
-                    </Grid>
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="延迟触发/秒" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
-                        <xctk:DoubleUpDown Grid.Column="1" Value="{Binding Config.ZoomDelaySeconds}" Minimum="0" Increment="0.5" Padding="6"/>
-                    </Grid>
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="特写保持时间/秒" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
-                        <xctk:DoubleUpDown Grid.Column="1" Value="{Binding Config.ZoomDurationSeconds}" Minimum="0" Increment="0.5" Padding="6"/>
-                    </Grid>
-                    </StackPanel>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="-10" Padding="10">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="启用智能特写" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <CheckBox Grid.Column="1" IsChecked="{Binding Config.EnableSmartZoom}" VerticalAlignment="Center" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Left"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="特写放大倍数" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <ComboBox x:Name="ZoomScaleComboBox" Grid.Column="1" SelectedItem="{Binding Config.ZoomScale}"  Cursor="Hand"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="延迟触发/秒" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <xctk:DoubleUpDown Grid.Column="1" Value="{Binding Config.ZoomDelaySeconds}" Minimum="0" Increment="0.5" />
+                            </Grid>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="特写保持时间/秒" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <xctk:DoubleUpDown Grid.Column="1" Value="{Binding Config.ZoomDurationSeconds}" Minimum="0" Increment="0.5" />
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
                 </Border>
             </TabItem>
 
-            <TabItem Header="🛡️ 业务与防呆">
-                <Border Background="White" CornerRadius="8" Padding="20">
+            <TabItem Header=" 业务与防呆">
+                <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" Padding="20">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.05"/>
                     </Border.Effect>
-                    <StackPanel>
-                        <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="140"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="启用声音提示" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
-                        <CheckBox Grid.Column="1" IsChecked="{Binding Config.EnableSoundPrompt}" VerticalAlignment="Center" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Left"/>
-                    </Grid>
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="超时预警提前/秒" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
-                        <xctk:DoubleUpDown Grid.Column="1" Value="{Binding Config.TimeoutWarningSeconds}" Minimum="3" Maximum="120" Increment="1" Padding="6"/>
-                    </Grid>
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="140"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="视频存储路径" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
-                        <TextBox x:Name="PathTextBox" Grid.Column="1" Text="{Binding Config.VideoStoragePath}" Padding="6" IsReadOnly="True" Background="#F1F5F9" Foreground="#64748B"/>
-                        <Button Grid.Column="2" Content="浏览" Width="60" Margin="8,0,0,0" Click="BtnBrowsePath_Click" Background="#E2E8F0" BorderThickness="0" Cursor="Hand" FontWeight="Bold">
-                            <Button.Resources>
-                                <Style TargetType="Border">
-                                    <Setter Property="CornerRadius" Value="4"/>
-                                </Style>
-                            </Button.Resources>
-                        </Button>
-                    </Grid>
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="140"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="启用静止自动停录" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
-                        <CheckBox Grid.Column="1" IsChecked="{Binding Config.EnableAutoStop}" VerticalAlignment="Center" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Left"/>
-                    </Grid>
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="静止超时/分钟" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
-                        <xctk:DoubleUpDown Grid.Column="1" Value="{Binding Config.AutoStopMinutes}" Minimum="0.1" Maximum="60.0" Increment="0.5" Padding="6"/>
-                    </Grid>
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="限制录像时长" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
-                        <CheckBox Grid.Column="1" IsChecked="{Binding Config.EnableMaxDuration}" VerticalAlignment="Center" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Left"/>
-                    </Grid>
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="最大时长/分钟" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
-                        <xctk:DoubleUpDown Grid.Column="1" Value="{Binding Config.MaxDurationMinutes}" Minimum="0.1" Maximum="60.0" Increment="0.5" Padding="6"/>
-                    </Grid>
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="140"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="单号正则式" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
-                        <TextBox Grid.Column="1" Text="{Binding Config.OrderIdRegex}" Padding="6"/>
-                    </Grid>
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="140"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="磁盘配额/GB" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
-                        <xctk:DoubleUpDown Grid.Column="1" Value="{Binding Config.MaxDiskSpaceGB}" Minimum="0.5" Maximum="5000.0" Increment="0.5" Padding="6"/>
-                    </Grid>
-                    </StackPanel>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="-10" Padding="10">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="启用声音提示" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <CheckBox Grid.Column="1" IsChecked="{Binding Config.EnableSoundPrompt}" VerticalAlignment="Center" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Left"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="超时预警提前/秒" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <xctk:DoubleUpDown Grid.Column="1" Value="{Binding Config.TimeoutWarningSeconds}" Minimum="3" Maximum="120" Increment="1" />
+                            </Grid>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="视频存储路径" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <TextBox x:Name="PathTextBox" Grid.Column="1" Text="{Binding Config.VideoStoragePath}"  IsReadOnly="True" Background="{DynamicResource BorderLight}" Foreground="{DynamicResource TextSecondary}"/>
+                                <Button Grid.Column="2" Content="浏览" Width="60" Margin="8,0,0,0" Click="BtnBrowsePath_Click" Background="{DynamicResource BorderDefault}" BorderThickness="0" Cursor="Hand" FontWeight="Bold">
+                                    <Button.Resources>
+                                        <Style TargetType="Border">
+                                            <Setter Property="CornerRadius" Value="4"/>
+                                        </Style>
+                                    </Button.Resources>
+                                </Button>
+                            </Grid>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="启用静止自动停录" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <CheckBox Grid.Column="1" IsChecked="{Binding Config.EnableAutoStop}" VerticalAlignment="Center" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Left"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="静止超时/分钟" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <xctk:DoubleUpDown Grid.Column="1" Value="{Binding Config.AutoStopMinutes}" Minimum="0.1" Maximum="60.0" Increment="0.5" />
+                            </Grid>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="限制录像时长" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <CheckBox Grid.Column="1" IsChecked="{Binding Config.EnableMaxDuration}" VerticalAlignment="Center" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Left"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="最大时长/分钟" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <xctk:DoubleUpDown Grid.Column="1" Value="{Binding Config.MaxDurationMinutes}" Minimum="0.1" Maximum="60.0" Increment="0.5" />
+                            </Grid>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="单号正则式" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <TextBox Grid.Column="1" Text="{Binding Config.OrderIdRegex}" />
+                            </Grid>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="磁盘配额/GB" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <xctk:DoubleUpDown Grid.Column="1" Value="{Binding Config.MaxDiskSpaceGB}" Minimum="0.5" Maximum="5000.0" Increment="0.5" />
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
                 </Border>
             </TabItem>
         </TabControl>
 
         <UniformGrid Grid.Row="2" Rows="1" Columns="2" HorizontalAlignment="Right" Width="180">
-            <Button Content="取消" Height="38" Margin="0,0,8,0" Click="BtnCancel_Click" Background="White" BorderBrush="#CBD5E1" BorderThickness="1" Foreground="#475569" FontWeight="SemiBold" Cursor="Hand">
+            <Button Content="取消" Height="38" Margin="0,0,8,0" Click="BtnCancel_Click" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderStrong}" BorderThickness="1" Foreground="{DynamicResource TextSecondary}" FontWeight="SemiBold" Cursor="Hand">
                 <Button.Resources>
                     <Style TargetType="Border">
                         <Setter Property="CornerRadius" Value="6"/>
                     </Style>
                 </Button.Resources>
             </Button>
-            <Button Content="保存应用" Height="38" Click="BtnSave_Click" Background="#2563EB" Foreground="White" FontWeight="SemiBold" BorderThickness="0" Cursor="Hand">
+            <Button Content="保存应用" Height="38" Click="BtnSave_Click" Background="{DynamicResource AccentBlueDark}" Foreground="White" FontWeight="SemiBold" BorderThickness="0" Cursor="Hand">
                 <Button.Resources>
                     <Style TargetType="Border">
                         <Setter Property="CornerRadius" Value="6"/>
@@ -324,3 +342,7 @@
         </UniformGrid>
     </Grid>
 </Window>
+
+
+
+

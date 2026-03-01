@@ -4,6 +4,15 @@
              xmlns:local="clr-namespace:ExpressPackingMonitoring"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/LightTheme.xaml"/>
+                <ResourceDictionary Source="Themes/ComboBoxTheme.xaml" />
+                <ResourceDictionary Source="Themes/DatePickerTheme.xaml" />
+                <ResourceDictionary Source="Themes/SpinBoxTheme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>
+
+

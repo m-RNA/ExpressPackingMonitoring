@@ -1,0 +1,41 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Window & Panel -->
+    <SolidColorBrush x:Key="WindowBackground" Color="#F3F4F6"/>
+    <SolidColorBrush x:Key="PanelBackground" Color="White"/>
+    <SolidColorBrush x:Key="ControlBackground" Color="#F8FAFC"/>
+    <SolidColorBrush x:Key="ControlBackgroundHover" Color="#F1F5F9"/>
+
+    <!-- Text -->
+    <SolidColorBrush x:Key="TextPrimary" Color="#1E293B"/>
+    <SolidColorBrush x:Key="TextSecondary" Color="#64748B"/>
+    <SolidColorBrush x:Key="TextMuted" Color="#94A3B8"/>
+    <SolidColorBrush x:Key="TextInvert" Color="White"/>
+
+    <!-- Borders -->
+    <SolidColorBrush x:Key="BorderLight" Color="#F1F5F9"/>
+    <SolidColorBrush x:Key="BorderDefault" Color="#E2E8F0"/>
+    <SolidColorBrush x:Key="BorderStrong" Color="#CBD5E1"/>
+
+    <!-- Accent / Status -->
+    <SolidColorBrush x:Key="AccentBlue" Color="#3B82F6"/>
+    <SolidColorBrush x:Key="AccentBlueDark" Color="#2563EB"/>
+    <SolidColorBrush x:Key="AccentGreen" Color="#10B981"/>
+    <SolidColorBrush x:Key="AccentRed" Color="#EF4444"/>
+    <SolidColorBrush x:Key="AccentOrange" Color="#F59E0B"/>
+    <SolidColorBrush x:Key="AccentPurple" Color="#8B5CF6"/>
+    <SolidColorBrush x:Key="AccentCyan" Color="#0EA5E9"/>
+
+    <!-- List Item Status Colors -->
+    <SolidColorBrush x:Key="BadgePackBg" Color="#DBEAFE"/>
+    <SolidColorBrush x:Key="BadgePackText" Color="#1D4ED8"/>
+    <SolidColorBrush x:Key="BadgeReturnBg" Color="#FEF3C7"/>
+    <SolidColorBrush x:Key="BadgeReturnText" Color="#D97706"/>
+    <SolidColorBrush x:Key="BadgeErrorBg" Color="#FEE2E2"/>
+    <SolidColorBrush x:Key="BadgeErrorText" Color="#DC2626"/>
+
+    <!-- Misc -->
+    <Color x:Key="ShadowColor">#000000</Color>
+    <SolidColorBrush x:Key="ToastBackground" Color="#CC0F172A"/>
+    <SolidColorBrush x:Key="VideoPlaceholder" Color="#0F172A"/>
+</ResourceDictionary>

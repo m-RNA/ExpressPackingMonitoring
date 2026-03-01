@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:ExpressPackingMonitoring.ViewModels"
         Title="📦 极简打包监控终端 v6.0" Height="850" Width="1350"
-        Background="#F3F4F6" WindowState="Maximized" Closing="Window_Closing"
+        Background="{DynamicResource WindowBackground}" WindowState="Maximized" Closing="Window_Closing"
         FontFamily="Microsoft YaHei UI, Segoe UI">
 
     <Window.DataContext>
@@ -51,7 +51,7 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <Border Grid.Row="0" Background="White" CornerRadius="10" Padding="20,16" Margin="0,0,0,20">
+                <Border Grid.Row="0" Background="{DynamicResource PanelBackground}" CornerRadius="10" Padding="20,16" Margin="0,0,0,20">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="15" ShadowDepth="2" Opacity="0.04"/>
                     </Border.Effect>
@@ -71,7 +71,7 @@
                                 <Button.Style>
                                     <Style TargetType="Button">
                                         <Setter Property="Foreground" Value="White"/>
-                                        <Setter Property="Background" Value="#3B82F6"/>
+                                        <Setter Property="Background" Value="{DynamicResource AccentBlue}"/>
                                         <Setter Property="Template">
                                             <Setter.Value>
                                                 <ControlTemplate TargetType="Button">
@@ -91,7 +91,7 @@
                                         </Setter>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding CurrentMode}" Value="退货">
-                                                <Setter Property="Background" Value="#F59E0B"/>
+                                                <Setter Property="Background" Value="{DynamicResource AccentOrange}"/>
                                             </DataTrigger>
                                             <Trigger Property="IsMouseOver" Value="True">
                                                 <Setter Property="Opacity" Value="0.9"/>
@@ -101,7 +101,7 @@
                                 </Button.Style>
                             </Button>
 
-                            <TextBox Grid.Column="1" x:Name="ScanInputTextBox" Height="52" FontSize="22" Padding="16,0" FontWeight="Bold" Foreground="#1E293B" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="2" VerticalContentAlignment="Center"
+                            <TextBox Grid.Column="1" x:Name="ScanInputTextBox" Height="52" FontSize="22" Padding="16,0" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" Background="{DynamicResource ControlBackground}" BorderBrush="{DynamicResource BorderDefault}" BorderThickness="2" VerticalContentAlignment="Center"
                                      Text="{Binding ScanInputText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                      GotKeyboardFocus="ScanInputTextBox_GotFocus" PreviewMouseLeftButtonDown="ScanInputTextBox_PreviewMouseLeftButtonDown"
                                      PreviewKeyDown="ScanInputTextBox_PreviewKeyDown" LostFocus="ScanInputTextBox_LostFocus">
@@ -116,13 +116,13 @@
                         <Button Grid.Column="1" Command="{Binding ToggleRecordingCommand}" Focusable="False" Height="52" Width="160" Cursor="Hand">
                             <Button.Style>
                                 <Style TargetType="Button" BasedOn="{StaticResource ModernBtn}">
-                                    <Setter Property="Background" Value="#10B981"/>
+                                    <Setter Property="Background" Value="{DynamicResource AccentGreen}"/>
                                     <Setter Property="Content" Value="▶ 开始录制"/>
                                     <Setter Property="FontWeight" Value="Black"/>
                                     <Setter Property="FontSize" Value="20"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding IsRecording}" Value="True">
-                                            <Setter Property="Background" Value="#EF4444"/>
+                                            <Setter Property="Background" Value="{DynamicResource AccentRed}"/>
                                             <Setter Property="Content" Value="⏹ 停止录制"/>
                                         </DataTrigger>
                                     </Style.Triggers>
@@ -132,14 +132,14 @@
                     </Grid>
                 </Border>
 
-                <Border Grid.Row="1" Background="#0F172A" CornerRadius="10" ClipToBounds="True">
+                <Border Grid.Row="1" Background="{DynamicResource VideoPlaceholder}" CornerRadius="10" ClipToBounds="True">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="15" ShadowDepth="2" Opacity="0.04"/>
                     </Border.Effect>
                     <Image Source="{Binding VideoFrame}" Stretch="Uniform"/>
                 </Border>
 
-                <Border Grid.Row="2" Background="White" CornerRadius="10" Padding="20,12" Margin="0,20,0,0">
+                <Border Grid.Row="2" Background="{DynamicResource PanelBackground}" CornerRadius="10" Padding="20,12" Margin="0,20,0,0">
                     <Border.Effect><DropShadowEffect BlurRadius="15" ShadowDepth="2" Opacity="0.04"/></Border.Effect>
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -148,24 +148,24 @@
                         </Grid.ColumnDefinitions>
                         
                         <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <TextBlock Text="今日件数:" FontSize="15" Foreground="#64748B" VerticalAlignment="Bottom" Margin="0,0,8,3"/>
-                            <TextBlock Text="{Binding TotalPieces}" FontSize="24" FontWeight="Black" Foreground="#2563EB" Margin="0,0,24,0"/>
-                            <TextBlock Text="平均时长:" FontSize="15" Foreground="#64748B" VerticalAlignment="Bottom" Margin="0,0,8,3"/>
-                            <TextBlock Text="{Binding AveragePackTime}" FontSize="24" FontWeight="Black" Foreground="#2563EB" Margin="0,0,24,0"/>
-                            <TextBlock Text="总耗时:" FontSize="15" Foreground="#64748B" VerticalAlignment="Bottom" Margin="0,0,8,3"/>
-                            <TextBlock Text="{Binding TotalPackTimeStr}" FontSize="24" FontWeight="Black" Foreground="#2563EB"/>
+                            <TextBlock Text="今日件数:" FontSize="15" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Bottom" Margin="0,0,8,3"/>
+                            <TextBlock Text="{Binding TotalPieces}" FontSize="24" FontWeight="Black" Foreground="{DynamicResource AccentBlueDark}" Margin="0,0,24,0"/>
+                            <TextBlock Text="平均时长:" FontSize="15" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Bottom" Margin="0,0,8,3"/>
+                            <TextBlock Text="{Binding AveragePackTime}" FontSize="24" FontWeight="Black" Foreground="{DynamicResource AccentBlueDark}" Margin="0,0,24,0"/>
+                            <TextBlock Text="总耗时:" FontSize="15" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Bottom" Margin="0,0,8,3"/>
+                            <TextBlock Text="{Binding TotalPackTimeStr}" FontSize="24" FontWeight="Black" Foreground="{DynamicResource AccentBlueDark}"/>
                         </StackPanel>
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Style="{StaticResource ModernBtn}" Content="📊 数据看板" Command="{Binding OpenStatsCommand}" Background="#8B5CF6" Width="120" Height="42" Margin="0,0,10,0"/>
-                            <Button Style="{StaticResource ModernBtn}" Content="🎬 录像回放" Command="{Binding OpenPlaybackCommand}" Background="#0EA5E9" Width="120" Height="42" Margin="0,0,10,0"/>
-                            <Button Style="{StaticResource ModernBtn}" Content="⚙️ 系统设置" Click="BtnSettings_Click" Background="#64748B" Width="120" Height="42"/>
+                            <Button Style="{StaticResource ModernBtn}" Content="📊 数据看板" Command="{Binding OpenStatsCommand}" Background="{DynamicResource AccentPurple}" Width="120" Height="42" Margin="0,0,10,0"/>
+                            <Button Style="{StaticResource ModernBtn}" Content="🎬 录像回放" Command="{Binding OpenPlaybackCommand}" Background="{DynamicResource AccentCyan}" Width="120" Height="42" Margin="0,0,10,0"/>
+                            <Button Style="{StaticResource ModernBtn}" Content="⚙️ 系统设置" Click="BtnSettings_Click" Background="{DynamicResource TextSecondary}" Width="120" Height="42"/>
                         </StackPanel>
                     </Grid>
                 </Border>
             </Grid>
 
-            <Border Grid.Column="1" Background="White" CornerRadius="10" Padding="20">
+            <Border Grid.Column="1" Background="{DynamicResource PanelBackground}" CornerRadius="10" Padding="20">
                 <Border.Effect>
                     <DropShadowEffect BlurRadius="15" ShadowDepth="2" Opacity="0.04"/>
                 </Border.Effect>
@@ -175,8 +175,8 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="扫码动态" FontSize="20" FontWeight="Black" Foreground="#1E293B" Margin="0,0,0,16"/>
-                    <TextBox Grid.Row="1" Text="{Binding LogSearchText, UpdateSourceTrigger=PropertyChanged}" Padding="12,10" FontSize="14" Foreground="#333" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="2" Margin="0,0,0,16" ToolTip="输入单号过滤">
+                    <TextBlock Grid.Row="0" Text="扫码动态" FontSize="20" FontWeight="Black" Foreground="{DynamicResource TextPrimary}" Margin="0,0,0,16"/>
+                    <TextBox Grid.Row="1" Text="{Binding LogSearchText, UpdateSourceTrigger=PropertyChanged}" Padding="12,10" FontSize="14" Foreground="{DynamicResource TextPrimary}" Background="{DynamicResource ControlBackground}" BorderBrush="{DynamicResource BorderDefault}" BorderThickness="2" Margin="0,0,0,16" ToolTip="输入单号过滤">
                         <TextBox.Resources>
                             <Style TargetType="Border">
                                 <Setter Property="CornerRadius" Value="6"/>
@@ -186,9 +186,9 @@
                     <ListView Grid.Row="2" ItemsSource="{Binding FilteredLogs}" AlternationCount="2" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                         <ListView.ItemTemplate>
                             <DataTemplate>
-                                <Border Background="White" CornerRadius="8" Margin="4,4,4,12" Padding="16,14">
+                                <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" Margin="4,4,4,12" Padding="16,14">
                                     <Border.Effect>
-                                        <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.06" Color="#000000"/>
+                                        <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.06" Color="{DynamicResource ShadowColor}"/>
                                     </Border.Effect>
                                     <Grid>
                                         <Grid.RowDefinitions>
@@ -203,17 +203,17 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0" Text="📦" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding OrderId}" FontWeight="Bold" FontSize="16" Foreground="#1E293B" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding OrderId}" FontWeight="Bold" FontSize="16" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                             <Border Grid.Column="2" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
                                                 <Border.Style>
                                                     <Style TargetType="Border">
-                                                        <Setter Property="Background" Value="#DBEAFE"/>
+                                                        <Setter Property="Background" Value="{DynamicResource BadgePackBg}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                                <Setter Property="Background" Value="#FEE2E2"/>
+                                                                <Setter Property="Background" Value="{DynamicResource BadgeErrorBg}"/>
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding Mode}" Value="退货">
-                                                                <Setter Property="Background" Value="#FEF3C7"/>
+                                                                <Setter Property="Background" Value="{DynamicResource BadgeReturnBg}"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
@@ -221,13 +221,13 @@
                                                 <TextBlock Text="{Binding Mode}" FontSize="12" FontWeight="SemiBold">
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock">
-                                                            <Setter Property="Foreground" Value="#1D4ED8"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource BadgePackText}"/>
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                                    <Setter Property="Foreground" Value="#DC2626"/>
+                                                                    <Setter Property="Foreground" Value="{DynamicResource BadgeErrorText}"/>
                                                                 </DataTrigger>
                                                                 <DataTrigger Binding="{Binding Mode}" Value="退货">
-                                                                    <Setter Property="Foreground" Value="#D97706"/>
+                                                                    <Setter Property="Foreground" Value="{DynamicResource BadgeReturnText}"/>
                                                                 </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
@@ -237,21 +237,21 @@
                                         </Grid>
                                         
                                         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="28,8,0,0">
-                                            <TextBlock Text="⏱ " Foreground="#94A3B8" FontSize="13"/>
+                                            <TextBlock Text="⏱ " Foreground="{DynamicResource TextMuted}" FontSize="13"/>
                                             <TextBlock Text="{Binding Duration}" FontWeight="Bold" FontSize="13" Margin="0,0,16,0">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
-                                                        <Setter Property="Foreground" Value="#475569"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                                <Setter Property="Foreground" Value="#EF4444"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentRed}"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </TextBlock.Style>
                                             </TextBlock>
-                                            <TextBlock Text="📅 " Foreground="#94A3B8" FontSize="13"/>
-                                            <TextBlock Text="{Binding DateStr}" Foreground="#94A3B8" FontSize="13"/>
+                                            <TextBlock Text="📅 " Foreground="{DynamicResource TextMuted}" FontSize="13"/>
+                                            <TextBlock Text="{Binding DateStr}" Foreground="{DynamicResource TextMuted}" FontSize="13"/>
                                         </StackPanel>
                                     </Grid>
                                 </Border>
@@ -272,7 +272,7 @@
                                             </Border>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter Property="Background" Value="#F8FAFC"/>
+                                                    <Setter Property="Background" Value="{DynamicResource ControlBackground}"/>
                                                 </Trigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
@@ -285,7 +285,7 @@
             </Border>
         </Grid>
 
-        <Border Background="#CC0F172A" CornerRadius="8" Padding="32,16" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+        <Border Background="{DynamicResource ToastBackground}" CornerRadius="8" Padding="32,16" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
             <Border.Style>
                 <Style TargetType="Border">
                     <Setter Property="Opacity" Value="0"/>
@@ -315,3 +315,5 @@
         </Border>
     </Grid>
 </Window>
+
+
