@@ -16,9 +16,11 @@ namespace ExpressPackingMonitoring
         public double CurrentDiskUsagePercent { get; set; }
         public string CurrentDiskUsageText { get; set; }
 
+        private string _originalTheme;
         public SettingsWindow(AppConfig clonedConfig, double diskUsagePercent, string diskUsageText)
         {
             InitializeComponent();
+            _originalTheme = clonedConfig.Theme;
             Config = clonedConfig;
 
             CurrentDiskUsagePercent = diskUsagePercent;
@@ -28,6 +30,18 @@ namespace ExpressPackingMonitoring
 
             LoadCameras();
             LoadPresets(clonedConfig);
+        }
+
+        private void ThemeComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (ThemeComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem item && item.Content != null)
+            {
+                string t = item.Content.ToString();
+                if (Enum.TryParse<ExpressPackingMonitoring.Themes.AppTheme>(t, out var themeEnum))
+                {
+                    ExpressPackingMonitoring.Themes.ThemeManager.ApplyTheme(themeEnum);
+                }
+            }
         }
 
         private void LoadPresets(AppConfig config)
@@ -87,6 +101,20 @@ namespace ExpressPackingMonitoring
             this.DialogResult = true; this.Close();
         }
 
-        private void BtnCancel_Click(object sender, RoutedEventArgs e) { this.DialogResult = false; this.Close(); }
+        private void BtnCancel_Click(object sender, RoutedEventArgs e)
+        {
+            if (Config.Theme != _originalTheme)
+            {
+                if (Enum.TryParse<ExpressPackingMonitoring.Themes.AppTheme>(_originalTheme, out var themeEnum))
+                {
+                    ExpressPackingMonitoring.Themes.ThemeManager.ApplyTheme(themeEnum);
+                }
+            }
+            this.DialogResult = false;
+            this.Close();
+        }
     }
 }
+
+
+

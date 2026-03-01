@@ -60,6 +60,7 @@ namespace ExpressPackingMonitoring.ViewModels
         public string OrderIdRegex { get; set; } = "^[a-zA-Z0-9]{6,30}$";
         public bool EnableSoundPrompt { get; set; } = true;
         public double TimeoutWarningSeconds { get; set; } = 10.0;
+        public string Theme { get; set; } = "Auto";
     }
 
     public class MainViewModel : ObservableObject, IDisposable
@@ -189,7 +190,30 @@ namespace ExpressPackingMonitoring.ViewModels
         private void FilterLogs() { FilteredLogs.Clear(); var keyword = LogSearchText?.ToUpper() ?? ""; foreach (var log in _allLogs) { if (string.IsNullOrEmpty(keyword) || log.OrderId.ToUpper().Contains(keyword)) FilteredLogs.Add(log); } }
         private void AddRecord(ScanRecord record) { Application.Current.Dispatcher.InvokeAsync(() => { _allLogs.Insert(0, record); if (string.IsNullOrEmpty(LogSearchText)) FilteredLogs.Insert(0, record); if (_allLogs.Count > 200) _allLogs.RemoveAt(_allLogs.Count - 1); }); }
 
-        private void LoadConfig() { try { if (File.Exists(_configFilePath)) Config = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(_configFilePath)) ?? new AppConfig(); else { Config = new AppConfig(); SaveConfig(); } } catch { Config = new AppConfig(); } }
+        private void LoadConfig() 
+        { 
+            try 
+            { 
+                if (File.Exists(_configFilePath)) 
+                    Config = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(_configFilePath)) ?? new AppConfig(); 
+                else 
+                { 
+                    Config = new AppConfig(); 
+                    SaveConfig(); 
+                } 
+            } 
+            catch { Config = new AppConfig(); } 
+            
+            // Apply Theme
+            if (Enum.TryParse<ExpressPackingMonitoring.Themes.AppTheme>(Config.Theme, out var themeEnum))
+            {
+                ExpressPackingMonitoring.Themes.ThemeManager.ApplyTheme(themeEnum);
+            }
+            else
+            {
+                ExpressPackingMonitoring.Themes.ThemeManager.ApplyTheme(ExpressPackingMonitoring.Themes.AppTheme.Auto);
+            }
+        }
         private void SaveConfig() { try { File.WriteAllText(_configFilePath, JsonSerializer.Serialize(Config, new JsonSerializerOptions { WriteIndented = true })); } catch { } }
 
         public void OpenSettings()
@@ -200,7 +224,19 @@ namespace ExpressPackingMonitoring.ViewModels
                 var clonedConfig = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(Config)) ?? new AppConfig();
                 var settingsWin = new SettingsWindow(clonedConfig, DiskUsagePercent, DiskUsageText);
                 if (Application.Current?.MainWindow != null) settingsWin.Owner = Application.Current.MainWindow;
-                if (settingsWin.ShowDialog() == true) { Config = clonedConfig; SaveConfig(); ForceCheckDiskAndCleanup(); ShowToast("⚙️ 配置已保存，重启相机"); RestartCamera(); }
+                if (settingsWin.ShowDialog() == true) { 
+                    bool themeChanged = Config.Theme != clonedConfig.Theme;
+                    Config = clonedConfig; 
+                    SaveConfig(); 
+                    if (themeChanged)
+                    {
+                        if (Enum.TryParse<ExpressPackingMonitoring.Themes.AppTheme>(Config.Theme, out var themeEnum))
+                        {
+                            ExpressPackingMonitoring.Themes.ThemeManager.ApplyTheme(themeEnum);
+                        }
+                    }
+                    ForceCheckDiskAndCleanup(); ShowToast("⚙️ 配置已保存，重启相机"); RestartCamera(); 
+                }
             }
             catch (Exception ex) { ShowToast($"设置错误: {ex.Message}"); }
         }

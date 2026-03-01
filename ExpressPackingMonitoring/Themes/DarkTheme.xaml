@@ -1,0 +1,41 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Window & Panel -->
+    <SolidColorBrush x:Key="WindowBackground" Color="#0B1120"/> <!-- Darker than panel -->
+    <SolidColorBrush x:Key="PanelBackground" Color="#1E293B"/> <!-- Main surface -->
+    <SolidColorBrush x:Key="ControlBackground" Color="#0F172A"/> <!-- Input fields -->
+    <SolidColorBrush x:Key="ControlBackgroundHover" Color="#334155"/>
+
+    <!-- Text -->
+    <SolidColorBrush x:Key="TextPrimary" Color="#F8FAFC"/>
+    <SolidColorBrush x:Key="TextSecondary" Color="#94A3B8"/>
+    <SolidColorBrush x:Key="TextMuted" Color="#64748B"/>
+    <SolidColorBrush x:Key="TextInvert" Color="#1E293B"/> <!-- Sometimes dark text on accent -->
+
+    <!-- Borders -->
+    <SolidColorBrush x:Key="BorderLight" Color="#334155"/>
+    <SolidColorBrush x:Key="BorderDefault" Color="#475569"/>
+    <SolidColorBrush x:Key="BorderStrong" Color="#64748B"/>
+
+    <!-- Accent / Status -->
+    <SolidColorBrush x:Key="AccentBlue" Color="#3B82F6"/>
+    <SolidColorBrush x:Key="AccentBlueDark" Color="#60A5FA"/> <!-- Lighter for dark mode contrast -->
+    <SolidColorBrush x:Key="AccentGreen" Color="#10B981"/>
+    <SolidColorBrush x:Key="AccentRed" Color="#EF4444"/>
+    <SolidColorBrush x:Key="AccentOrange" Color="#F59E0B"/>
+    <SolidColorBrush x:Key="AccentPurple" Color="#8B5CF6"/>
+    <SolidColorBrush x:Key="AccentCyan" Color="#0EA5E9"/>
+
+    <!-- List Item Status Colors -->
+    <SolidColorBrush x:Key="BadgePackBg" Color="#1E3A8A"/> <!-- Darker background -->
+    <SolidColorBrush x:Key="BadgePackText" Color="#93C5FD"/> <!-- Lighter text -->
+    <SolidColorBrush x:Key="BadgeReturnBg" Color="#78350F"/>
+    <SolidColorBrush x:Key="BadgeReturnText" Color="#FCD34D"/>
+    <SolidColorBrush x:Key="BadgeErrorBg" Color="#7F1D1D"/>
+    <SolidColorBrush x:Key="BadgeErrorText" Color="#FCA5A5"/>
+
+    <!-- Misc -->
+    <Color x:Key="ShadowColor">#000000</Color>
+    <SolidColorBrush x:Key="ToastBackground" Color="#CC334155"/> <!-- Dark toast suitable for white text -->
+    <SolidColorBrush x:Key="VideoPlaceholder" Color="#000000"/>
+</ResourceDictionary>
