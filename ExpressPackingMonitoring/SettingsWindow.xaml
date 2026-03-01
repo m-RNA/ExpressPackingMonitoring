@@ -111,6 +111,23 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="140"/>
                             <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="启用声音提示:" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
+                        <CheckBox Grid.Column="1" IsChecked="{Binding Config.EnableSoundPrompt}" VerticalAlignment="Center">
+                            <CheckBox.LayoutTransform>
+                                <ScaleTransform ScaleX="1.3" ScaleY="1.3"/>
+                            </CheckBox.LayoutTransform>
+                        </CheckBox>
+                    </Grid>
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="超时预警提前 (秒):" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
+                        <xctk:DoubleUpDown Grid.Column="1" Value="{Binding Config.TimeoutWarningSeconds}" Minimum="3" Maximum="120" Increment="1" Padding="6"/>
+                    </Grid>
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="视频存储路径:" VerticalAlignment="Center" Foreground="#333" FontWeight="SemiBold"/>
