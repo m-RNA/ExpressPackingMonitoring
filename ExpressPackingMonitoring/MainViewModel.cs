@@ -24,13 +24,6 @@ using System.Speech.Synthesis;
 
 namespace ExpressPackingMonitoring.ViewModels
 {
-    // 【新增】：用于本地持久化保存的统计模型
-    public class DailyStatItem
-    {
-        public string Date { get; set; }
-        public int TotalPieces { get; set; }
-        public double TotalDurationSec { get; set; }
-    }
 
     public partial class ScanRecord : ObservableObject
     {
@@ -75,7 +68,8 @@ namespace ExpressPackingMonitoring.ViewModels
     {
         private AppConfig _config;
         private readonly string _configFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
-        private readonly string _statsFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "daily_stats.json");
+        private readonly string _dbFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "videos.db");
+        private VideoDatabase _db;
 
         private VideoCaptureDevice _videoSource;
         private Mat _latestFrame;
@@ -112,6 +106,9 @@ namespace ExpressPackingMonitoring.ViewModels
         private bool _delayBeforeZooming = false;
 
         private ScanRecord _currentScanRecord;
+        private long _currentVideoRecordId;    // 数据库中当前录制记录 ID
+        private string _currentVideoFilePath;  // 当前录制文件路径
+        private string _stopReason = "手动";     // 停止录制的原因
         private bool _autoStopWarned = false;
         private bool _maxDurationWarned = false;
 
@@ -150,7 +147,8 @@ namespace ExpressPackingMonitoring.ViewModels
         public MainViewModel()
         {
             LoadConfig();
-            LoadTodayStats();
+            InitDatabase();
+            RefreshTodayStats();
             InitSpeechSynthesizer();
             ScanCommand = new RelayCommand<string>(HandleScan);
             OpenSettingsCommand = new RelayCommand(OpenSettings);
@@ -161,40 +159,26 @@ namespace ExpressPackingMonitoring.ViewModels
             InitializeSystem();
         }
 
-        private void LoadTodayStats()
+        private void InitDatabase()
         {
             try
             {
-                if (File.Exists(_statsFilePath))
-                {
-                    var stats = JsonSerializer.Deserialize<List<DailyStatItem>>(File.ReadAllText(_statsFilePath));
-                    var today = stats?.FirstOrDefault(s => s.Date == DateTime.Now.ToString("yyyy-MM-dd"));
-                    if (today != null)
-                    {
-                        TotalPieces = today.TotalPieces;
-                        _totalPackTime = TimeSpan.FromSeconds(today.TotalDurationSec);
-                        OnPropertyChanged(nameof(TotalPackTimeStr)); OnPropertyChanged(nameof(AveragePackTime));
-                    }
-                }
+                _db = new VideoDatabase(_dbFilePath);
             }
             catch { }
         }
 
-        private void SaveStatToDatabase(double durationSec)
+        private void RefreshTodayStats()
         {
             try
             {
-                List<DailyStatItem> stats = new List<DailyStatItem>();
-                if (File.Exists(_statsFilePath)) stats = JsonSerializer.Deserialize<List<DailyStatItem>>(File.ReadAllText(_statsFilePath)) ?? new List<DailyStatItem>();
-
-                string dateStr = DateTime.Now.ToString("yyyy-MM-dd");
-                var today = stats.FirstOrDefault(s => s.Date == dateStr);
-                if (today == null) { today = new DailyStatItem { Date = dateStr }; stats.Add(today); }
-
-                today.TotalPieces++;
-                today.TotalDurationSec += durationSec;
-
-                File.WriteAllText(_statsFilePath, JsonSerializer.Serialize(stats));
+                var today = _db?.GetTodayStat();
+                if (today != null)
+                {
+                    TotalPieces = today.TotalPieces;
+                    _totalPackTime = TimeSpan.FromSeconds(today.TotalDurationSec);
+                    OnPropertyChanged(nameof(TotalPackTimeStr)); OnPropertyChanged(nameof(AveragePackTime));
+                }
             }
             catch { }
         }
@@ -225,7 +209,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private void OpenStatsWindow()
         {
-            var statsWin = new StatisticsWindow(_statsFilePath);
+            var statsWin = new StatisticsWindow(_db);
             if (Application.Current?.MainWindow != null) statsWin.Owner = Application.Current.MainWindow;
             statsWin.ShowDialog();
         }
@@ -246,7 +230,7 @@ namespace ExpressPackingMonitoring.ViewModels
         {
             string folderPath = Path.IsPathRooted(Config.VideoStoragePath) ? Config.VideoStoragePath : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Config.VideoStoragePath);
             if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
-            var playbackWin = new PlaybackWindow(folderPath);
+            var playbackWin = new PlaybackWindow(folderPath, _db);
             if (Application.Current?.MainWindow != null) playbackWin.Owner = Application.Current.MainWindow;
             playbackWin.ShowDialog();
         }
@@ -444,10 +428,10 @@ namespace ExpressPackingMonitoring.ViewModels
                         }
 
                         if (!inGracePeriod && Config.EnableAutoStop && (DateTime.Now - _lastMotionTime).TotalSeconds >= Config.AutoStopMinutes * 60.0)
-                        { _ = Application.Current.Dispatcher.InvokeAsync(() => { StopRecording(); ShowToast("画面静止超时，自动停录"); Speak("静止超时，停止录制"); CurrentOrderId = ""; ScanInputText = ""; }); }
+                        { _stopReason = "静止超时"; _ = Application.Current.Dispatcher.InvokeAsync(() => { StopRecording(); ShowToast("画面静止超时，自动停录"); Speak("静止超时，停止录制"); CurrentOrderId = ""; ScanInputText = ""; }); }
 
                         if (!inGracePeriod && Config.EnableMaxDuration && elapsedSec >= Config.MaxDurationMinutes * 60.0)
-                        { _ = Application.Current.Dispatcher.InvokeAsync(() => { StopRecording(); ShowToast("⏳ 已达最大录像限制时长"); Speak("时长超时，停止录制"); CurrentOrderId = ""; ScanInputText = ""; }); }
+                        { _stopReason = "时长超时"; _ = Application.Current.Dispatcher.InvokeAsync(() => { StopRecording(); ShowToast("⏳ 已达最大录像限制时长"); Speak("时长超时，停止录制"); CurrentOrderId = ""; ScanInputText = ""; }); }
                     }
 
                     frameTickCounter++;
@@ -487,6 +471,7 @@ namespace ExpressPackingMonitoring.ViewModels
             try { if (!System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex)) { ScanInputText = ""; ShowToast("非法单号，已拦截"); return; } } catch { }
 
             CurrentOrderId = upperResult;
+            if (IsRecording) _stopReason = "扫码切换";
             StartRecordingProcess();
         }
 
@@ -508,6 +493,11 @@ namespace ExpressPackingMonitoring.ViewModels
 
             string fileName = $"{CurrentOrderId}_{DateTime.Now:yyyyMMdd_HHmmss}_{CurrentMode}.mp4";
             string filePath = Path.Combine(dateFolder, fileName);
+            _currentVideoFilePath = filePath;
+            _stopReason = "手动";
+
+            // 录制开始时写入数据库
+            try { _currentVideoRecordId = _db?.InsertVideoRecord(CurrentOrderId, CurrentMode, filePath, DateTime.Now) ?? 0; } catch { _currentVideoRecordId = 0; }
 
             if (_cachedFourCC == 0)
             {
@@ -621,20 +611,29 @@ namespace ExpressPackingMonitoring.ViewModels
             var duration = DateTime.Now - _recordStartTime;
             if (duration.TotalSeconds > 0 && _recordStartTime.Year > 2000)
             {
-                TotalPieces++; _totalPackTime += duration;
-                OnPropertyChanged(nameof(TotalPackTimeStr)); OnPropertyChanged(nameof(AveragePackTime));
-
                 if (_currentScanRecord != null)
                 {
                     _currentScanRecord.Duration = $"{(int)duration.TotalSeconds}s";
-                    _currentScanRecord.IsActive = false; // 【需求2】：录完恢复黑色
+                    _currentScanRecord.IsActive = false;
                 }
 
-                // 【核心：写入统计数据库】
-                SaveStatToDatabase(duration.TotalSeconds);
+                // 更新数据库记录：结束时间、时长、文件大小、停止原因
+                try
+                {
+                    long fileSize = 0;
+                    if (!string.IsNullOrEmpty(_currentVideoFilePath) && File.Exists(_currentVideoFilePath))
+                        fileSize = new FileInfo(_currentVideoFilePath).Length;
+                    _db?.UpdateVideoRecordOnStop(_currentVideoRecordId, DateTime.Now, duration.TotalSeconds, fileSize, _stopReason);
+                }
+                catch { }
+
+                // 从数据库刷新今日统计（保证与统计窗口一致）
+                RefreshTodayStats();
             }
             _recordStartTime = DateTime.MinValue;
             _currentScanRecord = null;
+            _currentVideoRecordId = 0;
+            _currentVideoFilePath = null;
         }
 
         private void ForceCheckDiskAndCleanup()
@@ -643,30 +642,87 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 try
                 {
-                    string folderPath = Path.IsPathRooted(Config.VideoStoragePath) ? Config.VideoStoragePath : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Config.VideoStoragePath);
-                    if (Directory.Exists(folderPath))
+                    // 优先从数据库获取总大小（快速），回退到文件系统扫描
+                    long currentSizeBytes = _db?.GetTotalFileSizeBytes() ?? 0;
+                    if (currentSizeBytes == 0)
                     {
-                        var dirInfo = new DirectoryInfo(folderPath);
-                        // 使用 EnumerateFiles 懒加载，避免一次性加载 50k+ 文件元数据到内存
-                        long currentSizeBytes = 0;
-                        foreach (var fi in dirInfo.EnumerateFiles("*.mp4", SearchOption.AllDirectories))
-                            currentSizeBytes += fi.Length;
-
-                        long maxSizeBytes = (long)(Config.MaxDiskSpaceGB * 1024 * 1024 * 1024);
-                        if (currentSizeBytes > maxSizeBytes)
+                        string folderPath = Path.IsPathRooted(Config.VideoStoragePath) ? Config.VideoStoragePath : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Config.VideoStoragePath);
+                        if (Directory.Exists(folderPath))
                         {
-                            long bytesToDelete = currentSizeBytes - (long)(maxSizeBytes * 0.9);
-                            long deletedBytes = 0;
-                            // 流式枚举 + 排序，只取需要删除的部分
-                            foreach (var file in dirInfo.EnumerateFiles("*.mp4", SearchOption.AllDirectories).OrderBy(fi => fi.LastWriteTime))
+                            foreach (var fi in new DirectoryInfo(folderPath).EnumerateFiles("*.mp4", SearchOption.AllDirectories))
+                                currentSizeBytes += fi.Length;
+                        }
+                    }
+
+                    long maxSizeBytes = (long)(Config.MaxDiskSpaceGB * 1024 * 1024 * 1024);
+                    if (currentSizeBytes > maxSizeBytes)
+                    {
+                        long bytesToDelete = currentSizeBytes - (long)(maxSizeBytes * 0.9);
+                        long deletedBytes = 0;
+                        int deletedCount = 0;
+
+                        // 从数据库查询最旧的视频，按时间升序删除
+                        var oldestVideos = _db?.GetOldestVideos(200);
+                        if (oldestVideos != null && oldestVideos.Count > 0)
+                        {
+                            foreach (var video in oldestVideos)
                             {
-                                try { long len = file.Length; file.Delete(); deletedBytes += len; currentSizeBytes -= len; if (deletedBytes >= bytesToDelete) break; } catch { }
+                                try
+                                {
+                                    long len = video.FileSizeBytes;
+                                    if (File.Exists(video.FilePath))
+                                    {
+                                        len = new FileInfo(video.FilePath).Length; // 用实际大小
+                                        File.Delete(video.FilePath);
+                                    }
+                                    // 数据库记录删除日志
+                                    _db?.MarkVideoDeleted(video.FilePath, "磁盘空间清理");
+                                    deletedBytes += len;
+                                    currentSizeBytes -= len;
+                                    deletedCount++;
+                                    if (deletedBytes >= bytesToDelete) break;
+                                }
+                                catch { }
                             }
                         }
-                        double currentGB = currentSizeBytes / (1024.0 * 1024.0 * 1024.0);
-                        double maxGB = Config.MaxDiskSpaceGB > 0 ? Config.MaxDiskSpaceGB : 1.0;
-                        _ = Application.Current.Dispatcher.InvokeAsync(() => { DiskUsagePercent = Math.Min(100.0, (currentGB / maxGB) * 100.0); DiskUsageText = $"{currentGB:F1} / {maxGB:F1} GB"; });
+                        else
+                        {
+                            // 数据库为空时回退到文件系统删除
+                            string folderPath = Path.IsPathRooted(Config.VideoStoragePath) ? Config.VideoStoragePath : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Config.VideoStoragePath);
+                            if (Directory.Exists(folderPath))
+                            {
+                                foreach (var file in new DirectoryInfo(folderPath).EnumerateFiles("*.mp4", SearchOption.AllDirectories).OrderBy(fi => fi.LastWriteTime))
+                                {
+                                    try
+                                    {
+                                        long len = file.Length;
+                                        string fp = file.FullName;
+                                        file.Delete();
+                                        _db?.MarkVideoDeleted(fp, "磁盘空间清理");
+                                        deletedBytes += len;
+                                        currentSizeBytes -= len;
+                                        deletedCount++;
+                                        if (deletedBytes >= bytesToDelete) break;
+                                    }
+                                    catch { }
+                                }
+                            }
+                        }
+
+                        if (deletedCount > 0)
+                        {
+                            double deletedMB = deletedBytes / (1024.0 * 1024.0);
+                            _ = Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                ShowToast($"🗑 磁盘清理: 删除{deletedCount}个视频，释放{deletedMB:F0}MB");
+                                RefreshTodayStats(); // 清理后刷新统计（删除的视频不再计入）
+                            });
+                        }
                     }
+
+                    double currentGB = currentSizeBytes / (1024.0 * 1024.0 * 1024.0);
+                    double maxGB = Config.MaxDiskSpaceGB > 0 ? Config.MaxDiskSpaceGB : 1.0;
+                    _ = Application.Current.Dispatcher.InvokeAsync(() => { DiskUsagePercent = Math.Min(100.0, (currentGB / maxGB) * 100.0); DiskUsageText = $"{currentGB:F1} / {maxGB:F1} GB"; });
                 }
                 catch { }
             });
@@ -675,12 +731,14 @@ namespace ExpressPackingMonitoring.ViewModels
         public void Dispose()
         {
             _cts?.Cancel();
+            _stopReason = "程序退出";
             StopRecording();
             StopCamera();
             try { _videoTask?.Wait(3000); } catch { }
             _cts?.Dispose();
             lock (_videoLock) { _previousCheckFrame?.Dispose(); }
             lock (_speechLock) { _speechSynth?.Dispose(); _speechSynth = null; }
+            try { _db?.Dispose(); } catch { }
         }
 
         private void InitSpeechSynthesizer()
