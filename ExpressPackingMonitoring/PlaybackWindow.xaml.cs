@@ -13,9 +13,9 @@ namespace ExpressPackingMonitoring
 {
     public class VideoItem
     {
-        public string DisplayName { get; set; }
-        public string FullPath { get; set; }
-        public FileInfo File { get; set; }
+        public string DisplayName { get; set; } = "";
+        public string FullPath { get; set; } = "";
+        public required FileInfo File { get; set; }
     }
 
     public partial class PlaybackWindow : Window
@@ -31,7 +31,7 @@ namespace ExpressPackingMonitoring
             InitializeComponent();
             _folderPath = folderPath;
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
-            _timer.Tick += Timer_Tick;
+            _timer.Tick += Timer_Tick!;
             DpEndDate.SelectedDate = DateTime.Now;
             DpStartDate.SelectedDate = DateTime.Now.AddDays(-7);
             LoadVideos();
@@ -70,7 +70,7 @@ namespace ExpressPackingMonitoring
         {
             if (_allVideos == null || VideoList == null) return;
             var filtered = _allVideos.AsEnumerable();
-            string keyword = SearchBox?.Text.Trim().ToUpper();
+            string? keyword = SearchBox?.Text.Trim().ToUpper();
             if (!string.IsNullOrEmpty(keyword)) filtered = filtered.Where(v => v.File.Name.ToUpper().Contains(keyword));
             VideoList.ItemsSource = filtered.ToList();
         }
