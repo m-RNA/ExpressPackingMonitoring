@@ -81,10 +81,10 @@ namespace ExpressPackingMonitoring.ViewModels
         private Mat _latestFrame;
         private readonly object _frameLock = new object();
 
-        private VideoWriter _writer;
         private BlockingCollection<Mat> _videoWriteQueue;
         private Task _writeTask;
         private CancellationTokenSource _writeCts;
+        private int _cachedFourCC = 0; // 启动时探测并缓存可用编码器
 
         private Mat _previousCheckFrame = new Mat();
         private BitmapSource _videoFrame;
@@ -251,7 +251,60 @@ namespace ExpressPackingMonitoring.ViewModels
             playbackWin.ShowDialog();
         }
 
-        private void InitializeSystem() { _cts = new CancellationTokenSource(); StartCamera(); _videoTask = Task.Run(() => VideoProcessLoop(_cts.Token), _cts.Token); Task.Run(CheckDiskAndCleanup); }
+        private void InitializeSystem()
+        {
+            ProbeVideoCodec();  // 启动时一次性探测可用编码器
+            _cts = new CancellationTokenSource();
+            StartCamera();
+            _videoTask = Task.Run(() => VideoProcessLoop(_cts.Token), _cts.Token);
+            Task.Run(CheckDiskAndCleanup);
+        }
+
+        /// <summary>
+        /// 参照 OBS 做法：启动时用独立临时文件探测可用编码器，避免录制时反复创建/销毁 VideoWriter 泄漏 FFmpeg 句柄。
+        /// </summary>
+        private void ProbeVideoCodec()
+        {
+            string testDir = Path.Combine(Path.GetTempPath(), "ExpressPackingMonitoring_probe");
+            try { Directory.CreateDirectory(testDir); } catch { return; }
+
+            // 优先 mp4v（兼容性最好），再试 avc1、hevc
+            int[] codecs = {
+                FourCC.MP4V,
+                VideoWriter.FourCC('a', 'v', 'c', '1'),
+                VideoWriter.FourCC('h', 'e', 'v', 'c'),
+            };
+
+            foreach (var codec in codecs)
+            {
+                // 每个编码器用单独的临时文件，互不干扰
+                string testFile = Path.Combine(testDir, $"probe_{codec}.mp4");
+                VideoWriter testWriter = null;
+                try
+                {
+                    testWriter = new VideoWriter(testFile, codec, 15, new OpenCvSharp.Size(640, 480));
+                    if (testWriter.IsOpened())
+                    {
+                        // 写入 2 帧验证编码器真正可用
+                        using var black = new Mat(480, 640, MatType.CV_8UC3, Scalar.All(0));
+                        testWriter.Write(black);
+                        testWriter.Write(black);
+                        _cachedFourCC = codec;
+                    }
+                }
+                catch { }
+                finally
+                {
+                    // 同一线程创建和释放，保证 FFmpeg 状态干净
+                    try { testWriter?.Release(); } catch { }
+                    try { testWriter?.Dispose(); } catch { }
+                }
+                if (_cachedFourCC != 0) break;
+            }
+
+            // 清理临时目录
+            try { Directory.Delete(testDir, true); } catch { }
+        }
         private void RestartCamera() { StopRecording(); StopCamera(); StartCamera(); }
 
         private void StartCamera()
@@ -326,7 +379,12 @@ namespace ExpressPackingMonitoring.ViewModels
                         }
                         else if (_isScanning) { _isScanning = false; }
 
-                        if (IsRecording && _videoWriteQueue != null && !_videoWriteQueue.IsAddingCompleted) { _videoWriteQueue.Add(processedFrame.Clone()); }
+                        if (IsRecording && _videoWriteQueue != null && !_videoWriteQueue.IsAddingCompleted)
+                        {
+                            try { _videoWriteQueue.TryAdd(processedFrame.Clone(), 100); }
+                            catch (ObjectDisposedException) { }
+                            catch (InvalidOperationException) { }
+                        }
 
                         var bitmap = processedFrame.ToWriteableBitmap();
                         bitmap.Freeze();
@@ -451,19 +509,20 @@ namespace ExpressPackingMonitoring.ViewModels
             string fileName = $"{CurrentOrderId}_{DateTime.Now:yyyyMMdd_HHmmss}_{CurrentMode}.mp4";
             string filePath = Path.Combine(dateFolder, fileName);
 
+            if (_cachedFourCC == 0)
+            {
+                IsRecording = false;
+                ShowToast("⚠ 无可用视频编码器，无法录制");
+                Speak("编码器不可用");
+                return;
+            }
+
             lock (_videoLock)
             {
-                _writer = new VideoWriter(filePath, VideoWriter.FourCC('h', 'e', 'v', 'c'), Config.Fps, new OpenCvSharp.Size(Config.FrameWidth, Config.FrameHeight));
-                if (!_writer.IsOpened())
-                {
-                    _writer?.Dispose();
-                    _writer = new VideoWriter(filePath, VideoWriter.FourCC('a', 'v', 'c', '1'), Config.Fps, new OpenCvSharp.Size(Config.FrameWidth, Config.FrameHeight));
-                    if (!_writer.IsOpened()) { _writer?.Dispose(); _writer = new VideoWriter(filePath, FourCC.MP4V, Config.Fps, new OpenCvSharp.Size(Config.FrameWidth, Config.FrameHeight)); }
-                }
-
                 _writeCts = new CancellationTokenSource();
                 _videoWriteQueue = new BlockingCollection<Mat>(boundedCapacity: 120);
-                _writeTask = Task.Run(() => BackgroundVideoWriterLoop(_writeCts.Token));
+                // 参照 OBS：VideoWriter 在写入线程内创建/使用/销毁，保证同一线程生命周期
+                _writeTask = Task.Run(() => BackgroundVideoWriterLoop(filePath, _writeCts.Token));
             }
 
             ShowToast("▶ 开始录像");
@@ -473,26 +532,63 @@ namespace ExpressPackingMonitoring.ViewModels
             AddRecord(_currentScanRecord);
         }
 
-        private void BackgroundVideoWriterLoop(CancellationToken token)
+        /// <summary>
+        /// 参照 OBS 做法：VideoWriter 的创建、写入、Release/Dispose 全部在同一线程完成，
+        /// 避免跨线程操作导致 FFmpeg 原生句柄泄漏。
+        /// </summary>
+        private void BackgroundVideoWriterLoop(string filePath, CancellationToken token)
         {
+            VideoWriter writer = null;
+            bool writerOk = false;
             try
             {
-                foreach (var frame in _videoWriteQueue.GetConsumingEnumerable(token))
+                var size = new OpenCvSharp.Size(Config.FrameWidth, Config.FrameHeight);
+                writer = new VideoWriter(filePath, _cachedFourCC, Config.Fps, size);
+
+                if (!writer.IsOpened())
                 {
+                    _ = Application.Current.Dispatcher.BeginInvoke(() =>
+                    {
+                        IsRecording = false;
+                        ShowToast("⚠ 视频编码器打开失败");
+                    });
+                    return;
+                }
+                writerOk = true;
+
+                // 使用无 token 的枚举，让 CompleteAdding 自然排空队列中所有帧
+                foreach (var frame in _videoWriteQueue.GetConsumingEnumerable())
+                {
+                    // 仅在排空后用 token 作为强制中断的兜底
+                    if (token.IsCancellationRequested) { frame?.Dispose(); break; }
+
                     if (frame != null && !frame.IsDisposed)
                     {
-                        if (frame.Width != Config.FrameWidth || frame.Height != Config.FrameHeight)
+                        if (frame.Width != size.Width || frame.Height != size.Height)
                         {
-                            using var resizedFrame = new Mat();
-                            Cv2.Resize(frame, resizedFrame, new OpenCvSharp.Size(Config.FrameWidth, Config.FrameHeight));
-                            _writer?.Write(resizedFrame);
+                            using var resized = new Mat();
+                            Cv2.Resize(frame, resized, size);
+                            writer.Write(resized);
                         }
-                        else { _writer?.Write(frame); }
+                        else { writer.Write(frame); }
                         frame.Dispose();
                     }
                 }
             }
+            catch (OperationCanceledException) { }
             catch { }
+            finally
+            {
+                // 同一线程释放，保证 FFmpeg muxer 正确写入 trailer
+                try { writer?.Release(); } catch { }
+                try { writer?.Dispose(); } catch { }
+
+                // 如果 writer 创建失败，删除 0KB 空文件
+                if (!writerOk)
+                {
+                    try { if (File.Exists(filePath)) File.Delete(filePath); } catch { }
+                }
+            }
         }
 
         private void StopRecording()
@@ -503,12 +599,23 @@ namespace ExpressPackingMonitoring.ViewModels
 
             lock (_videoLock)
             {
+                // CompleteAdding → 写入线程自然排空队列所有帧 → Release/Dispose writer（同一线程）
                 _videoWriteQueue?.CompleteAdding();
+                try { _writeTask?.Wait(8000); } catch { }
+                // 兜底：如果排空超时，强制中断
                 _writeCts?.Cancel();
                 try { _writeTask?.Wait(2000); } catch { }
                 _writeCts?.Dispose(); _writeCts = null;
-                _videoWriteQueue?.Dispose(); _videoWriteQueue = null;
-                if (_writer != null) { _writer.Release(); _writer.Dispose(); _writer = null; }
+
+                // 清理队列中因强制中断而未消费的残留帧
+                if (_videoWriteQueue != null)
+                {
+                    while (_videoWriteQueue.TryTake(out var leftover))
+                        leftover?.Dispose();
+                    _videoWriteQueue.Dispose();
+                    _videoWriteQueue = null;
+                }
+                _writeTask = null;
             }
 
             var duration = DateTime.Now - _recordStartTime;
@@ -572,7 +679,7 @@ namespace ExpressPackingMonitoring.ViewModels
             StopCamera();
             try { _videoTask?.Wait(3000); } catch { }
             _cts?.Dispose();
-            lock (_videoLock) { _writer?.Dispose(); _previousCheckFrame?.Dispose(); }
+            lock (_videoLock) { _previousCheckFrame?.Dispose(); }
             lock (_speechLock) { _speechSynth?.Dispose(); _speechSynth = null; }
         }
 

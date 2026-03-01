@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:ExpressPackingMonitoring.ViewModels"
         Title="📦 极简打包监控终端 v6.0" Height="850" Width="1350"
-        Background="#F3F4F6" WindowState="Maximized" Closed="Window_Closed"
+        Background="#F3F4F6" WindowState="Maximized" Closing="Window_Closing"
         FontFamily="Microsoft YaHei UI, Segoe UI">
 
     <Window.DataContext>
