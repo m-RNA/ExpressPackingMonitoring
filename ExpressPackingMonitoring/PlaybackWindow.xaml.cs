@@ -21,7 +21,24 @@ namespace ExpressPackingMonitoring
         public string FileSize { get; set; } = "";
         public string StopReason { get; set; } = "";
         public bool IsMissing { get; set; }
-        public string MissingText => IsMissing ? "⚠ 文件已丢失" : "";
+        public bool IsDeleted { get; set; }
+        public string DeleteReason { get; set; } = "";
+        public DateTime? DeletedAt { get; set; }
+        public string StatusText
+        {
+            get
+            {
+                if (IsDeleted)
+                {
+                    string reason = string.IsNullOrEmpty(DeleteReason) ? "已删除" : DeleteReason;
+                    string time = DeletedAt?.ToString("MM-dd HH:mm") ?? "";
+                    return $"已覆盖 ({reason} {time})";
+                }
+                if (IsMissing) return "⚠ 文件已丢失";
+                return "";
+            }
+        }
+        public bool IsUnavailable => IsDeleted || IsMissing;
         public FileInfo? File { get; set; }
     }
 
@@ -29,16 +46,18 @@ namespace ExpressPackingMonitoring
     {
         private readonly string _folderPath;
         private readonly VideoDatabase? _db;
+        private readonly bool _showDeletedVideos;
         private List<VideoItem> _allVideos = new List<VideoItem>();
         private DispatcherTimer _timer;
         private bool _isDragging = false;
         private bool _isPlaying = false;
 
-        public PlaybackWindow(string folderPath, VideoDatabase? db = null)
+        public PlaybackWindow(string folderPath, VideoDatabase? db = null, bool showDeletedVideos = true)
         {
             InitializeComponent();
             _folderPath = folderPath;
             _db = db;
+            _showDeletedVideos = showDeletedVideos;
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
             _timer.Tick += Timer_Tick!;
             DpEndDate.SelectedDate = DateTime.Now;
@@ -67,8 +86,9 @@ namespace ExpressPackingMonitoring
                     var records = _db.QueryVideos(start, end, string.IsNullOrEmpty(keyword) ? null : keyword);
                     foreach (var r in records)
                     {
-                        bool missing = !File.Exists(r.FilePath);
-                        FileInfo? fi = missing ? null : new FileInfo(r.FilePath);
+                        bool deleted = r.IsDeleted;
+                        bool missing = !deleted && !File.Exists(r.FilePath);
+                        FileInfo? fi = (deleted || missing) ? null : new FileInfo(r.FilePath);
                         _allVideos.Add(new VideoItem
                         {
                             DisplayName = Path.GetFileNameWithoutExtension(r.FileName),
@@ -76,9 +96,12 @@ namespace ExpressPackingMonitoring
                             OrderId = r.OrderId,
                             Mode = r.Mode,
                             Duration = r.DurationSeconds > 0 ? $"{(int)r.DurationSeconds}s" : "",
-                            FileSize = missing ? FormatFileSize(r.FileSizeBytes) : FormatFileSize(fi!.Length),
+                            FileSize = (deleted || missing) ? FormatFileSize(r.FileSizeBytes) : FormatFileSize(fi!.Length),
                             StopReason = r.StopReason,
                             IsMissing = missing,
+                            IsDeleted = deleted,
+                            DeleteReason = r.DeleteReason,
+                            DeletedAt = r.DeletedAt,
                             File = fi
                         });
                     }
@@ -131,6 +154,7 @@ namespace ExpressPackingMonitoring
         {
             if (_allVideos == null || VideoList == null) return;
             var filtered = _allVideos.AsEnumerable();
+            if (!_showDeletedVideos) filtered = filtered.Where(v => !v.IsDeleted && !v.IsMissing);
             string? keyword = SearchBox?.Text.Trim().ToUpper();
             if (!string.IsNullOrEmpty(keyword)) filtered = filtered.Where(v =>
                 v.DisplayName.ToUpper().Contains(keyword) ||
@@ -149,6 +173,20 @@ namespace ExpressPackingMonitoring
         {
             if (VideoList.SelectedItem is VideoItem video)
             {
+                if (video.IsDeleted)
+                {
+                    string reason = string.IsNullOrEmpty(video.DeleteReason) ? "系统清理" : video.DeleteReason;
+                    string time = video.DeletedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "未知";
+                    MessageBox.Show(
+                        $"该视频已被覆盖删除，无法播放。\n\n" +
+                        $"单号: {video.OrderId}\n" +
+                        $"删除原因: {reason}\n" +
+                        $"删除时间: {time}\n" +
+                        $"原始大小: {video.FileSize}\n" +
+                        $"录制时长: {video.Duration}",
+                        "视频已删除", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
                 if (video.IsMissing)
                 {
                     MessageBox.Show(

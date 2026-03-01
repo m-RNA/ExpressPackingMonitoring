@@ -318,6 +318,14 @@
                                 <TextBlock Text="磁盘配额/GB" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
                                 <xctk:DoubleUpDown Grid.Column="1" Value="{Binding Config.MaxDiskSpaceGB}" Minimum="0.5" Maximum="5000.0" Increment="0.5" />
                             </Grid>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="显示已删除视频" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <CheckBox Grid.Column="1" IsChecked="{Binding Config.ShowDeletedVideos}" VerticalAlignment="Center" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Left"/>
+                            </Grid>
                         </StackPanel>
                     </ScrollViewer>
                 </Border>
