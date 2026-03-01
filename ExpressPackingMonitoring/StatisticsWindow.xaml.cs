@@ -59,8 +59,8 @@ namespace ExpressPackingMonitoring
                 TimeSpan tTime = TimeSpan.FromSeconds(totalSec);
                 TimeSpan aTime = pieces > 0 ? TimeSpan.FromSeconds(totalSec / pieces) : TimeSpan.Zero;
 
-                // 限制柱状图最大高度 350px 进行按比例缩放
-                double height = (pieces / (double)maxPieces) * 350.0;
+                // 限制柱状图最大高度 320px (留出30px给顶部的文字) 进行按比例缩放
+                double height = (pieces / (double)maxPieces) * 320.0;
                 if (height < 5 && pieces > 0) height = 5;
 
                 WeekTotalPieces += pieces;
@@ -73,7 +73,7 @@ namespace ExpressPackingMonitoring
                     BarHeight = height,
 
                     // 【核心修复2】：在后台直接生成完整的 Margin 对象
-                    LabelMargin = new Thickness(0, 0, 0, height + 5),
+                    LabelMargin = new Thickness(0, 0, 0, height), // 高度直接贴着柱子顶部，XAML中运用了TranslateTransform微调
 
                     TotalTime = $"{(int)tTime.TotalHours:D2}:{tTime.Minutes:D2}:{tTime.Seconds:D2}",
                     AvgTime = aTime.ToString(@"mm\:ss")

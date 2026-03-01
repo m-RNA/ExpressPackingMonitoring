@@ -183,25 +183,74 @@
                             </Style>
                         </TextBox.Resources>
                     </TextBox>
-                    <ListView Grid.Row="2" ItemsSource="{Binding FilteredLogs}" AlternationCount="2" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                       <ListView.ItemTemplate>
+                    <ListView Grid.Row="2" ItemsSource="{Binding FilteredLogs}" AlternationCount="2" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListView.ItemTemplate>
                             <DataTemplate>
-                                <Border BorderBrush="#F1F5F9" BorderThickness="0,0,0,1" Padding="6,12">
+                                <Border Background="White" CornerRadius="8" Margin="4,4,4,12" Padding="16,14">
+                                    <Border.Effect>
+                                        <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.06" Color="#000000"/>
+                                    </Border.Effect>
                                     <Grid>
-                                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                                        <TextBlock Grid.Row="0" Text="{Binding OrderId}" FontWeight="Bold" FontSize="17" Foreground="#0F172A" TextWrapping="Wrap"/>
-                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8,0,0">
-                                            <TextBlock Text="{Binding Mode}" Foreground="#64748B" FontSize="13" Margin="0,0,14,0"/>
-                                            <TextBlock Text="{Binding Duration}" FontWeight="Bold" FontSize="13" Margin="0,0,14,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="📦" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding OrderId}" FontWeight="Bold" FontSize="16" Foreground="#1E293B" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                            <Border Grid.Column="2" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background" Value="#DBEAFE"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                <Setter Property="Background" Value="#FEE2E2"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Mode}" Value="退货">
+                                                                <Setter Property="Background" Value="#FEF3C7"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock Text="{Binding Mode}" FontSize="12" FontWeight="SemiBold">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="#1D4ED8"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                    <Setter Property="Foreground" Value="#DC2626"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Mode}" Value="退货">
+                                                                    <Setter Property="Foreground" Value="#D97706"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </Border>
+                                        </Grid>
+                                        
+                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="28,8,0,0">
+                                            <TextBlock Text="⏱ " Foreground="#94A3B8" FontSize="13"/>
+                                            <TextBlock Text="{Binding Duration}" FontWeight="Bold" FontSize="13" Margin="0,0,16,0">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
-                                                        <Setter Property="Foreground" Value="#1E293B"/> <Style.Triggers>
+                                                        <Setter Property="Foreground" Value="#475569"/>
+                                                        <Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                                <Setter Property="Foreground" Value="#EF4444"/> </DataTrigger>
+                                                                <Setter Property="Foreground" Value="#EF4444"/>
+                                                            </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </TextBlock.Style>
                                             </TextBlock>
+                                            <TextBlock Text="📅 " Foreground="#94A3B8" FontSize="13"/>
                                             <TextBlock Text="{Binding DateStr}" Foreground="#94A3B8" FontSize="13"/>
                                         </StackPanel>
                                     </Grid>
@@ -211,13 +260,24 @@
                         <ListView.ItemContainerStyle>
                             <Style TargetType="ListViewItem">
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                <Setter Property="IsHitTestVisible" Value="False"/>
-                                <Setter Property="Margin" Value="0,0,0,2"/>
-                                <Style.Triggers>
-                                    <Trigger Property="ItemsControl.AlternationIndex" Value="1">
-                                        <Setter Property="Background" Value="#F8FAFC"/>
-                                    </Trigger>
-                                </Style.Triggers>
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="BorderThickness" Value="0"/>
+                                <Setter Property="Margin" Value="0"/>
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListViewItem">
+                                            <Border Background="{TemplateBinding Background}">
+                                                <ContentPresenter/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#F8FAFC"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
                             </Style>
                         </ListView.ItemContainerStyle>
                     </ListView>
