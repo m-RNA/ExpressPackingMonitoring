@@ -52,9 +52,22 @@ private void ScanInputTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
             if (!ScanInputTextBox.IsKeyboardFocusWithin) { e.Handled = true; ScanInputTextBox.Focus(); }
         }
 
-        private void Window_Closed(object sender, System.EventArgs e)
+        private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            if (DataContext is System.IDisposable disposable) disposable.Dispose();
+            var vm = DataContext as MainViewModel;
+            string msg = vm != null && vm.IsRecording
+                ? "当前正在录制，退出将自动保存视频。\n当前正在录制，退出将自动保存视频。\n当前正在录制，退出将自动保存视频。\n确定要退出吗？"
+                : "确定要退出程序吗？";
+
+            var result = MessageBox.Show(this, msg, "退出确认", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (result != MessageBoxResult.Yes)
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            // 正常退出：Dispose 会先 StopRecording（保存视频）再停相机
+            if (vm is System.IDisposable disposable) disposable.Dispose();
             System.Environment.Exit(0);
         }
     }
