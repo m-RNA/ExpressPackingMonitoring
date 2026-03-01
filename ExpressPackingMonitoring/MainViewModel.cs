@@ -689,6 +689,17 @@ namespace ExpressPackingMonitoring.ViewModels
                         }
                     }
 
+                    // 加上当前正在录制的文件实际大小（数据库中尚未更新）
+                    if (IsRecording && !string.IsNullOrEmpty(_currentVideoFilePath))
+                    {
+                        try
+                        {
+                            if (File.Exists(_currentVideoFilePath))
+                                currentSizeBytes += new FileInfo(_currentVideoFilePath).Length;
+                        }
+                        catch { }
+                    }
+
                     long maxSizeBytes = (long)(Config.MaxDiskSpaceGB * 1024 * 1024 * 1024);
                     if (currentSizeBytes > maxSizeBytes)
                     {
@@ -762,7 +773,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 catch { }
             });
         }
-        private async Task CheckDiskAndCleanup() { while (!_cts.Token.IsCancellationRequested) { ForceCheckDiskAndCleanup(); await Task.Delay(20000, _cts.Token); } }
+        private async Task CheckDiskAndCleanup() { while (!_cts.Token.IsCancellationRequested) { ForceCheckDiskAndCleanup(); int interval = IsRecording ? 10000 : 60000; await Task.Delay(interval, _cts.Token); } }
         public void Dispose()
         {
             _cts?.Cancel();
