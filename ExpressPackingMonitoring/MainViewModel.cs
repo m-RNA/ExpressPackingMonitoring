@@ -32,7 +32,7 @@ namespace ExpressPackingMonitoring.ViewModels
         [ObservableProperty] private string _dateStr;
         [ObservableProperty] private string _mode;
 
-        // 【需求2】：新增活跃状态，用于前端变色
+        // 新增活跃状态，用于前端变色
         [ObservableProperty] private bool _isActive;
 
         public ScanRecord(string orderId, string duration, string dateStr, string mode, bool isActive = false)
@@ -53,14 +53,12 @@ namespace ExpressPackingMonitoring.ViewModels
         public bool EnableAutoStop { get; set; } = false;
         public double AutoStopMinutes { get; set; } = 5.0;
         public bool EnableMaxDuration { get; set; } = false;
-
-        // 【需求1】：最大时长改为分钟
-        public double MaxDurationMinutes { get; set; } = 1.0;
+        public double MaxDurationMinutes { get; set; } = 10.0;
 
         public double MotionDetectThreshold { get; set; } = 15.0;
-        public string VideoStoragePath { get; set; } = "打包监控视频";
+        public string VideoStoragePath { get; set; } = "D:\\快递打包视频";
         public string OrderIdRegex { get; set; } = "^[a-zA-Z0-9]{6,30}$";
-        public bool EnableSoundPrompt { get; set; } = false;
+        public bool EnableSoundPrompt { get; set; } = true;
         public double TimeoutWarningSeconds { get; set; } = 10.0;
     }
 
@@ -517,7 +515,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
             ShowToast("▶ 开始录像");
             Speak("开始录制");
-            // 【需求2】：设置 IsActive 为 true，触发红色高亮
+            // 设置 IsActive 为 true，触发红色高亮
             _currentScanRecord = new ScanRecord(CurrentOrderId, "0s", DateTime.Now.ToString("HH:mm:ss"), CurrentMode, true);
             AddRecord(_currentScanRecord);
         }
