@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -65,9 +66,6 @@ namespace ExpressPackingMonitoring
             ApplyFilters();
         }
 
-        private void FilterChanged(object sender, SelectionChangedEventArgs e) => ApplyFilters();
-        private void FilterChanged(object sender, TextChangedEventArgs e) => ApplyFilters();
-
         private void ApplyFilters()
         {
             if (_allVideos == null || VideoList == null) return;
@@ -76,6 +74,14 @@ namespace ExpressPackingMonitoring
             if (!string.IsNullOrEmpty(keyword)) filtered = filtered.Where(v => v.File.Name.ToUpper().Contains(keyword));
             VideoList.ItemsSource = filtered.ToList();
         }
+
+        private void Window_Closing(object sender, CancelEventArgs e)
+        {
+            _timer?.Stop();
+            MediaPlayer.Stop();
+            MediaPlayer.Close();
+        }
+
         private void VideoList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (VideoList.SelectedItem is VideoItem video)

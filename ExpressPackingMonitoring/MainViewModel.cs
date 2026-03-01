@@ -71,13 +71,12 @@ namespace ExpressPackingMonitoring.ViewModels
     public class MainViewModel : ObservableObject, IDisposable
     {
         private AppConfig _config;
-        private readonly string _configFilePath = "config.json";
-        private readonly string _statsFilePath = "daily_stats.json"; // 统计数据库
+        private readonly string _configFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
+        private readonly string _statsFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "daily_stats.json");
 
         private VideoCaptureDevice _videoSource;
         private Mat _latestFrame;
         private readonly object _frameLock = new object();
-        private bool _isFirstFrameReceived = false;
 
         private VideoWriter _writer;
         private BlockingCollection<Mat> _videoWriteQueue;
@@ -116,6 +115,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private string _toastMessage;
         private bool _isToastVisible;
+        private CancellationTokenSource _toastCts;
         public string ToastMessage { get => _toastMessage; set => SetProperty(ref _toastMessage, value); }
         public bool IsToastVisible { get => _isToastVisible; set => SetProperty(ref _isToastVisible, value); }
 
@@ -193,7 +193,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private void ToggleMode() { CurrentMode = CurrentMode == "发货" ? "退货" : "发货"; ShowToast($"已切换为: {CurrentMode}"); }
         private void ToggleRecording() { if (IsRecording) StopRecordingManual(); else StartRecordingManual(); }
 
-        public void ShowToast(string message) { Application.Current.Dispatcher.InvokeAsync(async () => { ToastMessage = message; IsToastVisible = true; await Task.Delay(2500); IsToastVisible = false; }); }
+        public void ShowToast(string message) { Application.Current.Dispatcher.InvokeAsync(async () => { _toastCts?.Cancel(); _toastCts = new CancellationTokenSource(); var token = _toastCts.Token; ToastMessage = message; IsToastVisible = true; try { await Task.Delay(2500, token); } catch (OperationCanceledException) { return; } IsToastVisible = false; }); }
 
         private void FilterLogs() { FilteredLogs.Clear(); var keyword = LogSearchText?.ToUpper() ?? ""; foreach (var log in _allLogs) { if (string.IsNullOrEmpty(keyword) || log.OrderId.ToUpper().Contains(keyword)) FilteredLogs.Add(log); } }
         private void AddRecord(ScanRecord record) { Application.Current.Dispatcher.InvokeAsync(() => { _allLogs.Insert(0, record); if (string.IsNullOrEmpty(LogSearchText)) FilteredLogs.Insert(0, record); if (_allLogs.Count > 200) _allLogs.RemoveAt(_allLogs.Count - 1); }); }
@@ -258,7 +258,7 @@ namespace ExpressPackingMonitoring.ViewModels
             catch { ShowToast("摄像头启动失败"); }
         }
 
-        private void StopCamera() { _isFirstFrameReceived = false; if (_videoSource != null) { if (_videoSource.IsRunning) { _videoSource.SignalToStop(); _videoSource.WaitForStop(); } _videoSource.NewFrame -= VideoSource_NewFrame; _videoSource = null; } lock (_frameLock) { _latestFrame?.Dispose(); _latestFrame = null; } }
+        private void StopCamera() { if (_videoSource != null) { if (_videoSource.IsRunning) { _videoSource.SignalToStop(); _videoSource.WaitForStop(); } _videoSource.NewFrame -= VideoSource_NewFrame; _videoSource = null; } lock (_frameLock) { _latestFrame?.Dispose(); _latestFrame = null; } }
         private void VideoSource_NewFrame(object sender, NewFrameEventArgs eventArgs) { try { Mat newMat = BitmapToMat(eventArgs.Frame); lock (_frameLock) { _latestFrame?.Dispose(); _latestFrame = newMat; } } catch { } }
 
         private Mat BitmapToMat(Bitmap bitmap)
@@ -302,7 +302,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     if (IsRecording && _videoWriteQueue != null && !_videoWriteQueue.IsAddingCompleted) { _videoWriteQueue.Add(processedFrame.Clone()); }
 
                     Application.Current.Dispatcher.Invoke(() => { VideoFrame = processedFrame.ToWriteableBitmap(); });
-                    if ((DateTime.Now - startTime).TotalMilliseconds > 500) PerformMotionDetection(currentFrame);
+                    if (frameTickCounter % 30 == 0) PerformMotionDetection(currentFrame);
                     if (processedFrame != currentFrame) processedFrame.Dispose(); currentFrame.Dispose();
                 }
 
@@ -312,7 +312,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
                     if (frameTickCounter % 15 == 0 && _currentScanRecord != null)
                     {
-                        Application.Current.Dispatcher.InvokeAsync(() => {
+                        _ = Application.Current.Dispatcher.InvokeAsync(() => {
                             if (_currentScanRecord != null)
                             {
                                 int maxSec = (int)(Config.MaxDurationMinutes * 60);
@@ -322,10 +322,10 @@ namespace ExpressPackingMonitoring.ViewModels
                     }
 
                     if (Config.EnableAutoStop && (DateTime.Now - _lastMotionTime).TotalSeconds >= Config.AutoStopMinutes * 60.0)
-                    { Application.Current.Dispatcher.InvokeAsync(() => { StopRecording(); ShowToast("画面静止超时，自动停录"); CurrentOrderId = ""; ScanInputText = ""; }); }
+                    { _ = Application.Current.Dispatcher.InvokeAsync(() => { StopRecording(); ShowToast("画面静止超时，自动停录"); CurrentOrderId = ""; ScanInputText = ""; }); }
 
                     if (Config.EnableMaxDuration && elapsedSec >= Config.MaxDurationMinutes * 60.0)
-                    { Application.Current.Dispatcher.InvokeAsync(() => { StopRecording(); ShowToast("⏳ 已达最大录像限制时长"); CurrentOrderId = ""; ScanInputText = ""; }); }
+                    { _ = Application.Current.Dispatcher.InvokeAsync(() => { StopRecording(); ShowToast("⏳ 已达最大录像限制时长"); CurrentOrderId = ""; ScanInputText = ""; }); }
                 }
 
                 frameTickCounter++;
@@ -427,9 +427,10 @@ namespace ExpressPackingMonitoring.ViewModels
             lock (_videoLock)
             {
                 _videoWriteQueue?.CompleteAdding();
+                _writeCts?.Cancel();
                 try { _writeTask?.Wait(2000); } catch { }
+                _writeCts?.Dispose(); _writeCts = null;
                 _videoWriteQueue?.Dispose(); _videoWriteQueue = null;
-                _writeCts?.Cancel(); _writeCts?.Dispose(); _writeCts = null;
                 if (_writer != null) { _writer.Release(); _writer.Dispose(); _writer = null; }
             }
 

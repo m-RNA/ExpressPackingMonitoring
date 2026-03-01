@@ -2,7 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="🎬 历史录像检索与回放" Height="700" Width="1100"
-        WindowStartupLocation="CenterOwner" Background="#F0F2F5">
+        WindowStartupLocation="CenterOwner" Background="#F0F2F5"
+        Closing="Window_Closing">
     <Grid Margin="15">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="320"/>
@@ -27,13 +28,13 @@
                             <ColumnDefinition Width="15"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <DatePicker x:Name="DpStartDate" Grid.Column="0" SelectedDateChanged="FilterChanged"/>
+                        <DatePicker x:Name="DpStartDate" Grid.Column="0" SelectedDateChanged="DateFilterChanged"/>
                         <TextBlock Grid.Column="1" Text="至" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        <DatePicker x:Name="DpEndDate" Grid.Column="2" SelectedDateChanged="FilterChanged"/>
+                        <DatePicker x:Name="DpEndDate" Grid.Column="2" SelectedDateChanged="DateFilterChanged"/>
                     </Grid>
 
                     <TextBlock Text="🔍 单号精准搜索:" FontWeight="Bold" Margin="0,0,0,5" Foreground="#555"/>
-                    <TextBox x:Name="SearchBox" FontSize="14" Padding="5" TextChanged="FilterChanged" BorderBrush="#0078D7" BorderThickness="2"/>
+                    <TextBox x:Name="SearchBox" FontSize="14" Padding="5" TextChanged="TextFilterChanged" BorderBrush="#0078D7" BorderThickness="2"/>
                 </StackPanel>
 
                 <ListView x:Name="VideoList" Grid.Row="1" FontSize="14" SelectionChanged="VideoList_SelectionChanged" BorderThickness="1" BorderBrush="#E2E8F0" Background="#F8FAFC">
