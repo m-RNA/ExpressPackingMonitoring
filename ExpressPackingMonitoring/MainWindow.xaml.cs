@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using ExpressPackingMonitoring.ViewModels;
 
 namespace ExpressPackingMonitoring
@@ -9,50 +10,52 @@ namespace ExpressPackingMonitoring
         public MainWindow()
         {
             InitializeComponent();
-            Loaded += (s, e) => ScanInputTextBox.Focus();
+            Loaded += (s, e) => {
+                ScanInputTextBox.Focus();
+
+                // 【需求4修复】：抓取编译时间并显示在标题
+                var buildTime = System.IO.File.GetLastWriteTime(System.Reflection.Assembly.GetExecutingAssembly().Location);
+                this.Title = $"📦 极简打包监控终端 v6.2 (编译于: {buildTime:yyyy-MM-dd HH:mm})";
+            };
         }
 
         private void BtnSettings_Click(object sender, RoutedEventArgs e)
         {
-            if (DataContext is MainViewModel viewModel)
-            {
-                viewModel.OpenSettings();
-            }
+            if (DataContext is MainViewModel viewModel) viewModel.OpenSettings();
         }
-
-        private void ScanInputTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
+private void ScanInputTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter)
             {
+                string scanResult = ScanInputTextBox.Text.Trim();
                 if (DataContext is MainViewModel viewModel)
                 {
-                    string scanResult = ScanInputTextBox.Text;
-                    if (viewModel.ScanCommand.CanExecute(scanResult))
-                    {
-                        viewModel.ScanCommand.Execute(scanResult);
-                    }
+                    if (viewModel.ScanCommand.CanExecute(scanResult)) viewModel.ScanCommand.Execute(scanResult);
                 }
-                ScanInputTextBox.Clear();
+                // 彻底交由 ViewModel 接管清空逻辑
                 e.Handled = true;
             }
         }
 
         private void ScanInputTextBox_LostFocus(object sender, RoutedEventArgs e)
         {
-            // 【核心修复】防止焦点死循环崩溃！
-            // 只有在主窗口是激活状态（没有弹出设置框）时，才允许抢回焦点
-            if (this.IsActive)
-            {
-                Dispatcher.BeginInvoke(new System.Action(() => ScanInputTextBox.Focus()));
-            }
+            if (this.IsActive) Dispatcher.BeginInvoke(new System.Action(() => ScanInputTextBox.Focus()));
+        }
+
+        private void ScanInputTextBox_GotFocus(object sender, RoutedEventArgs e)
+        {
+            Dispatcher.BeginInvoke(new System.Action(() => ScanInputTextBox.SelectAll()));
+        }
+
+        private void ScanInputTextBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (!ScanInputTextBox.IsKeyboardFocusWithin) { e.Handled = true; ScanInputTextBox.Focus(); }
         }
 
         private void Window_Closed(object sender, System.EventArgs e)
         {
-            if (DataContext is System.IDisposable disposable)
-            {
-                disposable.Dispose();
-            }
+            if (DataContext is System.IDisposable disposable) disposable.Dispose();
+            System.Environment.Exit(0);
         }
     }
 }
