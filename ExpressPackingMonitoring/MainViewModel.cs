@@ -504,8 +504,8 @@ namespace ExpressPackingMonitoring.ViewModels
             if (upperResult.Contains("CMD_CLEAR") || upperResult.Contains("清除")) { ScanInputText = ""; ShowToast("🧹 扫码框已清除"); return; }
             if (upperResult.Contains("MODE_FAHUO") || upperResult.Contains("发货")) { CurrentMode = "发货"; ScanInputText = ""; ShowToast("切换为发货模式"); Speak("切换发货"); return; }
             if (upperResult.Contains("MODE_TUIHUO") || upperResult.Contains("退货")) { CurrentMode = "退货"; ScanInputText = ""; ShowToast("切换为退货模式"); Speak("切换退货"); return; }
-            if (upperResult.Contains("CMD_START") || upperResult.Contains("开始录制")) { ToggleRecording(); return; }
-            if (upperResult.Contains("CMD_STOP") || upperResult.Contains("停止录制")) { StopRecordingManual(); return; }
+            if (upperResult.Contains("CMD_START") || upperResult.Contains("开始录制")) { ScanInputText = ""; ToggleRecording(); return; }
+            if (upperResult.Contains("CMD_STOP") || upperResult.Contains("停止录制")) { ScanInputText = ""; StopRecordingManual(); return; }
 
             try { if (!System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex)) { ScanInputText = ""; ShowToast("非法单号，已拦截"); return; } } catch { }
 
