@@ -2,6 +2,7 @@
 using System;
 using System.Windows;
 using System.Collections.Generic;
+using Microsoft.Win32;
 using ExpressPackingMonitoring.ViewModels;
 using AForge.Video.DirectShow;
 
@@ -30,6 +31,9 @@ namespace ExpressPackingMonitoring
 
             LoadCameras();
             LoadPresets(clonedConfig);
+
+            // 从注册表读取实际的开机自启动状态
+            Config.AutoStartOnBoot = IsAutoStartEnabled();
         }
 
         private void ThemeComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -99,7 +103,42 @@ namespace ExpressPackingMonitoring
         private void BtnSave_Click(object sender, RoutedEventArgs e)
         {
             if (ResComboBox.SelectedItem is ResOption selectedRes) { Config.FrameWidth = selectedRes.Width; Config.FrameHeight = selectedRes.Height; }
+            ApplyAutoStart(Config.AutoStartOnBoot);
             this.DialogResult = true; this.Close();
+        }
+
+        private void ApplyAutoStart(bool enable)
+        {
+            const string regKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+            const string appName = "ExpressPackingMonitoring";
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(regKey, true);
+                if (key == null) return;
+                if (enable)
+                {
+                    string exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
+                    if (!string.IsNullOrEmpty(exePath))
+                        key.SetValue(appName, $"\"{exePath}\"");
+                }
+                else
+                {
+                    key.DeleteValue(appName, false);
+                }
+            }
+            catch { }
+        }
+
+        private bool IsAutoStartEnabled()
+        {
+            const string regKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+            const string appName = "ExpressPackingMonitoring";
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(regKey, false);
+                return key?.GetValue(appName) != null;
+            }
+            catch { return false; }
         }
 
         private void BtnCancel_Click(object sender, RoutedEventArgs e)

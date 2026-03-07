@@ -326,6 +326,14 @@
                                 <TextBlock Text="显示已删除视频" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
                                 <CheckBox Grid.Column="1" IsChecked="{Binding Config.ShowDeletedVideos}" VerticalAlignment="Center" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Left"/>
                             </Grid>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="开机自启动" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+                                <CheckBox x:Name="AutoStartCheckBox" Grid.Column="1" IsChecked="{Binding Config.AutoStartOnBoot}" VerticalAlignment="Center" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Left"/>
+                            </Grid>
                         </StackPanel>
                     </ScrollViewer>
                 </Border>
