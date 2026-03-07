@@ -47,9 +47,10 @@ namespace ExpressPackingMonitoring
         private void LoadPresets(AppConfig config)
         {
             var resOptions = new List<ResOption> {
-                new ResOption { Name = "720P (1280x720) - 推荐/省空间", Width = 1280, Height = 720 },
-                new ResOption { Name = "1080P (1920x1080) - 高清画质", Width = 1920, Height = 1080 },
-                new ResOption { Name = "4K (3840x2160) - 极清画质", Width = 3840, Height = 2160 }
+                new ResOption { Name = "720P - 省空间", Width = 1280, Height = 720 },
+                new ResOption { Name = "1080P - 高清", Width = 1920, Height = 1080 },
+                new ResOption { Name = "2K - 超清", Width = 2560, Height = 1440 },
+                new ResOption { Name = "4K - 极清", Width = 3840, Height = 2160 }
             };
             ResComboBox.ItemsSource = resOptions;
             foreach (var item in resOptions)

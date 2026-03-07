@@ -157,9 +157,9 @@
                         </StackPanel>
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Style="{StaticResource ModernBtn}" Content="📊 数据看板" Command="{Binding OpenStatsCommand}" Background="{DynamicResource AccentPurple}" Width="120" Height="42" Margin="0,0,10,0"/>
-                            <Button Style="{StaticResource ModernBtn}" Content="🎬 录像回放" Command="{Binding OpenPlaybackCommand}" Background="{DynamicResource AccentCyan}" Width="120" Height="42" Margin="0,0,10,0"/>
-                            <Button Style="{StaticResource ModernBtn}" Content="⚙️ 系统设置" Click="BtnSettings_Click" Background="{DynamicResource TextSecondary}" Width="120" Height="42"/>
+                            <Button Style="{StaticResource ModernBtn}" Content="📊 数据" Command="{Binding OpenStatsCommand}" Background="{DynamicResource AccentPurple}" Width="120" Height="42" Margin="0,0,10,0"/>
+                            <Button Style="{StaticResource ModernBtn}" Content="🎬 回放" Command="{Binding OpenPlaybackCommand}" Background="{DynamicResource AccentCyan}" Width="120" Height="42" Margin="0,0,10,0"/>
+                            <Button Style="{StaticResource ModernBtn}" Content="⚙️ 设置" Click="BtnSettings_Click" Background="{DynamicResource TextSecondary}" Width="120" Height="42"/>
                         </StackPanel>
                     </Grid>
                 </Border>

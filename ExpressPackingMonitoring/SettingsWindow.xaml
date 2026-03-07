@@ -157,7 +157,7 @@
                 </Style>
             </TabControl.Resources>
 
-            <TabItem Header=" 基础设备">
+            <TabItem Header=" 设备">
                 <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" Padding="20">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.05" Color="{DynamicResource ShadowColor}"/>
@@ -205,7 +205,7 @@
                 </Border>
             </TabItem>
 
-            <TabItem Header=" 智能特写">
+            <TabItem Header=" 特写">
                 <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" Padding="20">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.05"/>
@@ -243,7 +243,7 @@
                 </Border>
             </TabItem>
 
-            <TabItem Header=" 业务与防呆">
+            <TabItem Header=" 高级">
                 <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" Padding="20">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.05"/>

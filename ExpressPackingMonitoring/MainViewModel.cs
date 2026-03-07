@@ -49,11 +49,11 @@ namespace ExpressPackingMonitoring.ViewModels
         public double ZoomScale { get; set; } = 1.5;
         public double ZoomDelaySeconds { get; set; } = 1.0;
         public double ZoomDurationSeconds { get; set; } = 3.0;
-        public double MaxDiskSpaceGB { get; set; } = 100.0;
-        public bool EnableAutoStop { get; set; } = false;
-        public double AutoStopMinutes { get; set; } = 5.0;
+        public double MaxDiskSpaceGB { get; set; } = 950.0;
+        public bool EnableAutoStop { get; set; } = true;
+        public double AutoStopMinutes { get; set; } = 1.0;
         public bool EnableMaxDuration { get; set; } = false;
-        public double MaxDurationMinutes { get; set; } = 10.0;
+        public double MaxDurationMinutes { get; set; } = 5.0;
 
         public double MotionDetectThreshold { get; set; } = 15.0;
         public string VideoStoragePath { get; set; } = "D:\\快递打包视频";
@@ -296,16 +296,20 @@ namespace ExpressPackingMonitoring.ViewModels
 
             foreach (var codec in codecs)
             {
+                // 使用配置的分辨率进行真实环境下的编码器能力探测
+                int probeW = Math.Max(640, Config.FrameWidth);
+                int probeH = Math.Max(480, Config.FrameHeight);
+
                 // 每个编码器用单独的临时文件，互不干扰
                 string testFile = Path.Combine(testDir, $"probe_{codec}.mp4");
                 VideoWriter testWriter = null;
                 try
                 {
-                    testWriter = new VideoWriter(testFile, codec, 15, new OpenCvSharp.Size(640, 480));
+                    testWriter = new VideoWriter(testFile, codec, 15, new OpenCvSharp.Size(probeW, probeH));
                     if (testWriter.IsOpened())
                     {
                         // 写入 2 帧验证编码器真正可用
-                        using var black = new Mat(480, 640, MatType.CV_8UC3, Scalar.All(0));
+                        using var black = new Mat(probeH, probeW, MatType.CV_8UC3, Scalar.All(0));
                         testWriter.Write(black);
                         testWriter.Write(black);
                         _cachedFourCC = codec;
@@ -545,7 +549,8 @@ namespace ExpressPackingMonitoring.ViewModels
             lock (_videoLock)
             {
                 _writeCts = new CancellationTokenSource();
-                _videoWriteQueue = new BlockingCollection<Mat>(boundedCapacity: 120);
+                // 优化内存占用：缓冲区调小至 60 帧（15FPS 约 4 秒缓冲），节省 600MB 内存
+                _videoWriteQueue = new BlockingCollection<Mat>(boundedCapacity: 60);
                 // 参照 OBS：VideoWriter 在写入线程内创建/使用/销毁，保证同一线程生命周期
                 _writeTask = Task.Run(() => BackgroundVideoWriterLoop(filePath, _writeCts.Token));
             }
