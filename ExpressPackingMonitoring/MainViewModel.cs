@@ -62,6 +62,7 @@ namespace ExpressPackingMonitoring.ViewModels
         public double TimeoutWarningSeconds { get; set; } = 10.0;
         public string Theme { get; set; } = "Auto";
         public bool ShowDeletedVideos { get; set; } = true;
+        public bool AutoStartOnBoot { get; set; } = false;
     }
 
     public class MainViewModel : ObservableObject, IDisposable
