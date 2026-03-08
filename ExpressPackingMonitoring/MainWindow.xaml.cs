@@ -67,8 +67,10 @@ private void ScanInputTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
                 ? "当前正在录制，退出将自动保存视频。\n当前正在录制，退出将自动保存视频。\n当前正在录制，退出将自动保存视频。\n确定要退出吗？"
                 : "确定要退出程序吗？";
 
-            var result = MessageBox.Show(this, msg, "退出确认", MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (result != MessageBoxResult.Yes)
+            var dialog = new ConfirmDialog(msg, "退出确认") { Owner = this };
+            var result = dialog.ShowDialog();
+            
+            if (result != true)
             {
                 e.Cancel = true;
                 return;
