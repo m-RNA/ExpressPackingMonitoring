@@ -114,7 +114,7 @@
         </Style>
 
         <Style x:Key="SettingRowStyle" TargetType="Grid">
-            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Style.Triggers>
                 <Trigger Property="IsEnabled" Value="False">
@@ -289,6 +289,7 @@
                                     <TextBlock Text="采集设备" Style="{StaticResource SectionTitleStyle}"/>
                                     <TextBlock Text="这些选项决定录像来源和整体清晰度，建议优先确认。"
                                                Style="{StaticResource SectionHintStyle}"/>
+                                    <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,12,0,12"/>
 
                                     <Grid Style="{StaticResource SettingRowStyle}">
                                         <Grid.ColumnDefinitions>
@@ -336,6 +337,7 @@
                                     <TextBlock Text="录像质量" Style="{StaticResource SectionTitleStyle}"/>
                                     <TextBlock Text="清晰度越高，占用空间越大；帧率越高，画面越流畅。"
                                                Style="{StaticResource SectionHintStyle}"/>
+                                    <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,12,0,12"/>
 
                                     <Grid Style="{StaticResource SettingRowStyle}">
                                         <Grid.ColumnDefinitions>
@@ -385,8 +387,9 @@
                                     <TextBlock Text="启用智能特写" Style="{StaticResource SectionTitleStyle}"/>
                                     <TextBlock Text="当系统识别到需要关注的画面时，自动放大关键区域。"
                                                Style="{StaticResource SectionHintStyle}"/>
+                                    <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,12,0,12"/>
 
-                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,18,0,0">
+                                    <Grid Style="{StaticResource SettingRowStyle}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="230"/>
                                             <ColumnDefinition Width="*"/>
@@ -412,6 +415,7 @@
                                     <TextBlock Text="特写参数" Style="{StaticResource SectionTitleStyle}"/>
                                     <TextBlock Text="这些参数控制特写触发节奏和持续时间。"
                                                Style="{StaticResource SectionHintStyle}"/>
+                                    <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,12,0,12"/>
 
                                     <Grid Style="{StaticResource SettingRowStyle}">
                                         <Grid.ColumnDefinitions>
@@ -478,6 +482,7 @@
                                     <TextBlock Text="提示与录制时长" Style="{StaticResource SectionTitleStyle}"/>
                                     <TextBlock Text="这里控制预警提示，以及录像何时自动停止。"
                                                Style="{StaticResource SectionHintStyle}"/>
+                                    <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,12,0,12"/>
 
                                     <Grid Style="{StaticResource SettingRowStyle}">
                                         <Grid.ColumnDefinitions>
@@ -605,6 +610,7 @@
                                     <TextBlock Text="存储与检索" Style="{StaticResource SectionTitleStyle}"/>
                                     <TextBlock Text="建议将路径设置到本地磁盘，并结合磁盘配额控制历史视频总量。"
                                                Style="{StaticResource SectionHintStyle}"/>
+                                    <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,12,0,12"/>
 
                                     <Grid Style="{StaticResource SettingRowStyle}">
                                         <Grid.ColumnDefinitions>
@@ -691,6 +697,7 @@
                                     <TextBlock Text="识别与启动" Style="{StaticResource SectionTitleStyle}"/>
                                     <TextBlock Text="这些选项决定单号识别规则，以及程序是否随系统启动。"
                                                Style="{StaticResource SectionHintStyle}"/>
+                                    <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,12,0,12"/>
 
                                     <Grid Style="{StaticResource SettingRowStyle}">
                                         <Grid.ColumnDefinitions>
