@@ -7,7 +7,7 @@
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource WindowBackground}"
-        Foreground="{DynamicResource TextForeground}">
+        Foreground="{DynamicResource TextPrimary}">
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
@@ -19,7 +19,8 @@
                    VerticalAlignment="Center" 
                    HorizontalAlignment="Center"
                    TextAlignment="Center"
-                   FontSize="14"/>
+                   FontSize="14"
+                   Foreground="{DynamicResource TextPrimary}"/>
         
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
             <Button Content="确定" Width="80" Height="28" Margin="0,0,8,0" Click="btnOk_Click"/>
