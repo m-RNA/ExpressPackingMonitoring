@@ -361,8 +361,8 @@
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
-                                            <TextBlock Text="录制帧率 / FPS" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="包装台场景通常 15 到 25 FPS 即可满足回溯。"
+                                            <TextBlock Text="目标帧率 / FPS" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="系统会自动选择摄像头支持的最接近帧率，实际以硬件能力为准。"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:IntegerUpDown x:Name="FpsUpDown" Grid.Column="1"

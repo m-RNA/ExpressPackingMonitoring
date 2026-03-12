@@ -80,6 +80,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private Task _writeTask;
         private CancellationTokenSource _writeCts;
         private int _cachedFourCC = 0; // 启动时探测并缓存可用编码器
+        private int _actualCameraFps = 15; // 摄像头硬件实际帧率
 
         private Mat _previousCheckFrame = new Mat();
         private BitmapSource _videoFrame;
@@ -364,22 +365,30 @@ namespace ExpressPackingMonitoring.ViewModels
                 if (videoDevices.Count == 0) { ShowToast("未检测到摄像头"); return; }
                 if (Config.CameraIndex >= videoDevices.Count) Config.CameraIndex = 0;
                 _videoSource = new VideoCaptureDevice(videoDevices[Config.CameraIndex].MonikerString);
-                // 从摄像头能力中选择最匹配用户配置分辨率的模式
+                // 从摄像头能力中选择最匹配用户配置（分辨率+帧率）的模式
                 if (_videoSource.VideoCapabilities.Length > 0)
                 {
                     var caps = _videoSource.VideoCapabilities;
                     VideoCapabilities best = caps[0];
-                    int bestDiff = int.MaxValue;
+                    int bestScore = int.MaxValue;
                     foreach (var cap in caps)
                     {
-                        int diff = Math.Abs(cap.FrameSize.Width - Config.FrameWidth) + Math.Abs(cap.FrameSize.Height - Config.FrameHeight);
-                        if (diff < bestDiff)
+                        // 分辨率差值权重高，帧率差值权重低
+                        int resDiff = Math.Abs(cap.FrameSize.Width - Config.FrameWidth) + Math.Abs(cap.FrameSize.Height - Config.FrameHeight);
+                        int fpsDiff = Math.Abs(cap.AverageFrameRate - Config.Fps);
+                        int score = resDiff * 10 + fpsDiff;
+                        if (score < bestScore)
                         {
-                            bestDiff = diff;
+                            bestScore = score;
                             best = cap;
                         }
                     }
                     _videoSource.VideoResolution = best;
+                    _actualCameraFps = best.AverageFrameRate > 0 ? best.AverageFrameRate : Config.Fps;
+                }
+                else
+                {
+                    _actualCameraFps = Config.Fps > 0 ? Config.Fps : 15;
                 }
                 _videoSource.NewFrame += VideoSource_NewFrame; _videoSource.Start();
             }
@@ -415,13 +424,14 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private async Task VideoProcessLoop(CancellationToken token)
         {
-            double frameDurationMs = 1000.0 / (Config.Fps > 0 ? Config.Fps : 15);
             int frameTickCounter = 0;
 
             try
             {
                 while (!token.IsCancellationRequested)
                 {
+                    // 使用硬件实际帧率控制循环节拍，与 VideoWriter 元数据保持一致
+                    double frameDurationMs = 1000.0 / (_actualCameraFps > 0 ? _actualCameraFps : 15);
                     DateTime startTime = DateTime.Now; Mat currentFrame = null;
                     lock (_frameLock) { if (_latestFrame != null && !_latestFrame.IsDisposed) currentFrame = _latestFrame.Clone(); }
 
@@ -614,7 +624,8 @@ namespace ExpressPackingMonitoring.ViewModels
             try
             {
                 var size = new OpenCvSharp.Size(Config.FrameWidth, Config.FrameHeight);
-                writer = new VideoWriter(filePath, _cachedFourCC, Config.Fps, size);
+                // 使用硬件实际帧率写入，确保播放速度与现实一致
+                writer = new VideoWriter(filePath, _cachedFourCC, _actualCameraFps, size);
 
                 if (!writer.IsOpened())
                 {
