@@ -339,7 +339,23 @@ namespace ExpressPackingMonitoring.ViewModels
                 if (videoDevices.Count == 0) { ShowToast("未检测到摄像头"); return; }
                 if (Config.CameraIndex >= videoDevices.Count) Config.CameraIndex = 0;
                 _videoSource = new VideoCaptureDevice(videoDevices[Config.CameraIndex].MonikerString);
-                if (_videoSource.VideoCapabilities.Length > 0) _videoSource.VideoResolution = _videoSource.VideoCapabilities[0];
+                // 从摄像头能力中选择最匹配用户配置分辨率的模式
+                if (_videoSource.VideoCapabilities.Length > 0)
+                {
+                    var caps = _videoSource.VideoCapabilities;
+                    VideoCapabilities best = caps[0];
+                    int bestDiff = int.MaxValue;
+                    foreach (var cap in caps)
+                    {
+                        int diff = Math.Abs(cap.FrameSize.Width - Config.FrameWidth) + Math.Abs(cap.FrameSize.Height - Config.FrameHeight);
+                        if (diff < bestDiff)
+                        {
+                            bestDiff = diff;
+                            best = cap;
+                        }
+                    }
+                    _videoSource.VideoResolution = best;
+                }
                 _videoSource.NewFrame += VideoSource_NewFrame; _videoSource.Start();
             }
             catch { ShowToast("摄像头启动失败"); }
@@ -386,7 +402,6 @@ namespace ExpressPackingMonitoring.ViewModels
 
                     if (currentFrame != null && !currentFrame.Empty())
                     {
-                        if (Config.FrameWidth != currentFrame.Width || Config.FrameHeight != currentFrame.Height) { Config.FrameWidth = currentFrame.Width; Config.FrameHeight = currentFrame.Height; }
                         Mat processedFrame = currentFrame;
 
                         if (_isScanning && Config.EnableSmartZoom)
