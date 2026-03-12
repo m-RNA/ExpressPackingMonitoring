@@ -18,7 +18,7 @@ namespace ExpressPackingMonitoring
         public string CurrentDiskUsageText { get; set; }
 
         private string _originalTheme;
-        public SettingsWindow(AppConfig clonedConfig, double diskUsagePercent, string diskUsageText)
+        public SettingsWindow(AppConfig clonedConfig, double diskUsagePercent, string diskUsageText, bool isRecording = false)
         {
             InitializeComponent();
             _originalTheme = clonedConfig.Theme;
@@ -34,6 +34,17 @@ namespace ExpressPackingMonitoring
 
             // 从注册表读取实际的开机自启动状态
             Config.AutoStartOnBoot = IsAutoStartEnabled();
+
+            // 录制中禁用摄像头相关控件，提示下次生效
+            if (isRecording)
+            {
+                CameraComboBox.IsEnabled = false;
+                ResComboBox.IsEnabled = false;
+                FpsUpDown.IsEnabled = false;
+                CameraComboBox.ToolTip = "录制中不可修改，停止录制后再更改";
+                ResComboBox.ToolTip = "录制中不可修改，停止录制后再更改";
+                FpsUpDown.ToolTip = "录制中不可修改，停止录制后再更改";
+            }
         }
 
         private void ThemeComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)

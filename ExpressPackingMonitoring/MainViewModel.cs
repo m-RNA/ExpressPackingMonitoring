@@ -112,6 +112,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private string _stopReason = "手动";     // 停止录制的原因
         private bool _autoStopWarned = false;
         private bool _maxDurationWarned = false;
+        private bool _pendingCameraRestart = false; // 录制中修改了摄像头配置，录制结束后重启
 
         private int _totalPieces;
         private TimeSpan _totalPackTime;
@@ -220,16 +221,22 @@ namespace ExpressPackingMonitoring.ViewModels
 
         public void OpenSettings()
         {
-            if (IsRecording) { ShowToast("录制中，请先停止录像再修改设置"); Speak("请先停止录像"); return; }
             try
             {
                 var clonedConfig = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(Config)) ?? new AppConfig();
-                var settingsWin = new SettingsWindow(clonedConfig, DiskUsagePercent, DiskUsageText);
+                var settingsWin = new SettingsWindow(clonedConfig, DiskUsagePercent, DiskUsageText, IsRecording);
                 if (Application.Current?.MainWindow != null) settingsWin.Owner = Application.Current.MainWindow;
                 if (settingsWin.ShowDialog() == true) { 
+                    // 判断摄像头相关配置是否变更
+                    bool cameraChanged = Config.CameraIndex != clonedConfig.CameraIndex
+                        || Config.FrameWidth != clonedConfig.FrameWidth
+                        || Config.FrameHeight != clonedConfig.FrameHeight
+                        || Config.Fps != clonedConfig.Fps;
                     bool themeChanged = Config.Theme != clonedConfig.Theme;
+
                     Config = clonedConfig; 
                     SaveConfig(); 
+
                     if (themeChanged)
                     {
                         if (Enum.TryParse<ExpressPackingMonitoring.Themes.AppTheme>(Config.Theme, out var themeEnum))
@@ -237,7 +244,25 @@ namespace ExpressPackingMonitoring.ViewModels
                             ExpressPackingMonitoring.Themes.ThemeManager.ApplyTheme(themeEnum);
                         }
                     }
-                    ForceCheckDiskAndCleanup(); ShowToast("⚙️ 配置已保存，重启相机"); RestartCamera(); 
+                    ForceCheckDiskAndCleanup();
+
+                    if (cameraChanged)
+                    {
+                        if (IsRecording)
+                        {
+                            ShowToast("⚙️ 配置已保存，摄像头配置将在录制结束后生效");
+                            _pendingCameraRestart = true;
+                        }
+                        else
+                        {
+                            ShowToast("⚙️ 配置已保存，重启相机");
+                            RestartCamera();
+                        }
+                    }
+                    else
+                    {
+                        ShowToast("⚙️ 配置已保存");
+                    }
                 }
             }
             catch (Exception ex) { ShowToast($"设置错误: {ex.Message}"); }
@@ -690,6 +715,14 @@ namespace ExpressPackingMonitoring.ViewModels
             _currentScanRecord = null;
             _currentVideoRecordId = 0;
             _currentVideoFilePath = null;
+
+            // 录制中修改过摄像头配置，延迟到现在生效
+            if (_pendingCameraRestart)
+            {
+                _pendingCameraRestart = false;
+                RestartCamera();
+                ShowToast("摄像头配置已生效");
+            }
         }
 
         private void ForceCheckDiskAndCleanup()

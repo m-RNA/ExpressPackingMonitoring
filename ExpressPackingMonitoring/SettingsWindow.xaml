@@ -365,7 +365,7 @@
                                             <TextBlock Text="包装台场景通常 15 到 25 FPS 即可满足回溯。"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
-                                        <xctk:IntegerUpDown Grid.Column="1"
+                                        <xctk:IntegerUpDown x:Name="FpsUpDown" Grid.Column="1"
                                                             Height="32"
                                                             Value="{Binding Config.Fps}"
                                                             Minimum="5"
