@@ -12,7 +12,9 @@
     <!-- 单文件打包相关配置 -->
     <PublishSingleFile>true</PublishSingleFile>
     <!-- 对于包含原生库的项目，设为 false 可以将 C++ dll 解压，以防止DllNotFoundException -->
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract> 
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- 只保留中文资源，去掉其他语言的卫星程序集 -->
+    <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages> 
   </PropertyGroup>
 
   <ItemGroup>
@@ -32,9 +34,26 @@
     <Content Remove="runtimes\**\opencv_videoio_ffmpeg*" />
     <None Remove="runtimes\**\opencv_videoio_ffmpeg*" />
   </ItemGroup>
-  <Target Name="RemoveOpenCvFFmpeg" AfterTargets="ResolveReferences">
+  <Target Name="RemoveUnusedDlls" AfterTargets="ResolveReferences">
     <ItemGroup>
+      <!-- OpenCV 内置 ffmpeg -->
       <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="$([System.String]::Copy('%(Filename)').StartsWith('opencv_videoio_ffmpeg'))" />
+      <!-- WinForms（被 System.Drawing.Common 间接引入，项目不使用 WinForms UI） -->
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="$([System.String]::Copy('%(Filename)').StartsWith('System.Windows.Forms'))" />
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="$([System.String]::Copy('%(Filename)').StartsWith('System.Drawing.Design'))" />
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Accessibility'" />
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="$([System.String]::Copy('%(Filename)').StartsWith('Microsoft.VisualBasic'))" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Publish 时同样排除 -->
+  <Target Name="RemoveUnusedFromPublish" AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(Filename)').StartsWith('opencv_videoio_ffmpeg'))" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(Filename)').StartsWith('System.Windows.Forms'))" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(Filename)').StartsWith('System.Drawing.Design'))" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Filename)' == 'Accessibility'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(Filename)').StartsWith('Microsoft.VisualBasic'))" />
     </ItemGroup>
   </Target>
 
