@@ -151,7 +151,7 @@
                 <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.1"/>
             </Border.Effect>
             <Grid>
-                <MediaElement x:Name="MediaPlayer" LoadedBehavior="Manual" UnloadedBehavior="Stop" Stretch="Uniform" MediaOpened="MediaPlayer_MediaOpened"/>
+                <MediaElement x:Name="MediaPlayer" LoadedBehavior="Manual" UnloadedBehavior="Stop" Stretch="Uniform" MediaOpened="MediaPlayer_MediaOpened" MediaFailed="MediaPlayer_MediaFailed"/>
 
                 <Border VerticalAlignment="Bottom" Background="{DynamicResource ToastBackground}" Padding="15,10">
                     <Grid>

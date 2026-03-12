@@ -327,7 +327,44 @@
                                                   Grid.Column="1"
                                                   SelectedValuePath="Index"
                                                   DisplayMemberPath="Name"
-                                                  SelectedValue="{Binding Config.CameraIndex}"/>
+                                                  SelectedValue="{Binding Config.CameraIndex}"
+                                                  SelectionChanged="CameraComboBox_SelectionChanged"/>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="录制声音" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="开启后同步录制麦克风音频，需系统安装 FFmpeg。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <CheckBox x:Name="AudioRecordCheckBox"
+                                                  Grid.Column="1"
+                                                  IsChecked="{Binding Config.EnableAudioRecording}"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left"
+                                                  Style="{StaticResource ToggleSwitchStyle}"/>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}"
+                                          IsEnabled="{Binding IsChecked, ElementName=AudioRecordCheckBox, TargetNullValue=False}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="麦克风" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="选择用于录音的输入设备。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <ComboBox x:Name="MicComboBox"
+                                                  Grid.Column="1"
+                                                  SelectedValuePath="Name"
+                                                  DisplayMemberPath="Name"
+                                                  SelectedValue="{Binding Config.AudioDeviceName}"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>
@@ -346,7 +383,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="分辨率" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="常规记录建议使用 1080P；空间紧张时可降为 720P。"
+                                            <TextBlock Text="根据摄像头硬件能力自动列出可用分辨率。"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <ComboBox x:Name="ResComboBox"
@@ -362,14 +399,12 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="目标帧率 / FPS" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="系统会自动选择摄像头支持的最接近帧率，实际以硬件能力为准。"
+                                            <TextBlock Text="根据摄像头硬件能力自动列出可用帧率。"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
-                                        <xctk:IntegerUpDown x:Name="FpsUpDown" Grid.Column="1"
-                                                            Height="32"
-                                                            Value="{Binding Config.Fps}"
-                                                            Minimum="5"
-                                                            Maximum="60"/>
+                                        <ComboBox x:Name="FpsComboBox" Grid.Column="1"
+                                                  Height="32"
+                                                  Cursor="Hand"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>

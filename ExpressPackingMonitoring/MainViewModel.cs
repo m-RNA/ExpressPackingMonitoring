@@ -21,6 +21,7 @@ using AForge.Video.DirectShow;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Speech.Synthesis;
+using System.Runtime.InteropServices;
 
 namespace ExpressPackingMonitoring.ViewModels
 {
@@ -63,6 +64,8 @@ namespace ExpressPackingMonitoring.ViewModels
         public string Theme { get; set; } = "Auto";
         public bool ShowDeletedVideos { get; set; } = true;
         public bool AutoStartOnBoot { get; set; } = false;
+        public bool EnableAudioRecording { get; set; } = true;
+        public string AudioDeviceName { get; set; } = "";
     }
 
     public class MainViewModel : ObservableObject, IDisposable
@@ -79,7 +82,6 @@ namespace ExpressPackingMonitoring.ViewModels
         private BlockingCollection<Mat> _videoWriteQueue;
         private Task _writeTask;
         private CancellationTokenSource _writeCts;
-        private int _cachedFourCC = 0; // 启动时探测并缓存可用编码器
         private int _actualCameraFps = 15; // 摄像头硬件实际帧率
 
         private Mat _previousCheckFrame = new Mat();
@@ -299,61 +301,10 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private void InitializeSystem()
         {
-            ProbeVideoCodec();  // 启动时一次性探测可用编码器
             _cts = new CancellationTokenSource();
             StartCamera();
             _videoTask = Task.Run(() => VideoProcessLoop(_cts.Token), _cts.Token);
             Task.Run(CheckDiskAndCleanup);
-        }
-
-        /// <summary>
-        /// 参照 OBS 做法：启动时用独立临时文件探测可用编码器，避免录制时反复创建/销毁 VideoWriter 泄漏 FFmpeg 句柄。
-        /// </summary>
-        private void ProbeVideoCodec()
-        {
-            string testDir = Path.Combine(Path.GetTempPath(), "ExpressPackingMonitoring_probe");
-            try { Directory.CreateDirectory(testDir); } catch { return; }
-
-            // 优先 mp4v（兼容性最好），再试 avc1、hevc
-            int[] codecs = {
-                FourCC.MP4V,
-                VideoWriter.FourCC('a', 'v', 'c', '1'),
-                VideoWriter.FourCC('h', 'e', 'v', 'c'),
-            };
-
-            foreach (var codec in codecs)
-            {
-                // 使用配置的分辨率进行真实环境下的编码器能力探测
-                int probeW = Math.Max(640, Config.FrameWidth);
-                int probeH = Math.Max(480, Config.FrameHeight);
-
-                // 每个编码器用单独的临时文件，互不干扰
-                string testFile = Path.Combine(testDir, $"probe_{codec}.mp4");
-                VideoWriter testWriter = null;
-                try
-                {
-                    testWriter = new VideoWriter(testFile, codec, 15, new OpenCvSharp.Size(probeW, probeH));
-                    if (testWriter.IsOpened())
-                    {
-                        // 写入 2 帧验证编码器真正可用
-                        using var black = new Mat(probeH, probeW, MatType.CV_8UC3, Scalar.All(0));
-                        testWriter.Write(black);
-                        testWriter.Write(black);
-                        _cachedFourCC = codec;
-                    }
-                }
-                catch { }
-                finally
-                {
-                    // 同一线程创建和释放，保证 FFmpeg 状态干净
-                    try { testWriter?.Release(); } catch { }
-                    try { testWriter?.Dispose(); } catch { }
-                }
-                if (_cachedFourCC != 0) break;
-            }
-
-            // 清理临时目录
-            try { Directory.Delete(testDir, true); } catch { }
         }
         private void RestartCamera() { StopRecording(); StopCamera(); StartCamera(); }
 
@@ -430,7 +381,7 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 while (!token.IsCancellationRequested)
                 {
-                    // 使用硬件实际帧率控制循环节拍，与 VideoWriter 元数据保持一致
+                    // 使用硬件实际帧率控制循环节拍，与 FFmpeg 录制帧率保持一致
                     double frameDurationMs = 1000.0 / (_actualCameraFps > 0 ? _actualCameraFps : 15);
                     DateTime startTime = DateTime.Now; Mat currentFrame = null;
                     lock (_frameLock) { if (_latestFrame != null && !_latestFrame.IsDisposed) currentFrame = _latestFrame.Clone(); }
@@ -589,10 +540,11 @@ namespace ExpressPackingMonitoring.ViewModels
             // 录制开始时写入数据库
             try { _currentVideoRecordId = _db?.InsertVideoRecord(CurrentOrderId, CurrentMode, filePath, DateTime.Now) ?? 0; } catch { _currentVideoRecordId = 0; }
 
-            if (_cachedFourCC == 0)
+            string ffmpegPath = FindFFmpeg();
+            if (string.IsNullOrEmpty(ffmpegPath))
             {
                 IsRecording = false;
-                ShowToast("⚠ 无可用视频编码器，无法录制");
+                ShowToast("⚠ 未找到 FFmpeg，无法录制");
                 Speak("编码器不可用");
                 return;
             }
@@ -600,10 +552,8 @@ namespace ExpressPackingMonitoring.ViewModels
             lock (_videoLock)
             {
                 _writeCts = new CancellationTokenSource();
-                // 优化内存占用：缓冲区调小至 60 帧（15FPS 约 4 秒缓冲），节省 600MB 内存
-                _videoWriteQueue = new BlockingCollection<Mat>(boundedCapacity: 60);
-                // 参照 OBS：VideoWriter 在写入线程内创建/使用/销毁，保证同一线程生命周期
-                _writeTask = Task.Run(() => BackgroundVideoWriterLoop(filePath, _writeCts.Token));
+                _videoWriteQueue = new BlockingCollection<Mat>(boundedCapacity: 15);
+                _writeTask = Task.Run(() => BackgroundFFmpegRecordingLoop(filePath, ffmpegPath, _writeCts.Token));
             }
 
             ShowToast("▶ 开始录像");
@@ -614,63 +564,161 @@ namespace ExpressPackingMonitoring.ViewModels
         }
 
         /// <summary>
-        /// 参照 OBS 做法：VideoWriter 的创建、写入、Release/Dispose 全部在同一线程完成，
-        /// 避免跨线程操作导致 FFmpeg 原生句柄泄漏。
+        /// 主录制模式：通过管道将原始帧数据写入 FFmpeg，同时由 FFmpeg 录制麦克风音频，
+        /// 一次性输出带声音的 mp4，无需后期合并。
         /// </summary>
-        private void BackgroundVideoWriterLoop(string filePath, CancellationToken token)
+        private void BackgroundFFmpegRecordingLoop(string filePath, string ffmpegPath, CancellationToken token)
         {
-            VideoWriter writer = null;
-            bool writerOk = false;
+            Process ffmpeg = null;
+            Stream stdin = null;
+            bool recordingStarted = false;
+
             try
             {
-                var size = new OpenCvSharp.Size(Config.FrameWidth, Config.FrameHeight);
-                // 使用硬件实际帧率写入，确保播放速度与现实一致
-                writer = new VideoWriter(filePath, _cachedFourCC, _actualCameraFps, size);
+                int w = Config.FrameWidth;
+                int h = Config.FrameHeight;
+                int fps = _actualCameraFps > 0 ? _actualCameraFps : Config.Fps;
 
-                if (!writer.IsOpened())
+                string args = BuildFFmpegArgs(w, h, fps, filePath);
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = ffmpegPath,
+                    Arguments = args,
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardInput = true,
+                    RedirectStandardError = true
+                };
+
+                ffmpeg = Process.Start(psi);
+                if (ffmpeg == null) return;
+
+                // 后台排空 stderr 防止缓冲区死锁
+                Task.Run(() => { try { ffmpeg.StandardError.ReadToEnd(); } catch { } });
+
+                // 等待 FFmpeg 初始化
+                Thread.Sleep(200);
+                if (ffmpeg.HasExited)
                 {
                     _ = Application.Current.Dispatcher.BeginInvoke(() =>
                     {
                         IsRecording = false;
-                        ShowToast("⚠ 视频编码器打开失败");
+                        ShowToast("⚠ FFmpeg 启动失败，请检查 ffmpeg.exe 是否完整");
                     });
                     return;
                 }
-                writerOk = true;
 
-                // 使用无 token 的枚举，让 CompleteAdding 自然排空队列中所有帧
+                stdin = ffmpeg.StandardInput.BaseStream;
+                recordingStarted = true;
+
+                int expectedBytes = w * h * 3; // BGR24
+                byte[] buffer = new byte[expectedBytes];
+
                 foreach (var frame in _videoWriteQueue.GetConsumingEnumerable())
                 {
-                    // 仅在排空后用 token 作为强制中断的兜底
                     if (token.IsCancellationRequested) { frame?.Dispose(); break; }
+                    if (frame == null || frame.IsDisposed) continue;
 
-                    if (frame != null && !frame.IsDisposed)
+                    bool pipeError = false;
+                    try
                     {
-                        if (frame.Width != size.Width || frame.Height != size.Height)
+                        Mat toWrite = frame;
+                        bool needResize = frame.Width != w || frame.Height != h;
+
+                        if (needResize)
                         {
-                            using var resized = new Mat();
-                            Cv2.Resize(frame, resized, size);
-                            writer.Write(resized);
+                            toWrite = new Mat();
+                            Cv2.Resize(frame, toWrite, new OpenCvSharp.Size(w, h));
                         }
-                        else { writer.Write(frame); }
+
+                        try
+                        {
+                            if (toWrite.IsContinuous() && toWrite.Type() == MatType.CV_8UC3)
+                            {
+                                Marshal.Copy(toWrite.Data, buffer, 0, expectedBytes);
+                                stdin.Write(buffer, 0, expectedBytes);
+                            }
+                        }
+                        finally
+                        {
+                            if (needResize) toWrite.Dispose();
+                        }
+                    }
+                    catch (IOException) { pipeError = true; }
+                    finally
+                    {
                         frame.Dispose();
                     }
+
+                    if (pipeError) break;
                 }
             }
             catch (OperationCanceledException) { }
+            catch (IOException) { } // 管道中断
             catch { }
             finally
             {
-                // 同一线程释放，保证 FFmpeg muxer 正确写入 trailer
-                try { writer?.Release(); } catch { }
-                try { writer?.Dispose(); } catch { }
+                // 关闭管道，FFmpeg 收到 EOF 后自动写入文件 trailer
+                try { stdin?.Close(); } catch { }
 
-                // 如果 writer 创建失败，删除 0KB 空文件
-                if (!writerOk)
+                // 后台等待 FFmpeg 结束，不阻塞调用方
+                var ffmpegRef = ffmpeg;
+                var path = filePath;
+                var started = recordingStarted;
+                Task.Run(() =>
                 {
-                    try { if (File.Exists(filePath)) File.Delete(filePath); } catch { }
-                }
+                    try
+                    {
+                        if (ffmpegRef != null && !ffmpegRef.HasExited)
+                        {
+                            if (!ffmpegRef.WaitForExit(8000))
+                            {
+                                try { ffmpegRef.Kill(); } catch { }
+                            }
+                        }
+                    }
+                    catch { }
+                    finally
+                    {
+                        try { ffmpegRef?.Dispose(); } catch { }
+                        if (!started)
+                        {
+                            try { if (File.Exists(path)) File.Delete(path); } catch { }
+                        }
+                    }
+                });
             }
+        }
+
+        /// <summary>
+        /// 构建 FFmpeg 命令行参数：视频来自 stdin 管道（rawvideo BGR24），音频来自 DirectShow 麦克风。
+        /// </summary>
+        private string BuildFFmpegArgs(int w, int h, int fps, string filePath)
+        {
+            string args = $"-y -f rawvideo -video_size {w}x{h} -pixel_format bgr24 -framerate {fps} -i pipe:0";
+
+            bool hasAudio = Config.EnableAudioRecording && !string.IsNullOrEmpty(Config.AudioDeviceName);
+            if (hasAudio)
+            {
+                args += $" -f dshow -i audio=\"{Config.AudioDeviceName}\"";
+            }
+
+            args += " -c:v libx264 -pix_fmt yuv420p -preset ultrafast -crf 23";
+
+            if (hasAudio)
+            {
+                args += " -c:a aac -b:a 128k -shortest";
+            }
+
+            args += $" \"{filePath}\"";
+            return args;
+        }
+
+        private static string FindFFmpeg()
+        {
+            string appDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg.exe");
+            return File.Exists(appDir) ? appDir : null;
         }
 
         private void StopRecording()
@@ -681,15 +729,15 @@ namespace ExpressPackingMonitoring.ViewModels
 
             lock (_videoLock)
             {
-                // CompleteAdding → 写入线程自然排空队列所有帧 → Release/Dispose writer（同一线程）
-                _videoWriteQueue?.CompleteAdding();
-                try { _writeTask?.Wait(8000); } catch { }
-                // 兜底：如果排空超时，强制中断
+                // 先取消，让写入线程立即跳出循环
                 _writeCts?.Cancel();
+                // 再标记队列结束
+                try { _videoWriteQueue?.CompleteAdding(); } catch { }
+                // 短等待写入线程退出（关闭管道），FFmpeg 结束在后台异步完成
                 try { _writeTask?.Wait(2000); } catch { }
                 _writeCts?.Dispose(); _writeCts = null;
 
-                // 清理队列中因强制中断而未消费的残留帧
+                // 清理队列残留帧
                 if (_videoWriteQueue != null)
                 {
                     while (_videoWriteQueue.TryTake(out var leftover))
@@ -722,6 +770,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 // 从数据库刷新今日统计（保证与统计窗口一致）
                 RefreshTodayStats();
             }
+
             _recordStartTime = DateTime.MinValue;
             _currentScanRecord = null;
             _currentVideoRecordId = 0;

@@ -155,6 +155,18 @@ namespace ExpressPackingMonitoring
             }
         }
 
+        public void UpdateVideoFileSize(long recordId, long fileSizeBytes)
+        {
+            lock (_lock)
+            {
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = "UPDATE VideoRecords SET FileSizeBytes = @fileSize WHERE Id = @id;";
+                cmd.Parameters.AddWithValue("@id", recordId);
+                cmd.Parameters.AddWithValue("@fileSize", fileSizeBytes);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
         /// <summary>
         /// 标记视频为已删除并写入删除日志
         /// </summary>
