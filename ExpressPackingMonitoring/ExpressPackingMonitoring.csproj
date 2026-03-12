@@ -3,6 +3,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
@@ -23,8 +24,25 @@
     <PackageReference Include="OpenCvSharp4.Windows" Version="4.13.0.20260226" />
     <PackageReference Include="OpenCvSharp4.WpfExtensions" Version="4.13.0.20260226" />
     <PackageReference Include="System.Drawing.Common" Version="10.0.3" />
-    <PackageReference Include="System.Management" Version="10.0.3" />
     <PackageReference Include="System.Speech" Version="9.0.3" />
+  </ItemGroup>
+
+  <!-- 排除不需要的 OpenCV 内置 ffmpeg（已使用独立 ffmpeg.exe 管道录制） -->
+  <ItemGroup>
+    <Content Remove="runtimes\**\opencv_videoio_ffmpeg*" />
+    <None Remove="runtimes\**\opencv_videoio_ffmpeg*" />
+  </ItemGroup>
+  <Target Name="RemoveOpenCvFFmpeg" AfterTargets="ResolveReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="$([System.String]::Copy('%(Filename)').StartsWith('opencv_videoio_ffmpeg'))" />
+    </ItemGroup>
+  </Target>
+
+  <!-- ffmpeg.exe 放在项目根目录，构建/发布时自动复制到输出目录 -->
+  <ItemGroup>
+    <Content Include="ffmpeg.exe" Condition="Exists('ffmpeg.exe')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

@@ -198,6 +198,9 @@ namespace ExpressPackingMonitoring
                         "文件丢失", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
+                _timer.Stop();
+                MediaPlayer.Stop();
+                MediaPlayer.Close();
                 MediaPlayer.Source = new Uri(video.FullPath);
                 MediaPlayer.Play();
                 _timer.Start();
@@ -234,5 +237,6 @@ namespace ExpressPackingMonitoring
         private void TimelineSlider_DragStarted(object sender, DragStartedEventArgs e) { _isDragging = true; MediaPlayer.Pause(); }
         private void TimelineSlider_DragCompleted(object sender, DragCompletedEventArgs e) { _isDragging = false; MediaPlayer.Position = TimeSpan.FromSeconds(TimelineSlider.Value); MediaPlayer.Play(); UpdatePlayState(true); }
         private void TimelineSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) { if (!_isDragging && Math.Abs(e.NewValue - e.OldValue) > 1) { MediaPlayer.Position = TimeSpan.FromSeconds(e.NewValue); } }
+        private void MediaPlayer_MediaFailed(object sender, ExceptionRoutedEventArgs e) { _timer.Stop(); UpdatePlayState(false); MessageBox.Show($"视频播放失败：{e.ErrorException?.Message}", "播放错误", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 }
