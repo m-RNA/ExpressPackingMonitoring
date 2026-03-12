@@ -191,6 +191,12 @@ namespace ExpressPackingMonitoring
             catch { }
             if (micList.Count == 0) { micList.Add(new MicInfo { Name = "未检测到麦克风" }); }
             MicComboBox.ItemsSource = micList;
+
+            // 若当前配置为空，默认选第一个麦克风
+            if (string.IsNullOrEmpty(Config.AudioDeviceName) && micList.Count > 0)
+            {
+                Config.AudioDeviceName = micList[0].Name;
+            }
         }
 
         private void BtnBrowsePath_Click(object sender, RoutedEventArgs e)
