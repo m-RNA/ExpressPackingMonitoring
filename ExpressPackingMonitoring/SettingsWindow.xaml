@@ -4,6 +4,7 @@
         xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
         Title="设置" Height="680" Width="640"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Icon="app.ico"
         Background="{DynamicResource WindowBackground}" FontFamily="Microsoft YaHei UI, Segoe UI">
 
     <Window.Resources>
