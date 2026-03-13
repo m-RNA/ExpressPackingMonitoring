@@ -97,7 +97,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private string _currentOrderId = "";
         private bool _isRecording;
         private string _scanInputText = "";
-        public string ScanInputText { get => _scanInputText; set { if (SetProperty(ref _scanInputText, value)) RefreshBarcodes(); } }
+        public string ScanInputText { get => _scanInputText; set { if (SetProperty(ref _scanInputText, value)) ScheduleRefreshBarcodes(); } }
 
         private double _diskUsagePercent;
         private string _diskUsageText = "0.0 / 0.0 GB";
@@ -135,9 +135,9 @@ namespace ExpressPackingMonitoring.ViewModels
         public ObservableCollection<ScanRecord> FilteredLogs { get; } = new ObservableCollection<ScanRecord>();
 
         public BitmapSource VideoFrame { get => _videoFrame; set => SetProperty(ref _videoFrame, value); }
-        public string CurrentMode { get => _currentMode; set { if (SetProperty(ref _currentMode, value)) RefreshBarcodes(); } }
+        public string CurrentMode { get => _currentMode; set { if (SetProperty(ref _currentMode, value)) ScheduleRefreshBarcodes(); } }
         public string CurrentOrderId { get => _currentOrderId; set => SetProperty(ref _currentOrderId, value); }
-        public bool IsRecording { get => _isRecording; set { if (SetProperty(ref _isRecording, value)) RefreshBarcodes(); } }
+        public bool IsRecording { get => _isRecording; set { if (SetProperty(ref _isRecording, value)) ScheduleRefreshBarcodes(); } }
         public double DiskUsagePercent { get => _diskUsagePercent; set => SetProperty(ref _diskUsagePercent, value); }
         public string DiskUsageText { get => _diskUsageText; set => SetProperty(ref _diskUsageText, value); }
         public AppConfig Config { get => _config; set => SetProperty(ref _config, value); }
@@ -153,23 +153,31 @@ namespace ExpressPackingMonitoring.ViewModels
         public BitmapSource Barcode2Image { get => _barcode2Image; set => SetProperty(ref _barcode2Image, value); }
         public ICommand ClearScanInputCommand { get; }
         public ICommand ClearSearchCommand { get; }
+        private void ScheduleRefreshBarcodes()
+        {
+            Application.Current?.Dispatcher?.BeginInvoke(new Action(RefreshBarcodes), System.Windows.Threading.DispatcherPriority.Background);
+        }
         private void RefreshBarcodes()
         {
-            // 行1: 扫码框有内容→清除；空→切换模式
-            string cmd1; string label1;
-            if (!string.IsNullOrEmpty(_scanInputText))
-            { cmd1 = "CMD_CLEAR"; label1 = "清除"; }
-            else if (_currentMode == "发货")
-            { cmd1 = "MODE_TUIHUO"; label1 = "退货"; }
-            else
-            { cmd1 = "MODE_FAHUO"; label1 = "发货"; }
-            // 行2: 未录制→开录；录制中→停录
-            string cmd2 = _isRecording ? "CMD_STOP" : "CMD_START";
-            string label2 = _isRecording ? "停录" : "开录";
-            Barcode1Label = label1;
-            Barcode2Label = label2;
-            try { Barcode1Image = BarcodeHelper.Generate(cmd1, 50, 2); } catch { }
-            try { Barcode2Image = BarcodeHelper.Generate(cmd2, 50, 2); } catch { }
+            try
+            {
+                // 行1: 扫码框有内容→清除；空→切换模式
+                string cmd1; string label1;
+                if (!string.IsNullOrEmpty(_scanInputText))
+                { cmd1 = "CMD_CLEAR"; label1 = "清除"; }
+                else if (_currentMode == "发货")
+                { cmd1 = "MODE_TUIHUO"; label1 = "退货"; }
+                else
+                { cmd1 = "MODE_FAHUO"; label1 = "发货"; }
+                // 行2: 未录制→开录；录制中→停录
+                string cmd2 = _isRecording ? "CMD_STOP" : "CMD_START";
+                string label2 = _isRecording ? "停录" : "开录";
+                Barcode1Label = label1;
+                Barcode2Label = label2;
+                Barcode1Image = BarcodeHelper.Generate(cmd1, 50, 2);
+                Barcode2Image = BarcodeHelper.Generate(cmd2, 50, 2);
+            }
+            catch { }
         }
 
         public ICommand ScanCommand { get; }
