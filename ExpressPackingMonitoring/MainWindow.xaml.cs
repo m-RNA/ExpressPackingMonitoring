@@ -103,7 +103,8 @@ private void ScanInputTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
         private void ScanInputTextBox_LostFocus(object sender, RoutedEventArgs e)
         {
             _capsCheckTimer.Stop();
-            if (this.IsActive) Dispatcher.BeginInvoke(new System.Action(() => ScanInputTextBox.Focus()));
+            // 延迟检查 IsActive，避免在 Deactivated 之前抢先 re-focus 导致 CapsLock 恢复失败
+            Dispatcher.BeginInvoke(new System.Action(() => { if (this.IsActive) ScanInputTextBox.Focus(); }));
         }
 
         private void ScanInputTextBox_GotFocus(object sender, RoutedEventArgs e)

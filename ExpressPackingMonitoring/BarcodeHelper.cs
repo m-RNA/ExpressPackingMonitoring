@@ -78,7 +78,7 @@ namespace ExpressPackingMonitoring
             foreach (var code in allCodes)
                 foreach (var w in Patterns[code]) totalModules += w;
             foreach (var w in StopPattern) totalModules += w;
-            totalModules += 20; // quiet zone (10 modules each side)
+            totalModules += 4; // quiet zone (2 modules each side)
 
             int imgWidth = totalModules * moduleWidth;
             int imgHeight = height;
@@ -88,7 +88,7 @@ namespace ExpressPackingMonitoring
             {
                 dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, imgWidth, imgHeight));
 
-                int x = 10 * moduleWidth; // quiet zone
+                int x = 2 * moduleWidth; // quiet zone
                 // Draw all code patterns
                 foreach (var code in allCodes)
                     x = DrawPattern(dc, Patterns[code], x, imgHeight, moduleWidth);

@@ -747,7 +747,7 @@
                                         <TextBox Grid.Column="1" Text="{Binding Config.OrderIdRegex}"/>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,0">
+                                    <Grid Style="{StaticResource SettingRowStyle}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="230"/>
                                             <ColumnDefinition Width="*"/>
@@ -763,6 +763,24 @@
                                                   VerticalAlignment="Center"
                                                   HorizontalAlignment="Left"
                                                   Style="{StaticResource ToggleSwitchStyle}"/>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="条码冷却时间 (秒)" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="扫描指令条码后隐藏的秒数，防止重复扫描。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <xctk:DoubleUpDown Grid.Column="1"
+                                                           Height="32"
+                                                           Value="{Binding Config.BarcodeCooldownSeconds}"
+                                                           Minimum="0.5"
+                                                           Maximum="10.0"
+                                                           Increment="0.5"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>
