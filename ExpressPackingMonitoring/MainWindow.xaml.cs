@@ -1,4 +1,5 @@
-﻿using System.Windows;
+﻿using System.Runtime.InteropServices;
+using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using ExpressPackingMonitoring.ViewModels;
@@ -7,9 +8,63 @@ namespace ExpressPackingMonitoring
 {
     public partial class MainWindow : Window
     {
+        [DllImport("user32.dll")]
+        private static extern short GetKeyState(int nVirtKey);
+        [DllImport("user32.dll")]
+        private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+        private const int VK_CAPITAL = 0x14;
+        private DispatcherTimer _capsCheckTimer;
+        private bool _capsLockStateBeforeFocus;
+        private bool _capsLockOverridden;
+
+        private bool IsCapsLockOn() => (GetKeyState(VK_CAPITAL) & 1) != 0;
+
+        private void EnsureCapsLockOn()
+        {
+            if (!IsCapsLockOn())
+            {
+                keybd_event((byte)VK_CAPITAL, 0x45, 0, UIntPtr.Zero);
+                keybd_event((byte)VK_CAPITAL, 0x45, 2, UIntPtr.Zero);
+                _capsLockOverridden = true;
+            }
+        }
+
+        private void RestoreCapsLockState()
+        {
+            if (_capsLockOverridden && !_capsLockStateBeforeFocus && IsCapsLockOn())
+            {
+                keybd_event((byte)VK_CAPITAL, 0x45, 0, UIntPtr.Zero);
+                keybd_event((byte)VK_CAPITAL, 0x45, 2, UIntPtr.Zero);
+            }
+            _capsLockOverridden = false;
+        }
+
         public MainWindow()
         {
             InitializeComponent();
+            _capsCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _capsCheckTimer.Tick += (s, e) =>
+            {
+                if (IsActive && ScanInputTextBox.IsFocused && string.IsNullOrEmpty(ScanInputTextBox.Text))
+                    EnsureCapsLockOn();
+                else
+                    _capsCheckTimer.Stop();
+            };
+            Activated += (s, e) =>
+            {
+                _capsLockStateBeforeFocus = IsCapsLockOn();
+                _capsLockOverridden = false;
+                if (ScanInputTextBox.IsFocused)
+                {
+                    EnsureCapsLockOn();
+                    if (string.IsNullOrEmpty(ScanInputTextBox.Text)) _capsCheckTimer.Start();
+                }
+            };
+            Deactivated += (s, e) =>
+            {
+                _capsCheckTimer.Stop();
+                RestoreCapsLockState();
+            };
             Loaded += (s, e) => {
                 ScanInputTextBox.Focus();
 
@@ -47,11 +102,15 @@ private void ScanInputTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
 
         private void ScanInputTextBox_LostFocus(object sender, RoutedEventArgs e)
         {
+            _capsCheckTimer.Stop();
             if (this.IsActive) Dispatcher.BeginInvoke(new System.Action(() => ScanInputTextBox.Focus()));
         }
 
         private void ScanInputTextBox_GotFocus(object sender, RoutedEventArgs e)
         {
+            if (!_capsLockOverridden) _capsLockStateBeforeFocus = IsCapsLockOn();
+            EnsureCapsLockOn();
+            if (string.IsNullOrEmpty(ScanInputTextBox.Text)) _capsCheckTimer.Start();
             Dispatcher.BeginInvoke(new System.Action(() => ScanInputTextBox.SelectAll()));
         }
 
