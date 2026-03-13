@@ -57,10 +57,11 @@
     </ItemGroup>
   </Target>
 
-  <!-- ffmpeg.exe 放在项目根目录，构建/发布时自动复制到输出目录 -->
+  <!-- ffmpeg.exe 放在项目根目录，构建/发布时自动复制到输出目录（不打入单文件） -->
   <ItemGroup>
     <Content Include="ffmpeg.exe" Condition="Exists('ffmpeg.exe')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
   </ItemGroup>
 
