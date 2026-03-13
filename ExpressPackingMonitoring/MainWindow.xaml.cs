@@ -73,11 +73,11 @@ namespace ExpressPackingMonitoring
                 {
                     string processObjPath = System.Diagnostics.Process.GetCurrentProcess()?.MainModule?.FileName ?? AppContext.BaseDirectory;
                     var buildTime = System.IO.File.GetLastWriteTime(processObjPath);
-                    this.Title = $"📦 极简打包监控终端 v6.2 (编译于: {buildTime:yyyy-MM-dd HH:mm})";
+                    this.Title = $"打包监控 (编译于: {buildTime:yyyy-MM-dd HH:mm})";
                 }
                 catch
                 {
-                    this.Title = "📦 极简打包监控终端 v6.2";
+                    this.Title = "打包监控";
                 }
             };
         }
