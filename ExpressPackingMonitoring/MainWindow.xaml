@@ -101,16 +101,32 @@
                                 </Button.Style>
                             </Button>
 
-                            <TextBox Grid.Column="1" x:Name="ScanInputTextBox" Height="52" FontSize="22" Padding="16,0" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" Background="{DynamicResource ControlBackground}" BorderBrush="{DynamicResource BorderDefault}" BorderThickness="2" VerticalContentAlignment="Center"
-                                     Text="{Binding ScanInputText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                     GotKeyboardFocus="ScanInputTextBox_GotFocus" PreviewMouseLeftButtonDown="ScanInputTextBox_PreviewMouseLeftButtonDown"
-                                     PreviewKeyDown="ScanInputTextBox_PreviewKeyDown" LostFocus="ScanInputTextBox_LostFocus">
-                                <TextBox.Resources>
-                                    <Style TargetType="Border">
-                                        <Setter Property="CornerRadius" Value="8"/>
-                                    </Style>
-                                </TextBox.Resources>
-                            </TextBox>
+                            <Grid Grid.Column="1">
+                                <TextBox x:Name="ScanInputTextBox" Height="52" FontSize="22" Padding="16,0,36,0" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" Background="{DynamicResource ControlBackground}" BorderBrush="{DynamicResource BorderDefault}" BorderThickness="2" VerticalContentAlignment="Center"
+                                         Text="{Binding ScanInputText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         GotKeyboardFocus="ScanInputTextBox_GotFocus" PreviewMouseLeftButtonDown="ScanInputTextBox_PreviewMouseLeftButtonDown"
+                                         PreviewKeyDown="ScanInputTextBox_PreviewKeyDown" LostFocus="ScanInputTextBox_LostFocus">
+                                    <TextBox.Resources>
+                                        <Style TargetType="Border">
+                                            <Setter Property="CornerRadius" Value="8"/>
+                                        </Style>
+                                    </TextBox.Resources>
+                                </TextBox>
+                                <Button Command="{Binding ClearScanInputCommand}" Focusable="False" Content="✕" FontSize="14" Width="28" Height="28" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,6,0" Cursor="Hand" Foreground="{DynamicResource TextMuted}" Background="Transparent" BorderThickness="0">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}" CornerRadius="14">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="{DynamicResource ControlBackground}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </Grid>
                         </Grid>
 
                         <Button Grid.Column="1" Command="{Binding ToggleRecordingCommand}" Focusable="False" Height="52" Width="160" Cursor="Hand">
@@ -165,7 +181,7 @@
                 </Border>
             </Grid>
 
-            <Border Grid.Column="1" Background="{DynamicResource PanelBackground}" CornerRadius="10" Padding="20">
+            <Border Grid.Column="1" Background="{DynamicResource PanelBackground}" CornerRadius="10" Padding="16,12">
                 <Border.Effect>
                     <DropShadowEffect BlurRadius="15" ShadowDepth="2" Opacity="0.04"/>
                 </Border.Effect>
@@ -174,21 +190,26 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="扫码动态" FontSize="20" FontWeight="Black" Foreground="{DynamicResource TextPrimary}" Margin="0,0,0,16"/>
-                    <TextBox Grid.Row="1" Text="{Binding LogSearchText, UpdateSourceTrigger=PropertyChanged}" Padding="12,10" FontSize="14" Foreground="{DynamicResource TextPrimary}" Background="{DynamicResource ControlBackground}" BorderBrush="{DynamicResource BorderDefault}" BorderThickness="2" Margin="0,0,0,16" ToolTip="输入单号过滤">
-                        <TextBox.Resources>
-                            <Style TargetType="Border">
-                                <Setter Property="CornerRadius" Value="6"/>
-                            </Style>
-                        </TextBox.Resources>
-                    </TextBox>
+                    <!-- 行1条形码: 清除/发货/退货 -->
+                    <Grid Grid.Row="0" Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{Binding Barcode1Label}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" Width="36"/>
+                        <Image Grid.Column="1" Source="{Binding Barcode1Image}" Height="42" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                    </Grid>
+                    <Border Grid.Row="1" BorderBrush="{DynamicResource BorderDefault}" BorderThickness="0,1,0,0" Padding="0,6,0,0" Margin="0,0,0,6">
+                        <TextBlock Text="扫码动态" FontSize="18" FontWeight="Black" Foreground="{DynamicResource TextPrimary}"/>
+                    </Border>
                     <ListView Grid.Row="2" ItemsSource="{Binding FilteredLogs}" AlternationCount="2" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                         <ListView.ItemTemplate>
                             <DataTemplate>
-                                <Border Background="{DynamicResource PanelBackground}" CornerRadius="8" Margin="4,4,4,12" Padding="16,14">
+                                <Border Background="{DynamicResource ControlBackground}" CornerRadius="6" Margin="2,2,2,6" Padding="10,8">
                                     <Border.Effect>
-                                        <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.06" Color="{DynamicResource ShadowColor}"/>
+                                        <DropShadowEffect BlurRadius="4" ShadowDepth="1" Opacity="0.04" Color="{DynamicResource ShadowColor}"/>
                                     </Border.Effect>
                                     <Grid>
                                         <Grid.RowDefinitions>
@@ -202,7 +223,7 @@
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="{Binding OrderId}" FontWeight="Bold" FontSize="16" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="0" Text="{Binding OrderId}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                             <Border Grid.Column="2" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
                                                 <Border.Style>
                                                     <Style TargetType="Border">
@@ -235,9 +256,9 @@
                                             </Border>
                                         </Grid>
                                         
-                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="28,8,0,0">
-                                            <TextBlock Text="⏱ " Foreground="{DynamicResource TextMuted}" FontSize="13"/>
-                                            <TextBlock Text="{Binding Duration}" FontWeight="Bold" FontSize="13" Margin="0,0,16,0">
+                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,4,0,0">
+                                            <TextBlock Text="⏱ " Foreground="{DynamicResource TextMuted}" FontSize="12"/>
+                                            <TextBlock Text="{Binding Duration}" FontWeight="Bold" FontSize="12" Margin="0,0,12,0">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
                                                         <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
@@ -249,8 +270,8 @@
                                                     </Style>
                                                 </TextBlock.Style>
                                             </TextBlock>
-                                            <TextBlock Text="📅 " Foreground="{DynamicResource TextMuted}" FontSize="13"/>
-                                            <TextBlock Text="{Binding DateStr}" Foreground="{DynamicResource TextMuted}" FontSize="13"/>
+                                            <TextBlock Text="📅 " Foreground="{DynamicResource TextMuted}" FontSize="12"/>
+                                            <TextBlock Text="{Binding DateStr}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
                                         </StackPanel>
                                     </Grid>
                                 </Border>
@@ -280,6 +301,18 @@
                             </Style>
                         </ListView.ItemContainerStyle>
                     </ListView>
+
+                    <!-- 行2条形码: 开录/停录 -->
+                    <Border Grid.Row="3" BorderBrush="{DynamicResource BorderDefault}" BorderThickness="0,1,0,0" Padding="0,6,0,0" Margin="0,6,0,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{Binding Barcode2Label}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" Width="36"/>
+                            <Image Grid.Column="1" Source="{Binding Barcode2Image}" Height="42" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                        </Grid>
+                    </Border>
                 </Grid>
             </Border>
         </Grid>

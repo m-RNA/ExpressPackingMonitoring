@@ -68,6 +68,7 @@ namespace ExpressPackingMonitoring
         private void DateFilterChanged(object sender, SelectionChangedEventArgs e) { LoadVideos(); }
         // 搜索框改变时，只在内存中过滤，不读硬盘
         private void TextFilterChanged(object sender, TextChangedEventArgs e) { ApplyFilters(); }
+        private void BtnClearSearch_Click(object sender, RoutedEventArgs e) { SearchBox.Text = ""; }
 
         private void LoadVideos()
         {
