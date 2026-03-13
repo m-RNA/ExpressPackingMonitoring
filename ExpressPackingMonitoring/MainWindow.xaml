@@ -193,13 +193,29 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <!-- 行1条形码: 清除/发货/退货 -->
-                    <Grid Grid.Row="0" Margin="0,0,0,6">
+                    <Grid Grid.Row="0" Margin="0,0,0,6" Height="60">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{Binding Barcode1Label}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" Width="36"/>
-                        <Image Grid.Column="1" Source="{Binding Barcode1Image}" Height="42" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                        <TextBlock Grid.Column="0" Text="{Binding Barcode1Label}" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" TextAlignment="Center" Width="20" LineHeight="18" Margin="0,0,4,0"/>
+                        <Grid Grid.Column="1">
+                            <Image Source="{Binding Barcode1Image}" Stretch="Fill" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Stretch" Margin="12,0">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Barcode1Image}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                                <TextBlock Text="条码冷却中…" FontSize="12" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center" Margin="0,0,0,6"/>
+                                <ProgressBar Height="6" Minimum="0" Maximum="100" Value="{Binding Barcode1CooldownProgress}" Foreground="{DynamicResource AccentBlue}" Background="{DynamicResource BorderStrong}" BorderThickness="0"/>
+                            </StackPanel>
+                        </Grid>
                     </Grid>
                     <Border Grid.Row="1" BorderBrush="{DynamicResource BorderDefault}" BorderThickness="0,1,0,0" Padding="0,6,0,0" Margin="0,0,0,6">
                         <TextBlock Text="扫码动态" FontSize="18" FontWeight="Black" Foreground="{DynamicResource TextPrimary}"/>
@@ -304,13 +320,29 @@
 
                     <!-- 行2条形码: 开录/停录 -->
                     <Border Grid.Row="3" BorderBrush="{DynamicResource BorderDefault}" BorderThickness="0,1,0,0" Padding="0,6,0,0" Margin="0,6,0,0">
-                        <Grid>
+                        <Grid Height="60">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{Binding Barcode2Label}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" Width="36"/>
-                            <Image Grid.Column="1" Source="{Binding Barcode2Image}" Height="42" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                            <TextBlock Grid.Column="0" Text="{Binding Barcode2Label}" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" TextAlignment="Center" Width="20" LineHeight="18" Margin="0,0,4,0"/>
+                            <Grid Grid.Column="1">
+                                <Image Source="{Binding Barcode2Image}" Stretch="Fill" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Stretch" Margin="12,0">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Barcode2Image}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="条码冷却中…" FontSize="12" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center" Margin="0,0,0,6"/>
+                                    <ProgressBar Height="6" Minimum="0" Maximum="100" Value="{Binding Barcode2CooldownProgress}" Foreground="{DynamicResource AccentBlue}" Background="{DynamicResource BorderStrong}" BorderThickness="0"/>
+                                </StackPanel>
+                            </Grid>
                         </Grid>
                     </Border>
                 </Grid>

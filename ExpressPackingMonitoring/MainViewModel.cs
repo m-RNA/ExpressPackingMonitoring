@@ -66,6 +66,7 @@ namespace ExpressPackingMonitoring.ViewModels
         public bool AutoStartOnBoot { get; set; } = false;
         public bool EnableAudioRecording { get; set; } = true;
         public string AudioDeviceName { get; set; } = "";
+        public double BarcodeCooldownSeconds { get; set; } = 2.0;
     }
 
     public class MainViewModel : ObservableObject, IDisposable
@@ -113,6 +114,8 @@ namespace ExpressPackingMonitoring.ViewModels
         private long _currentVideoRecordId;    // 数据库中当前录制记录 ID
         private string _currentVideoFilePath;  // 当前录制文件路径
         private string _stopReason = "手动";     // 停止录制的原因
+        private string _recordingOrderId;       // 录制开始时的单号
+        private string _recordingMode;          // 录制开始时的模式
         private bool _autoStopWarned = false;
         private bool _maxDurationWarned = false;
         private bool _pendingCameraRestart = false; // 录制中修改了摄像头配置，录制结束后重启
@@ -147,12 +150,20 @@ namespace ExpressPackingMonitoring.ViewModels
         private string _barcode2Label;
         private BitmapSource _barcode1Image;
         private BitmapSource _barcode2Image;
+        private double _barcode1CooldownProgress;
+        private double _barcode2CooldownProgress;
         public string Barcode1Label { get => _barcode1Label; set => SetProperty(ref _barcode1Label, value); }
         public string Barcode2Label { get => _barcode2Label; set => SetProperty(ref _barcode2Label, value); }
         public BitmapSource Barcode1Image { get => _barcode1Image; set => SetProperty(ref _barcode1Image, value); }
         public BitmapSource Barcode2Image { get => _barcode2Image; set => SetProperty(ref _barcode2Image, value); }
+        public double Barcode1CooldownProgress { get => _barcode1CooldownProgress; set => SetProperty(ref _barcode1CooldownProgress, value); }
+        public double Barcode2CooldownProgress { get => _barcode2CooldownProgress; set => SetProperty(ref _barcode2CooldownProgress, value); }
         public ICommand ClearScanInputCommand { get; }
         public ICommand ClearSearchCommand { get; }
+        private CancellationTokenSource _barcode1CooldownCts;
+        private CancellationTokenSource _barcode2CooldownCts;
+        private bool _barcode1OnCooldown;
+        private bool _barcode2OnCooldown;
         private void ScheduleRefreshBarcodes()
         {
             Application.Current?.Dispatcher?.BeginInvoke(new Action(RefreshBarcodes), System.Windows.Threading.DispatcherPriority.Background);
@@ -164,20 +175,76 @@ namespace ExpressPackingMonitoring.ViewModels
                 // 行1: 扫码框有内容→清除；空→切换模式
                 string cmd1; string label1;
                 if (!string.IsNullOrEmpty(_scanInputText))
-                { cmd1 = "CMD_CLEAR"; label1 = "清除"; }
+                { cmd1 = "CLEAR"; label1 = "清\n除"; }
                 else if (_currentMode == "发货")
-                { cmd1 = "MODE_TUIHUO"; label1 = "退货"; }
+                { cmd1 = "BACK"; label1 = "退\n货"; }
                 else
-                { cmd1 = "MODE_FAHUO"; label1 = "发货"; }
+                { cmd1 = "SHIP"; label1 = "发\n货"; }
                 // 行2: 未录制→开录；录制中→停录
-                string cmd2 = _isRecording ? "CMD_STOP" : "CMD_START";
-                string label2 = _isRecording ? "停录" : "开录";
-                Barcode1Label = label1;
-                Barcode2Label = label2;
-                Barcode1Image = BarcodeHelper.Generate(cmd1, 50, 2);
-                Barcode2Image = BarcodeHelper.Generate(cmd2, 50, 2);
+                string cmd2 = _isRecording ? "STOP" : "START";
+                string label2 = _isRecording ? "停\n录" : "开\n录";
+                if (!_barcode1OnCooldown)
+                {
+                    Barcode1Label = label1;
+                    Barcode1Image = BarcodeHelper.Generate(cmd1, 70, 3);
+                }
+                if (!_barcode2OnCooldown)
+                {
+                    Barcode2Label = label2;
+                    Barcode2Image = BarcodeHelper.Generate(cmd2, 70, 3);
+                }
             }
             catch { }
+        }
+
+        private async void HideBarcode1Temporarily()
+        {
+            _barcode1CooldownCts?.Cancel();
+            var cts = _barcode1CooldownCts = new CancellationTokenSource();
+            _barcode1OnCooldown = true;
+            Barcode1Image = null; Barcode1Label = "";
+            Barcode1CooldownProgress = 0;
+            double totalMs = Config.BarcodeCooldownSeconds * 1000;
+            const int step = 50;
+            double elapsed = 0;
+            try
+            {
+                while (elapsed < totalMs)
+                {
+                    await Task.Delay(step, cts.Token);
+                    elapsed += step;
+                    Barcode1CooldownProgress = Math.Min(100, elapsed / totalMs * 100);
+                }
+            }
+            catch { return; }
+            _barcode1OnCooldown = false;
+            Barcode1CooldownProgress = 0;
+            if (!cts.IsCancellationRequested) RefreshBarcodes();
+        }
+
+        private async void HideBarcode2Temporarily()
+        {
+            _barcode2CooldownCts?.Cancel();
+            var cts = _barcode2CooldownCts = new CancellationTokenSource();
+            _barcode2OnCooldown = true;
+            Barcode2Image = null; Barcode2Label = "";
+            Barcode2CooldownProgress = 0;
+            double totalMs = Config.BarcodeCooldownSeconds * 1000;
+            const int step = 50;
+            double elapsed = 0;
+            try
+            {
+                while (elapsed < totalMs)
+                {
+                    await Task.Delay(step, cts.Token);
+                    elapsed += step;
+                    Barcode2CooldownProgress = Math.Min(100, elapsed / totalMs * 100);
+                }
+            }
+            catch { return; }
+            _barcode2OnCooldown = false;
+            Barcode2CooldownProgress = 0;
+            if (!cts.IsCancellationRequested) RefreshBarcodes();
         }
 
         public ICommand ScanCommand { get; }
@@ -544,11 +611,11 @@ namespace ExpressPackingMonitoring.ViewModels
             if (string.IsNullOrWhiteSpace(scanResult)) return;
             string upperResult = scanResult.ToUpper().Trim();
 
-            if (upperResult.Contains("CMD_CLEAR") || upperResult.Contains("清除")) { ScanInputText = ""; ShowToast("🧹 扫码框已清除"); return; }
-            if (upperResult.Contains("MODE_FAHUO") || upperResult.Contains("发货")) { CurrentMode = "发货"; ScanInputText = ""; ShowToast("切换为发货模式"); Speak("切换发货"); return; }
-            if (upperResult.Contains("MODE_TUIHUO") || upperResult.Contains("退货")) { CurrentMode = "退货"; ScanInputText = ""; ShowToast("切换为退货模式"); Speak("切换退货"); return; }
-            if (upperResult.Contains("CMD_START") || upperResult.Contains("开始录制")) { ScanInputText = ""; ToggleRecording(); return; }
-            if (upperResult.Contains("CMD_STOP") || upperResult.Contains("停止录制")) { ScanInputText = ""; StopRecordingManual(); return; }
+            if (upperResult.Contains("CLEAR") || upperResult.Contains("清除")) { ScanInputText = ""; HideBarcode1Temporarily(); ShowToast("🧹 扫码框已清除"); return; }
+            if (upperResult.Contains("SHIP") || upperResult.Contains("发货")) { CurrentMode = "发货"; ScanInputText = ""; HideBarcode1Temporarily(); ShowToast("切换为发货模式"); Speak("切换发货"); return; }
+            if (upperResult.Contains("BACK") || upperResult.Contains("退货")) { CurrentMode = "退货"; ScanInputText = ""; HideBarcode1Temporarily(); ShowToast("切换为退货模式"); Speak("切换退货"); return; }
+            if (upperResult.Contains("START") || upperResult.Contains("开始录制")) { ScanInputText = ""; HideBarcode2Temporarily(); ToggleRecording(); return; }
+            if (upperResult.Contains("STOP") || upperResult.Contains("停止录制")) { ScanInputText = ""; HideBarcode2Temporarily(); StopRecordingManual(); return; }
 
             try { if (!System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex)) { ScanInputText = ""; ShowToast("非法单号，已拦截");Speak("非法单号"); return; } } catch { }
                                                          
@@ -577,9 +644,8 @@ namespace ExpressPackingMonitoring.ViewModels
             string filePath = Path.Combine(dateFolder, fileName);
             _currentVideoFilePath = filePath;
             _stopReason = "手动";
-
-            // 录制开始时写入数据库
-            try { _currentVideoRecordId = _db?.InsertVideoRecord(CurrentOrderId, CurrentMode, filePath, DateTime.Now) ?? 0; } catch { _currentVideoRecordId = 0; }
+            _recordingOrderId = CurrentOrderId;
+            _recordingMode = CurrentMode;
 
             string ffmpegPath = FindFFmpeg();
             if (string.IsNullOrEmpty(ffmpegPath))
@@ -798,13 +864,15 @@ namespace ExpressPackingMonitoring.ViewModels
                     _currentScanRecord.IsActive = false;
                 }
 
-                // 更新数据库记录：结束时间、时长、文件大小、停止原因
+                // 录制结束后写入数据库（仅文件存在时才插入，避免回放列表显示丢失）
                 try
                 {
-                    long fileSize = 0;
                     if (!string.IsNullOrEmpty(_currentVideoFilePath) && File.Exists(_currentVideoFilePath))
-                        fileSize = new FileInfo(_currentVideoFilePath).Length;
-                    _db?.UpdateVideoRecordOnStop(_currentVideoRecordId, DateTime.Now, duration.TotalSeconds, fileSize, _stopReason);
+                    {
+                        long fileSize = new FileInfo(_currentVideoFilePath).Length;
+                        _currentVideoRecordId = _db?.InsertVideoRecord(_recordingOrderId, _recordingMode, _currentVideoFilePath, _recordStartTime) ?? 0;
+                        _db?.UpdateVideoRecordOnStop(_currentVideoRecordId, DateTime.Now, duration.TotalSeconds, fileSize, _stopReason);
+                    }
                 }
                 catch { }
 
