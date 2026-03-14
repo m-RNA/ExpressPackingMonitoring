@@ -383,6 +383,40 @@
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="视频编码格式" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="H.265 压缩率更高（体积更小），但需要硬件支持。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <ComboBox x:Name="VideoCodecComboBox"
+                                                  Grid.Column="1"
+                                                  SelectedValuePath="Value"
+                                                  DisplayMemberPath="DisplayName"
+                                                  Cursor="Hand"/>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="硬件编码器 / GPU" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="优先使用独立显卡加速录像编码，降低 CPU 占用。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <ComboBox x:Name="GpuEncoderComboBox"
+                                                  Grid.Column="1"
+                                                  SelectedValuePath="Value"
+                                                  DisplayMemberPath="DisplayName"
+                                                  Cursor="Hand"/>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="分辨率" Style="{StaticResource FieldLabelStyle}"/>
                                             <TextBlock Text="根据摄像头硬件能力自动列出可用分辨率。"
                                                        Style="{StaticResource FieldHintStyle}"/>
