@@ -7,6 +7,7 @@ using ExpressPackingMonitoring.ViewModels;
 using AForge.Video.DirectShow;
 using System.Linq;
 using System.Windows.Controls;
+using System.Threading;
 
 namespace ExpressPackingMonitoring
 {
@@ -22,10 +23,14 @@ namespace ExpressPackingMonitoring
         public string CurrentDiskUsageText { get; set; }
 
         private string _originalTheme;
+        private bool _isRecording;
+        private bool _isLoadingDevices;
+
         public SettingsWindow(AppConfig clonedConfig, double diskUsagePercent, string diskUsageText, bool isRecording = false)
         {
             InitializeComponent();
             _originalTheme = clonedConfig.Theme;
+            _isRecording = isRecording;
             Config = clonedConfig;
 
             CurrentDiskUsagePercent = diskUsagePercent;
@@ -33,16 +38,34 @@ namespace ExpressPackingMonitoring
 
             this.DataContext = this;
 
-            LoadCameras();
-            LoadMicrophones();
-            LoadPresets(clonedConfig);
-            LoadFpsOptions(clonedConfig.CameraIndex, clonedConfig.Fps);
+            // GPU编码器使用缓存，可立即加载
+            LoadGpuEncoders();
+            LoadVideoCodecs();
+
+            // 非DirectShow的预设
+            ZoomScaleComboBox.ItemsSource = new List<double> { 1.2, 1.5, 2.0, 2.5, 3.0, 4.0 };
+            if (!ZoomScaleComboBox.Items.Contains(Config.ZoomScale)) Config.ZoomScale = 1.5;
 
             // 从注册表读取实际的开机自启动状态
             Config.AutoStartOnBoot = IsAutoStartEnabled();
 
-            // 录制中禁用摄像头相关控件，提示下次生效
-            if (isRecording)
+            // 窗口加载后异步枚举设备，避免阻塞UI线程
+            this.Loaded += SettingsWindow_Loaded;
+        }
+
+        private async void SettingsWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            _isLoadingDevices = true;
+            try
+            {
+                await LoadAllDevicesAsync();
+            }
+            finally
+            {
+                _isLoadingDevices = false;
+            }
+
+            if (_isRecording)
             {
                 CameraComboBox.IsEnabled = false;
                 ResComboBox.IsEnabled = false;
@@ -65,51 +88,178 @@ namespace ExpressPackingMonitoring
             }
         }
 
-        private void LoadPresets(AppConfig config)
+        /// <summary>
+        /// 在独立 STA 线程上运行 DirectShow COM 操作，避免与 AForge 摄像头线程冲突。
+        /// </summary>
+        private static System.Threading.Tasks.Task<T> RunOnStaThread<T>(Func<T> func)
         {
-            LoadResolutionOptions(config.CameraIndex, config.FrameWidth, config.FrameHeight);
-
-            ZoomScaleComboBox.ItemsSource = new List<double> { 1.2, 1.5, 2.0, 2.5, 3.0, 4.0 };
-            if (!ZoomScaleComboBox.Items.Contains(config.ZoomScale)) config.ZoomScale = 1.5;
+            var tcs = new System.Threading.Tasks.TaskCompletionSource<T>();
+            var thread = new Thread(() =>
+            {
+                try { tcs.SetResult(func()); }
+                catch (Exception ex) { tcs.SetException(ex); }
+            });
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.IsBackground = true;
+            thread.Start();
+            return tcs.Task;
         }
 
-        private void LoadResolutionOptions(int cameraIndex, int currentWidth, int currentHeight)
+        private async System.Threading.Tasks.Task LoadAllDevicesAsync()
         {
-            var resOptions = new List<ResOption>();
-            try
+            var config = Config;
+            var result = await RunOnStaThread(() =>
             {
-                var videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
-                if (cameraIndex >= 0 && cameraIndex < videoDevices.Count)
-                {
-                    var device = new VideoCaptureDevice(videoDevices[cameraIndex].MonikerString);
-                    resOptions = device.VideoCapabilities
-                        .Select(c => new { c.FrameSize.Width, c.FrameSize.Height })
-                        .Distinct()
-                        .OrderByDescending(r => r.Width * r.Height)
-                        .Select(r => new ResOption
-                        {
-                            Name = $"{r.Width}x{r.Height}{GetResLabel(r.Width, r.Height)}",
-                            Width = r.Width,
-                            Height = r.Height
-                        })
-                        .ToList();
-                }
-            }
-            catch { }
+                var cams = new List<CameraInfo>();
+                var micList = new List<MicInfo>();
+                var resList = new List<ResOption>();
+                var fpsList = new List<int>();
 
-            if (resOptions.Count == 0)
+                try
+                {
+                    var videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
+                    for (int i = 0; i < videoDevices.Count; i++)
+                        cams.Add(new CameraInfo { Index = i, Name = $"[{i}] {videoDevices[i].Name}" });
+
+                    if (config.CameraIndex >= 0 && config.CameraIndex < videoDevices.Count)
+                    {
+                        var device = new VideoCaptureDevice(videoDevices[config.CameraIndex].MonikerString);
+                        resList = device.VideoCapabilities
+                            .Select(c => new { c.FrameSize.Width, c.FrameSize.Height })
+                            .Distinct()
+                            .OrderByDescending(r => r.Width * r.Height)
+                            .Select(r => new ResOption
+                            {
+                                Name = $"{r.Width}x{r.Height}{GetResLabel(r.Width, r.Height)}",
+                                Width = r.Width,
+                                Height = r.Height
+                            })
+                            .ToList();
+
+                        fpsList = device.VideoCapabilities
+                            .Select(c => c.AverageFrameRate)
+                            .Where(f => f > 0)
+                            .Distinct()
+                            .OrderBy(f => f)
+                            .ToList();
+                    }
+                }
+                catch { }
+
+                try
+                {
+                    var audioDevices = new FilterInfoCollection(new Guid("33D9A762-90C8-11D0-BD43-00A0C911CE86"));
+                    for (int i = 0; i < audioDevices.Count; i++)
+                        micList.Add(new MicInfo { Name = audioDevices[i].Name });
+                }
+                catch { }
+
+                return (Cameras: cams, Mics: micList, Resolutions: resList, FpsValues: fpsList);
+            });
+
+            // 更新摄像头
+            var cameras = result.Cameras;
+            if (cameras.Count == 0)
+                cameras.Add(new CameraInfo { Index = 0, Name = "[0] 未检测到摄像头" });
+            CameraComboBox.ItemsSource = cameras;
+            CameraComboBox.SelectedValue = config.CameraIndex;
+
+            // 更新麦克风
+            var mics = result.Mics;
+            if (mics.Count == 0)
+                mics.Add(new MicInfo { Name = "未检测到麦克风" });
+            MicComboBox.ItemsSource = mics;
+            if (string.IsNullOrEmpty(config.AudioDeviceName) && mics.Count > 0)
+                config.AudioDeviceName = mics[0].Name;
+
+            // 更新分辨率
+            var resolutions = result.Resolutions;
+            if (resolutions.Count == 0)
             {
-                resOptions = new List<ResOption> {
+                resolutions = new List<ResOption>
+                {
                     new ResOption { Name = "720P - 省空间", Width = 1280, Height = 720 },
                     new ResOption { Name = "1080P - 高清", Width = 1920, Height = 1080 },
                     new ResOption { Name = "2K - 超清", Width = 2560, Height = 1440 },
                     new ResOption { Name = "4K - 极清", Width = 3840, Height = 2160 }
                 };
             }
+            ResComboBox.ItemsSource = resolutions;
+            var resMatch = resolutions.FirstOrDefault(r => r.Width == config.FrameWidth && r.Height == config.FrameHeight);
+            ResComboBox.SelectedItem = resMatch ?? resolutions.FirstOrDefault();
 
-            ResComboBox.ItemsSource = resOptions;
-            var match = resOptions.FirstOrDefault(r => r.Width == currentWidth && r.Height == currentHeight);
-            ResComboBox.SelectedItem = match ?? resOptions.FirstOrDefault();
+            // 更新帧率
+            var fpsValues = result.FpsValues;
+            var fpsCbiList = new List<ComboBoxItem>();
+            if (fpsValues.Count == 0)
+                fpsValues = new List<int> { 10, 15, 20, 25, 30 };
+            foreach (var fps in fpsValues)
+                fpsCbiList.Add(new ComboBoxItem { Content = $"{fps} FPS", Tag = fps });
+            FpsComboBox.ItemsSource = fpsCbiList;
+            var fpsMatch = fpsCbiList.FirstOrDefault(i => (int)i.Tag == config.Fps);
+            FpsComboBox.SelectedItem = fpsMatch ?? fpsCbiList.FirstOrDefault();
+        }
+
+        private async System.Threading.Tasks.Task LoadCameraCapabilitiesAsync(int cameraIndex, int currentWidth, int currentHeight, int currentFps)
+        {
+            var result = await RunOnStaThread(() =>
+            {
+                var resList = new List<ResOption>();
+                var fpsList = new List<int>();
+                try
+                {
+                    var videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
+                    if (cameraIndex >= 0 && cameraIndex < videoDevices.Count)
+                    {
+                        var device = new VideoCaptureDevice(videoDevices[cameraIndex].MonikerString);
+                        resList = device.VideoCapabilities
+                            .Select(c => new { c.FrameSize.Width, c.FrameSize.Height })
+                            .Distinct()
+                            .OrderByDescending(r => r.Width * r.Height)
+                            .Select(r => new ResOption
+                            {
+                                Name = $"{r.Width}x{r.Height}{GetResLabel(r.Width, r.Height)}",
+                                Width = r.Width,
+                                Height = r.Height
+                            })
+                            .ToList();
+
+                        fpsList = device.VideoCapabilities
+                            .Select(c => c.AverageFrameRate)
+                            .Where(f => f > 0)
+                            .Distinct()
+                            .OrderBy(f => f)
+                            .ToList();
+                    }
+                }
+                catch { }
+                return (Resolutions: resList, FpsValues: fpsList);
+            });
+
+            var resolutions = result.Resolutions;
+            if (resolutions.Count == 0)
+            {
+                resolutions = new List<ResOption>
+                {
+                    new ResOption { Name = "720P - 省空间", Width = 1280, Height = 720 },
+                    new ResOption { Name = "1080P - 高清", Width = 1920, Height = 1080 },
+                    new ResOption { Name = "2K - 超清", Width = 2560, Height = 1440 },
+                    new ResOption { Name = "4K - 极清", Width = 3840, Height = 2160 }
+                };
+            }
+            ResComboBox.ItemsSource = resolutions;
+            var resMatch = resolutions.FirstOrDefault(r => r.Width == currentWidth && r.Height == currentHeight);
+            ResComboBox.SelectedItem = resMatch ?? resolutions.FirstOrDefault();
+
+            var fpsValues = result.FpsValues;
+            var fpsCbiList = new List<ComboBoxItem>();
+            if (fpsValues.Count == 0)
+                fpsValues = new List<int> { 10, 15, 20, 25, 30 };
+            foreach (var fps in fpsValues)
+                fpsCbiList.Add(new ComboBoxItem { Content = $"{fps} FPS", Tag = fps });
+            FpsComboBox.ItemsSource = fpsCbiList;
+            var fpsMatch = fpsCbiList.FirstOrDefault(i => (int)i.Tag == currentFps);
+            FpsComboBox.SelectedItem = fpsMatch ?? fpsCbiList.FirstOrDefault();
         }
 
         private static string GetResLabel(int w, int h)
@@ -121,82 +271,55 @@ namespace ExpressPackingMonitoring
             return "";
         }
 
-        private void LoadCameras()
+        private async void CameraComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            var cameraList = new List<CameraInfo>();
-            try
-            {
-                var videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
-                for (int i = 0; i < videoDevices.Count; i++) { cameraList.Add(new CameraInfo { Index = i, Name = $"[{i}] {videoDevices[i].Name}" }); }
-            }
-            catch { }
-            if (cameraList.Count == 0) { cameraList.Add(new CameraInfo { Index = 0, Name = "[0] 未检测到摄像头" }); }
-            CameraComboBox.ItemsSource = cameraList;
-        }
-
-        private void CameraComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
+            if (_isLoadingDevices) return;
             if (CameraComboBox.SelectedValue is int idx)
             {
-                LoadResolutionOptions(idx, Config.FrameWidth, Config.FrameHeight);
-                LoadFpsOptions(idx, Config.Fps);
+                await LoadCameraCapabilitiesAsync(idx, Config.FrameWidth, Config.FrameHeight, Config.Fps);
             }
         }
 
-        private void LoadFpsOptions(int cameraIndex, int currentFps)
+        private void LoadGpuEncoders()
         {
-            var fpsList = new List<ComboBoxItem>();
-            try
-            {
-                var videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
-                if (cameraIndex >= 0 && cameraIndex < videoDevices.Count)
+            var encoders = MainViewModel.CachedEncoderOptions
+                ?? new List<GpuEncoderOption>
                 {
-                    var device = new VideoCaptureDevice(videoDevices[cameraIndex].MonikerString);
-                    var fpsValues = device.VideoCapabilities
-                        .Select(c => c.AverageFrameRate)
-                        .Where(f => f > 0)
-                        .Distinct()
-                        .OrderBy(f => f)
-                        .ToList();
-                    foreach (var fps in fpsValues)
-                        fpsList.Add(new ComboBoxItem { Content = $"{fps} FPS", Tag = fps });
-                }
-            }
-            catch { }
-
-            if (fpsList.Count == 0)
-            {
-                foreach (var fps in new[] { 10, 15, 20, 25, 30 })
-                    fpsList.Add(new ComboBoxItem { Content = $"{fps} FPS", Tag = fps });
-            }
-
-            FpsComboBox.ItemsSource = fpsList;
-            // 选中当前配置的 FPS，如果不在列表中则选第一个
-            var match = fpsList.FirstOrDefault(i => (int)i.Tag == currentFps);
-            FpsComboBox.SelectedItem = match ?? fpsList.FirstOrDefault();
+                    new GpuEncoderOption { Value = "auto", DisplayName = "自动检测（优先独显）" },
+                    new GpuEncoderOption { Value = "cpu", DisplayName = "CPU 软编码" }
+                };
+            GpuEncoderComboBox.ItemsSource = encoders;
+            // 兼容旧配置：将旧版编码器名映射为 GPU 标识
+            string normalized = NormalizeGpuSetting(Config.GpuEncoder ?? "auto");
+            var match = encoders.FirstOrDefault(e => e.Value == normalized)
+                     ?? encoders.FirstOrDefault();
+            GpuEncoderComboBox.SelectedItem = match;
         }
 
-        private void LoadMicrophones()
+        private void LoadVideoCodecs()
         {
-            var micList = new List<MicInfo>();
-            try
+            var items = new[]
             {
-                // DirectShow Audio Input Device category
-                var audioDevices = new FilterInfoCollection(new Guid("33D9A762-90C8-11D0-BD43-00A0C911CE86"));
-                for (int i = 0; i < audioDevices.Count; i++)
-                {
-                    micList.Add(new MicInfo { Name = audioDevices[i].Name });
-                }
-            }
-            catch { }
-            if (micList.Count == 0) { micList.Add(new MicInfo { Name = "未检测到麦克风" }); }
-            MicComboBox.ItemsSource = micList;
+                new GpuEncoderOption { Value = "h264", DisplayName = "H.264 (\u517c\u5bb9\u6027\u597d)" },
+                new GpuEncoderOption { Value = "h265", DisplayName = "H.265 / HEVC (\u4f53\u79ef\u66f4\u5c0f)" },
+                new GpuEncoderOption { Value = "av1",  DisplayName = "AV1 (\u6781\u81f4\u538b\u7f29\uff0c\u63a8\u8350)" }
+            };
+            VideoCodecComboBox.ItemsSource = items;
+            string current = Config.VideoCodec?.ToLowerInvariant() ?? "h264";
+            VideoCodecComboBox.SelectedItem = items.FirstOrDefault(i => i.Value == current) ?? items[0];
+        }
 
-            // 若当前配置为空，默认选第一个麦克风
-            if (string.IsNullOrEmpty(Config.AudioDeviceName) && micList.Count > 0)
+        /// <summary>兼容旧版配置：将编码器名映射为 GPU 标识</summary>
+        private static string NormalizeGpuSetting(string setting)
+        {
+            return (setting?.Trim().ToLowerInvariant()) switch
             {
-                Config.AudioDeviceName = micList[0].Name;
-            }
+                "h264_nvenc" or "hevc_nvenc" or "av1_nvenc" or "nvidia" => "nvidia",
+                "h264_amf" or "hevc_amf" or "av1_amf" or "amd" => "amd",
+                "h264_qsv" or "hevc_qsv" or "av1_qsv" or "intel" => "intel",
+                "libx264" or "libx265" or "libsvtav1" or "cpu" => "cpu",
+                _ => setting ?? "auto"
+            };
         }
 
         private void BtnBrowsePath_Click(object sender, RoutedEventArgs e)
@@ -220,6 +343,8 @@ namespace ExpressPackingMonitoring
         {
             if (ResComboBox.SelectedItem is ResOption selectedRes) { Config.FrameWidth = selectedRes.Width; Config.FrameHeight = selectedRes.Height; }
             if (FpsComboBox.SelectedItem is ComboBoxItem fpsItem && fpsItem.Tag is int fps) { Config.Fps = fps; }
+            if (GpuEncoderComboBox.SelectedItem is GpuEncoderOption gpuOpt) { Config.GpuEncoder = gpuOpt.Value; }
+            if (VideoCodecComboBox.SelectedItem is GpuEncoderOption codecOpt) { Config.VideoCodec = codecOpt.Value; }
             ApplyAutoStart(Config.AutoStartOnBoot);
             this.DialogResult = true; this.Close();
         }

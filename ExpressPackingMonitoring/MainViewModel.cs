@@ -40,6 +40,12 @@ namespace ExpressPackingMonitoring.ViewModels
         { OrderId = orderId; Duration = duration; DateStr = dateStr; Mode = mode; IsActive = isActive; }
     }
 
+    public class GpuEncoderOption
+    {
+        public string Value { get; set; }
+        public string DisplayName { get; set; }
+    }
+
     public class AppConfig
     {
         public int CameraIndex { get; set; } = 0;
@@ -67,6 +73,8 @@ namespace ExpressPackingMonitoring.ViewModels
         public bool EnableAudioRecording { get; set; } = true;
         public string AudioDeviceName { get; set; } = "";
         public double BarcodeCooldownSeconds { get; set; } = 2.0;
+        public string GpuEncoder { get; set; } = "auto";
+        public string VideoCodec { get; set; } = "h264"; // "h264" or "h265"
     }
 
     public class MainViewModel : ObservableObject, IDisposable
@@ -75,6 +83,12 @@ namespace ExpressPackingMonitoring.ViewModels
         private readonly string _configFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
         private readonly string _dbFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "videos.db");
         private VideoDatabase _db;
+
+        /// <summary>启动时缓存的可用 GPU 编码器列表</summary>
+        public static List<GpuEncoderOption> CachedEncoderOptions { get; private set; }
+
+        /// <summary>启动时通过试编码验证的所有编码器名称（包括 H.264 和 H.265）</summary>
+        public static HashSet<string> ValidatedEncoders { get; private set; } = new();
 
         private VideoCaptureDevice _videoSource;
         private Mat _latestFrame;
@@ -257,6 +271,12 @@ namespace ExpressPackingMonitoring.ViewModels
         public MainViewModel()
         {
             LoadConfig();
+            // 在起动时后台探测可用 GPU 编码器并缓存
+            Task.Run(() => {
+                var (options, validated) = DetectAvailableEncodersSync();
+                CachedEncoderOptions = options;
+                ValidatedEncoders = validated;
+            });
             InitDatabase();
             RefreshTodayStats();
             InitSpeechSynthesizer();
@@ -458,14 +478,18 @@ namespace ExpressPackingMonitoring.ViewModels
         {
             if (_videoSource != null)
             {
-                _videoSource.NewFrame -= VideoSource_NewFrame;
-                if (_videoSource.IsRunning)
+                try { _videoSource.NewFrame -= VideoSource_NewFrame; } catch { }
+                try
                 {
-                    _videoSource.SignalToStop();
-                    // AForge WaitForStop can hang indefinitely — use a timeout
-                    for (int i = 0; i < 50 && _videoSource.IsRunning; i++)
-                        Thread.Sleep(100);
+                    if (_videoSource.IsRunning)
+                    {
+                        _videoSource.SignalToStop();
+                        for (int i = 0; i < 50 && _videoSource.IsRunning; i++)
+                            Thread.Sleep(100);
+                    }
                 }
+                catch (SEHException) { /* AForge COM cleanup on some laptops */ }
+                catch { }
                 _videoSource = null;
             }
             lock (_frameLock) { _latestFrame?.Dispose(); _latestFrame = null; }
@@ -673,20 +697,139 @@ namespace ExpressPackingMonitoring.ViewModels
         /// <summary>
         /// 主录制模式：通过管道将原始帧数据写入 FFmpeg，同时由 FFmpeg 录制麦克风音频，
         /// 一次性输出带声音的 mp4，无需后期合并。
+        /// 完整回退链：GPU → CPU+音频 → CPU无音频 → 失败
         /// </summary>
         private void BackgroundFFmpegRecordingLoop(string filePath, string ffmpegPath, CancellationToken token)
         {
+            int w = Config.FrameWidth;
+            int h = Config.FrameHeight;
+            int fps = _actualCameraFps > 0 ? _actualCameraFps : Config.Fps;
+            string encoder = ResolveEncoder();
+            string cpuEncoder = GetCpuEncoder();
+            bool hasAudio = Config.EnableAudioRecording && !string.IsNullOrEmpty(Config.AudioDeviceName);
+            string lastError = "";
+
+            // 第 1 步：首选编码器
+            var (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, encoder, hasAudio);
+            if (ok)
+            {
+                _ = Application.Current.Dispatcher.BeginInvoke(() =>
+                    ShowToast($"▶ 录像中 ({GetEncoderLabel(encoder)})"));
+                return;
+            }
+            lastError = err;
+
+            // 第 2 步：GPU 失败 → 回退 CPU + 音频
+            if (encoder != cpuEncoder && !token.IsCancellationRequested)
+            {
+                _ = Application.Current.Dispatcher.BeginInvoke(() =>
+                    ShowToast($"⚠ {encoder} 不可用，切换 CPU 编码"));
+                (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, cpuEncoder, hasAudio);
+                if (ok) return;
+                lastError = err;
+            }
+
+            // 第 3 步：音频设备可能不存在 → 禁用音频重试
+            if (hasAudio && !token.IsCancellationRequested)
+            {
+                _ = Application.Current.Dispatcher.BeginInvoke(() =>
+                    ShowToast("⚠ 音频设备不可用，已禁用录音"));
+                (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, cpuEncoder, false);
+                if (ok) return;
+                lastError = err;
+            }
+
+            // 全部失败
+            if (!token.IsCancellationRequested)
+            {
+                try { if (File.Exists(filePath) && new FileInfo(filePath).Length == 0) File.Delete(filePath); } catch { }
+                string errMsg = string.IsNullOrEmpty(lastError) ? "" : $"\n{lastError}";
+                _ = Application.Current.Dispatcher.BeginInvoke(() =>
+                {
+                    IsRecording = false;
+                    ShowToast($"⚠ 录制失败，请检查 FFmpeg{errMsg}");
+                    Speak("录制失败");
+                });
+            }
+        }
+
+        private static string GetEncoderLabel(string encoder) => encoder switch
+        {
+            "h264_nvenc" => "NVIDIA NVENC (H.264)",
+            "h264_amf" => "AMD AMF (H.264)",
+            "h264_qsv" => "Intel QSV (H.264)",
+            "libx264" => "CPU (H.264)",
+            "hevc_nvenc" => "NVIDIA NVENC (H.265)",
+            "hevc_amf" => "AMD AMF (H.265)",
+            "hevc_qsv" => "Intel QSV (H.265)",
+            "libx265" => "CPU (H.265)",
+            "av1_nvenc" => "NVIDIA NVENC (AV1)",
+            "av1_amf" => "AMD AMF (AV1)",
+            "av1_qsv" => "Intel QSV (AV1)",
+            "libsvtav1" => "CPU (AV1)",
+            _ => encoder
+        };
+
+        /// <summary>根据当前 VideoCodec 设置获取 CPU 编码器名称</summary>
+        private string GetCpuEncoder()
+        {
+            return (Config.VideoCodec?.ToLowerInvariant() ?? "h264") switch
+            {
+                "h265" => "libx265",
+                "av1" => "libsvtav1",
+                _ => "libx264"
+            };
+        }
+
+        /// <summary>将 GPU 名称和编解码器映射为具体的 FFmpeg 编码器名称</summary>
+        private static string MapGpuToEncoder(string gpu, string codec)
+        {
+            return (gpu, codec) switch
+            {
+                ("nvidia", "h264") => "h264_nvenc",
+                ("nvidia", "h265") => "hevc_nvenc",
+                ("nvidia", "av1")  => "av1_nvenc",
+                ("amd", "h264") => "h264_amf",
+                ("amd", "h265") => "hevc_amf",
+                ("amd", "av1")  => "av1_amf",
+                ("intel", "h264") => "h264_qsv",
+                ("intel", "h265") => "hevc_qsv",
+                ("intel", "av1")  => "av1_qsv",
+                ("cpu", "h264") => "libx264",
+                ("cpu", "h265") => "libx265",
+                ("cpu", "av1")  => "libsvtav1",
+                _ => codec switch { "h265" => "libx265", "av1" => "libsvtav1", _ => "libx264" }
+            };
+        }
+
+        /// <summary>将旧版编码器名称或新 GPU 标识符统一为 GPU 标识</summary>
+        private static string NormalizeGpuSetting(string setting)
+        {
+            return setting switch
+            {
+                "h264_nvenc" or "hevc_nvenc" or "av1_nvenc" or "nvidia" => "nvidia",
+                "h264_amf" or "hevc_amf" or "av1_amf" or "amd" => "amd",
+                "h264_qsv" or "hevc_qsv" or "av1_qsv" or "intel" => "intel",
+                "libx264" or "libx265" or "libsvtav1" or "cpu" => "cpu",
+                _ => setting
+            };
+        }
+
+        /// <summary>
+        /// 启动 FFmpeg 进程并通过管道写入帧数据。返回 (true, "") 表示正常录制，(false, stderr) 表示失败。
+        /// </summary>
+        private (bool ok, string error) RunFFmpegPipeline(string filePath, string ffmpegPath, CancellationToken token,
+            int w, int h, int fps, string encoder, bool withAudio)
+        {
             Process ffmpeg = null;
             Stream stdin = null;
-            bool recordingStarted = false;
+            bool anyFrameWritten = false;
+            string stderrText = "";
 
             try
             {
-                int w = Config.FrameWidth;
-                int h = Config.FrameHeight;
-                int fps = _actualCameraFps > 0 ? _actualCameraFps : Config.Fps;
-
-                string args = BuildFFmpegArgs(w, h, fps, filePath);
+                string args = BuildFFmpegArgs(w, h, fps, filePath, encoder, withAudio);
+                Debug.WriteLine($"[FFmpeg] encoder={encoder} audio={withAudio} args={args}");
 
                 var psi = new ProcessStartInfo
                 {
@@ -699,25 +842,23 @@ namespace ExpressPackingMonitoring.ViewModels
                 };
 
                 ffmpeg = Process.Start(psi);
-                if (ffmpeg == null) return;
+                if (ffmpeg == null) return (false, "FFmpeg 进程启动失败");
 
-                // 后台排空 stderr 防止缓冲区死锁
-                Task.Run(() => { try { ffmpeg.StandardError.ReadToEnd(); } catch { } });
+                // 异步捕获 stderr
+                var stderrTask = Task.Run(() => { try { return ffmpeg.StandardError.ReadToEnd(); } catch { return ""; } });
 
-                // 等待 FFmpeg 初始化
-                Thread.Sleep(200);
+                // 给 GPU 编码器更长的初始化时间
+                Thread.Sleep(encoder == "libx264" ? 300 : 600);
                 if (ffmpeg.HasExited)
                 {
-                    _ = Application.Current.Dispatcher.BeginInvoke(() =>
-                    {
-                        IsRecording = false;
-                        ShowToast("⚠ FFmpeg 启动失败，请检查 ffmpeg.exe 是否完整");
-                    });
-                    return;
+                    stderrText = stderrTask.GetAwaiter().GetResult();
+                    Debug.WriteLine($"[FFmpeg] early exit ({encoder}): {stderrText}");
+                    // 提取最后一行有意义的错误信息
+                    string shortErr = ExtractFFmpegError(stderrText);
+                    return (false, shortErr);
                 }
 
                 stdin = ffmpeg.StandardInput.BaseStream;
-                recordingStarted = true;
 
                 int expectedBytes = w * h * 3; // BGR24
                 byte[] buffer = new byte[expectedBytes];
@@ -745,6 +886,7 @@ namespace ExpressPackingMonitoring.ViewModels
                             {
                                 Marshal.Copy(toWrite.Data, buffer, 0, expectedBytes);
                                 stdin.Write(buffer, 0, expectedBytes);
+                                anyFrameWritten = true;
                             }
                         }
                         finally
@@ -760,72 +902,317 @@ namespace ExpressPackingMonitoring.ViewModels
 
                     if (pipeError) break;
                 }
+
+                return (anyFrameWritten, "");
             }
-            catch (OperationCanceledException) { }
-            catch (IOException) { } // 管道中断
-            catch { }
+            catch (OperationCanceledException) { return (anyFrameWritten, ""); }
+            catch (IOException) { return (anyFrameWritten, ""); }
+            catch (Exception ex) { return (false, ex.Message); }
             finally
             {
                 // 关闭管道，FFmpeg 收到 EOF 后自动写入文件 trailer
                 try { stdin?.Close(); } catch { }
 
-                // 后台等待 FFmpeg 结束，不阻塞调用方
-                var ffmpegRef = ffmpeg;
-                var path = filePath;
-                var started = recordingStarted;
-                Task.Run(() =>
+                // 同步等待 FFmpeg 完成（必须同步，否则回退重试时文件被锁）
+                try
                 {
-                    try
+                    if (ffmpeg != null && !ffmpeg.HasExited)
                     {
-                        if (ffmpegRef != null && !ffmpegRef.HasExited)
+                        if (!ffmpeg.WaitForExit(8000))
                         {
-                            if (!ffmpegRef.WaitForExit(8000))
-                            {
-                                try { ffmpegRef.Kill(); } catch { }
-                            }
+                            try { ffmpeg.Kill(); } catch { }
                         }
                     }
-                    catch { }
-                    finally
-                    {
-                        try { ffmpegRef?.Dispose(); } catch { }
-                        if (!started)
-                        {
-                            try { if (File.Exists(path)) File.Delete(path); } catch { }
-                        }
-                    }
-                });
+                }
+                catch { }
+                finally
+                {
+                    try { ffmpeg?.Dispose(); } catch { }
+                }
             }
         }
 
+        /// <summary>从 FFmpeg stderr 中提取简短错误信息</summary>
+        private static string ExtractFFmpegError(string stderr)
+        {
+            if (string.IsNullOrEmpty(stderr)) return "";
+            // 取最后几行中包含关键词的行
+            var lines = stderr.Split('\n');
+            for (int i = lines.Length - 1; i >= Math.Max(0, lines.Length - 10); i--)
+            {
+                string line = lines[i].Trim();
+                if (line.Contains("Error", StringComparison.OrdinalIgnoreCase) ||
+                    line.Contains("Could not", StringComparison.OrdinalIgnoreCase) ||
+                    line.Contains("No such", StringComparison.OrdinalIgnoreCase) ||
+                    line.Contains("not found", StringComparison.OrdinalIgnoreCase))
+                    return line.Length > 80 ? line[..80] : line;
+            }
+            return "";
+        }
+
         /// <summary>
-        /// 构建 FFmpeg 命令行参数：视频来自 stdin 管道（rawvideo BGR24），音频来自 DirectShow 麦克风。
+        /// 构建 FFmpeg 命令行参数：视频来自 stdin 管道（rawvideo BGR24），音频可选来自 DirectShow 麦克风。
         /// </summary>
-        private string BuildFFmpegArgs(int w, int h, int fps, string filePath)
+        private string BuildFFmpegArgs(int w, int h, int fps, string filePath, string encoder, bool withAudio)
         {
             string args = $"-y -f rawvideo -video_size {w}x{h} -pixel_format bgr24 -framerate {fps} -i pipe:0";
 
-            bool hasAudio = Config.EnableAudioRecording && !string.IsNullOrEmpty(Config.AudioDeviceName);
+            bool hasAudio = withAudio && Config.EnableAudioRecording && !string.IsNullOrEmpty(Config.AudioDeviceName);
             if (hasAudio)
             {
-                args += $" -f dshow -i audio=\"{Config.AudioDeviceName}\"";
+                args += $" -f dshow -thread_queue_size 1024 -i audio=\"{Config.AudioDeviceName}\"";
             }
 
-            args += " -c:v libx264 -pix_fmt yuv420p -preset ultrafast -crf 23";
+            // H.264 编码器
+            if (encoder == "h264_nvenc")
+                args += " -c:v h264_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -cq 30 -b:v 0 -g 150";
+            else if (encoder == "h264_amf")
+                args += " -c:v h264_amf -pix_fmt yuv420p -quality balanced -rc cqp -qp_i 30 -qp_p 30 -g 150";
+            else if (encoder == "h264_qsv")
+                args += " -c:v h264_qsv -pix_fmt nv12 -preset medium -global_quality 30 -g 150";
+            else if (encoder == "libx264")
+                args += " -c:v libx264 -pix_fmt yuv420p -preset fast -crf 30 -g 150";
+            // H.265 (HEVC) 编码器
+            else if (encoder == "hevc_nvenc")
+                args += " -c:v hevc_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -cq 30 -b:v 0 -g 150 -tag:v hvc1";
+            else if (encoder == "hevc_amf")
+                args += " -c:v hevc_amf -pix_fmt yuv420p -quality balanced -rc cqp -qp_i 30 -qp_p 30 -g 150 -tag:v hvc1";
+            else if (encoder == "hevc_qsv")
+                args += " -c:v hevc_qsv -pix_fmt nv12 -preset medium -global_quality 30 -g 150 -tag:v hvc1";
+            else if (encoder == "libx265")
+                args += " -c:v libx265 -pix_fmt yuv420p -preset fast -crf 30 -g 150 -tag:v hvc1";
+            // AV1 编码器 — 使用分辨率自适应目标码率
+            else if (encoder == "av1_nvenc")
+                args += $" -c:v av1_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -b:v {CalcAv1Bitrate(w, h, fps)}k -g 150";
+            else if (encoder == "av1_amf")
+                args += $" -c:v av1_amf -pix_fmt yuv420p -quality balanced -b:v {CalcAv1Bitrate(w, h, fps)}k -g 150";
+            else if (encoder == "av1_qsv")
+                args += $" -c:v av1_qsv -pix_fmt nv12 -preset medium -b:v {CalcAv1Bitrate(w, h, fps)}k -g 150";
+            else if (encoder == "libsvtav1")
+                args += $" -c:v libsvtav1 -pix_fmt yuv420p -preset 8 -b:v {CalcAv1Bitrate(w, h, fps)}k -g 150";
+            else
+                args += $" -c:v {encoder} -pix_fmt yuv420p -g 150";
 
             if (hasAudio)
             {
-                args += " -c:a aac -b:a 128k -shortest";
+                args += " -c:a aac -b:a 64k -shortest";
             }
 
             args += $" \"{filePath}\"";
             return args;
         }
 
+        /// <summary>
+        /// 根据分辨率和帧率计算 AV1 目标码率 (kb/s)。
+        /// 基准 (30fps): 720P=387, 1080P=906, 2K=1600, 4K=2050；按帧率线性缩放。
+        /// </summary>
+        private static int CalcAv1Bitrate(int w, int h, int fps)
+        {
+            long pixels = (long)w * h;
+            // 30fps 下的基准码率 (kb/s)，按像素数线性插值
+            (long px, int kbps)[] table = {
+                (1280L * 720,   387),
+                (1920L * 1080,  906),
+                (2560L * 1440, 1600),
+                (3840L * 2160, 2050)
+            };
+            int baseKbps;
+            if (pixels <= table[0].px)
+                baseKbps = table[0].kbps;
+            else if (pixels >= table[^1].px)
+                baseKbps = table[^1].kbps;
+            else
+            {
+                baseKbps = table[^1].kbps;
+                for (int i = 0; i < table.Length - 1; i++)
+                {
+                    if (pixels <= table[i + 1].px)
+                    {
+                        double t = (double)(pixels - table[i].px) / (table[i + 1].px - table[i].px);
+                        baseKbps = (int)(table[i].kbps + t * (table[i + 1].kbps - table[i].kbps));
+                        break;
+                    }
+                }
+            }
+            // 按帧率线性缩放（基准 30fps）
+            double fpsScale = Math.Max(fps, 1) / 30.0;
+            return Math.Max(100, (int)(baseKbps * fpsScale));
+        }
+
         private static string FindFFmpeg()
         {
             string appDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg.exe");
             return File.Exists(appDir) ? appDir : null;
+        }
+
+        /// <summary>
+        /// 根据用户设置解析最终要使用的编码器。
+        /// GpuEncoder 存储 GPU 偏好（"auto"/"nvidia"/"amd"/"intel"/"cpu"），
+        /// 结合 VideoCodec（"h264"/"h265"）动态映射为具体编码器。
+        /// </summary>
+        private string ResolveEncoder()
+        {
+            string codec = Config.VideoCodec?.Trim().ToLowerInvariant() ?? "h264";
+            if (codec != "h264" && codec != "h265" && codec != "av1") codec = "h264";
+            string cpuEncoder = codec switch { "h265" => "libx265", "av1" => "libsvtav1", _ => "libx264" };
+
+            string gpu = NormalizeGpuSetting(Config.GpuEncoder?.Trim().ToLowerInvariant() ?? "auto");
+
+            if (gpu != "auto")
+            {
+                // 用户指定了具体 GPU
+                string encoder = MapGpuToEncoder(gpu, codec);
+                if (encoder == cpuEncoder || (ValidatedEncoders != null && ValidatedEncoders.Contains(encoder)))
+                    return encoder;
+                return cpuEncoder;
+            }
+
+            // 自动模式：按 NVIDIA > AMD > Intel > CPU 优先级
+            foreach (var g in new[] { "nvidia", "amd", "intel" })
+            {
+                string encoder = MapGpuToEncoder(g, codec);
+                if (ValidatedEncoders != null && ValidatedEncoders.Contains(encoder))
+                    return encoder;
+            }
+            return cpuEncoder;
+        }
+
+        /// <summary>
+        /// 一次性调用 ffmpeg -encoders 并返回完整输出，避免多次启动进程。
+        /// </summary>
+        private static string QueryFFmpegEncoders(string ffmpegPath)
+        {
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = ffmpegPath,
+                    Arguments = "-hide_banner -encoders",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                using var proc = System.Diagnostics.Process.Start(psi);
+                string output = proc.StandardOutput.ReadToEnd();
+                proc.WaitForExit(5000);
+                return output ?? "";
+            }
+            catch { return ""; }
+        }
+
+        /// <summary>
+        /// 用实际试编码验证某个 GPU 编码器在当前硬件上是否真正可用。
+        /// </summary>
+        private static (bool ok, string stderr) TestEncoder(string ffmpegPath, string encoder)
+        {
+            try
+            {
+                // NVENC 要求最小分辨率 ≥ 146x50 左右，用 256x256 保证所有 GPU 编码器兼容
+                var psi = new ProcessStartInfo
+                {
+                    FileName = ffmpegPath,
+                    Arguments = $"-f lavfi -i color=black:s=256x256:d=0.1 -frames:v 2 -an -pix_fmt yuv420p -c:v {encoder} -f null -",
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardError = true
+                };
+                using var proc = Process.Start(psi);
+                if (proc == null) return (false, "Process.Start returned null");
+                string stderr = proc.StandardError.ReadToEnd();
+                bool exited = proc.WaitForExit(15000);
+                int exitCode = exited ? proc.ExitCode : -999;
+                return (exited && exitCode == 0, $"exit={exitCode} stderr={stderr}");
+            }
+            catch (Exception ex) { return (false, $"exception: {ex.Message}"); }
+        }
+
+        /// <summary>
+        /// 同步枚举系统上 FFmpeg 可用的 GPU 编码器列表（H.264 + H.265），并通过试编码验证硬件是否真正支持。
+        /// 检测结果写入 encoder_detect.log 便于排查。
+        /// 返回 (GPU 选项列表, 通过验证的编码器名称集合)。
+        /// </summary>
+        public static (List<GpuEncoderOption> options, HashSet<string> validated) DetectAvailableEncodersSync()
+        {
+            var log = new System.Text.StringBuilder();
+            log.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] === GPU 编码器检测开始 ===");
+
+            var list = new List<GpuEncoderOption>
+            {
+                new GpuEncoderOption { Value = "auto", DisplayName = "自动检测（优先独显）" },
+                new GpuEncoderOption { Value = "cpu", DisplayName = "CPU 软编码" }
+            };
+            var validated = new HashSet<string> { "libx264", "libx265", "libsvtav1" }; // CPU 编码器始终可用
+
+            string ffmpegPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg.exe");
+            log.AppendLine($"FFmpeg 路径: {ffmpegPath}");
+            log.AppendLine($"FFmpeg 存在: {File.Exists(ffmpegPath)}");
+
+            if (!File.Exists(ffmpegPath))
+            {
+                log.AppendLine("⚠ FFmpeg 不存在，跳过检测");
+                WriteEncoderLog(log);
+                return (list, validated);
+            }
+
+            string output = QueryFFmpegEncoders(ffmpegPath);
+            log.AppendLine($"ffmpeg -encoders 输出长度: {output.Length}");
+
+            // 按 GPU 厂商分组，每个厂商检测 H.264、H.265、AV1 三种编码器
+            var gpuGroups = new[]
+            {
+                (gpu: "nvidia", label: "NVIDIA GPU (NVENC)",  encs: new[] { "h264_nvenc", "hevc_nvenc", "av1_nvenc" }),
+                (gpu: "amd",    label: "AMD GPU (AMF)",       encs: new[] { "h264_amf",   "hevc_amf",   "av1_amf" }),
+                (gpu: "intel",  label: "Intel GPU (QSV)",     encs: new[] { "h264_qsv",   "hevc_qsv",   "av1_qsv" })
+            };
+
+            foreach (var (gpu, label, encs) in gpuGroups)
+            {
+                log.AppendLine($"\n=== {label} ===");
+                bool anyPassed = false;
+
+                foreach (var enc in encs)
+                {
+                    bool inList = output.Contains(enc);
+                    log.AppendLine($"  --- {enc} ---");
+                    log.AppendLine($"    ffmpeg -encoders 包含: {inList}");
+
+                    if (!inList)
+                    {
+                        log.AppendLine($"    跳过试编码（不在编码器列表中）");
+                        continue;
+                    }
+
+                    var (testOk, testDetail) = TestEncoder(ffmpegPath, enc);
+                    log.AppendLine($"    试编码结果: {(testOk ? "✓ 通过" : "✗ 失败")}");
+                    log.AppendLine($"    详情: {testDetail}");
+
+                    if (testOk)
+                    {
+                        validated.Add(enc);
+                        anyPassed = true;
+                    }
+                }
+
+                if (anyPassed)
+                    list.Insert(list.Count - 1, new GpuEncoderOption { Value = gpu, DisplayName = label });
+            }
+
+            log.AppendLine($"\nGPU 选项: {string.Join(", ", list.Select(e => e.Value))}");
+            log.AppendLine($"已验证编码器: {string.Join(", ", validated)}");
+            log.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] === 检测结束 ===");
+            WriteEncoderLog(log);
+            return (list, validated);
+        }
+
+        private static void WriteEncoderLog(System.Text.StringBuilder log)
+        {
+            try
+            {
+                string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "encoder_detect.log");
+                File.WriteAllText(logPath, log.ToString(), System.Text.Encoding.UTF8);
+            }
+            catch { }
         }
 
         private void StopRecording()
