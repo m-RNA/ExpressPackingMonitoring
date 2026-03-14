@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -51,6 +52,7 @@ namespace ExpressPackingMonitoring
         private DispatcherTimer _timer;
         private bool _isDragging = false;
         private bool _isPlaying = false;
+        private bool _suppressMediaFailed = false;
 
         public PlaybackWindow(string folderPath, VideoDatabase? db = null, bool showDeletedVideos = true)
         {
@@ -165,8 +167,10 @@ namespace ExpressPackingMonitoring
 
         private void Window_Closing(object sender, CancelEventArgs e)
         {
+            _suppressMediaFailed = true;
             _timer?.Stop();
             MediaPlayer.Stop();
+            MediaPlayer.Source = null;
             MediaPlayer.Close();
         }
 
@@ -200,8 +204,11 @@ namespace ExpressPackingMonitoring
                     return;
                 }
                 _timer.Stop();
+                _suppressMediaFailed = true;
                 MediaPlayer.Stop();
+                MediaPlayer.Source = null;
                 MediaPlayer.Close();
+                _suppressMediaFailed = false;
                 MediaPlayer.Source = new Uri(video.FullPath);
                 MediaPlayer.Play();
                 _timer.Start();
@@ -238,6 +245,39 @@ namespace ExpressPackingMonitoring
         private void TimelineSlider_DragStarted(object sender, DragStartedEventArgs e) { _isDragging = true; MediaPlayer.Pause(); }
         private void TimelineSlider_DragCompleted(object sender, DragCompletedEventArgs e) { _isDragging = false; MediaPlayer.Position = TimeSpan.FromSeconds(TimelineSlider.Value); MediaPlayer.Play(); UpdatePlayState(true); }
         private void TimelineSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) { if (!_isDragging && Math.Abs(e.NewValue - e.OldValue) > 1) { MediaPlayer.Position = TimeSpan.FromSeconds(e.NewValue); } }
-        private void MediaPlayer_MediaFailed(object sender, ExceptionRoutedEventArgs e) { _timer.Stop(); UpdatePlayState(false); MessageBox.Show($"视频播放失败：{e.ErrorException?.Message}", "播放错误", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        private void MediaPlayer_MediaFailed(object sender, ExceptionRoutedEventArgs e)
+        {
+            if (_suppressMediaFailed || !IsLoaded)
+                return;
+
+            _timer.Stop();
+            UpdatePlayState(false);
+            _suppressMediaFailed = true;
+            MediaPlayer.Stop();
+            MediaPlayer.Source = null;
+            if (VideoList.SelectedItem is VideoItem video && !string.IsNullOrEmpty(video.FullPath))
+            {
+                var result = MessageBox.Show(
+                    $"内置播放器不支持此视频格式（可能是 H.265/AV1 编码）。\n\n" +
+                    $"是否使用系统默认播放器打开？\n\n" +
+                    $"提示：也可从 Microsoft Store 安装 \"HEVC 视频扩展\" 和 \"AV1 视频扩展\" 来支持内置播放。",
+                    "播放错误", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (result == MessageBoxResult.Yes)
+                {
+                    try
+                    {
+                        Process.Start(new ProcessStartInfo(video.FullPath) { UseShellExecute = true });
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"无法打开外部播放器: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+            }
+            else
+            {
+                MessageBox.Show($"视频播放失败：{e.ErrorException?.Message}", "播放错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
     }
 }

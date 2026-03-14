@@ -21,6 +21,7 @@ using AForge.Video.DirectShow;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Speech.Synthesis;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 
 namespace ExpressPackingMonitoring.ViewModels
@@ -96,6 +97,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private BlockingCollection<Mat> _videoWriteQueue;
         private Task _writeTask;
+        private Task _lastFinalizeTask;
         private CancellationTokenSource _writeCts;
         private int _actualCameraFps = 15; // 摄像头硬件实际帧率
 
@@ -125,7 +127,6 @@ namespace ExpressPackingMonitoring.ViewModels
         private bool _delayBeforeZooming = false;
 
         private ScanRecord _currentScanRecord;
-        private long _currentVideoRecordId;    // 数据库中当前录制记录 ID
         private string _currentVideoFilePath;  // 当前录制文件路径
         private string _stopReason = "手动";     // 停止录制的原因
         private string _recordingOrderId;       // 录制开始时的单号
@@ -270,6 +271,20 @@ namespace ExpressPackingMonitoring.ViewModels
 
         public MainViewModel()
         {
+            // 跳过 XAML 设计器环境，避免 XDG0003 等设计时错误
+            if (DesignerProperties.GetIsInDesignMode(new System.Windows.DependencyObject()))
+            {
+                ScanCommand = new RelayCommand<string>(_ => { });
+                OpenSettingsCommand = new RelayCommand(() => { });
+                OpenPlaybackCommand = new RelayCommand(() => { });
+                ToggleModeCommand = new RelayCommand(() => { });
+                ToggleRecordingCommand = new RelayCommand(() => { });
+                OpenStatsCommand = new RelayCommand(() => { });
+                ClearScanInputCommand = new RelayCommand(() => { });
+                ClearSearchCommand = new RelayCommand(() => { });
+                return;
+            }
+
             LoadConfig();
             // 在起动时后台探测可用 GPU 编码器并缓存
             Task.Run(() => {
@@ -538,7 +553,12 @@ namespace ExpressPackingMonitoring.ViewModels
 
                         if (IsRecording && _videoWriteQueue != null && !_videoWriteQueue.IsAddingCompleted)
                         {
-                            try { _videoWriteQueue.TryAdd(processedFrame.Clone(), 100); }
+                            try
+                            {
+                                var clone = processedFrame.Clone();
+                                if (!_videoWriteQueue.TryAdd(clone))
+                                    clone.Dispose(); // 队列已满，丢帧而不阻塞，保证预览流畅
+                            }
                             catch (ObjectDisposedException) { }
                             catch (InvalidOperationException) { }
                         }
@@ -683,7 +703,7 @@ namespace ExpressPackingMonitoring.ViewModels
             lock (_videoLock)
             {
                 _writeCts = new CancellationTokenSource();
-                _videoWriteQueue = new BlockingCollection<Mat>(boundedCapacity: 15);
+                _videoWriteQueue = new BlockingCollection<Mat>(boundedCapacity: 60);
                 _writeTask = Task.Run(() => BackgroundFFmpegRecordingLoop(filePath, ffmpegPath, _writeCts.Token));
             }
 
@@ -708,6 +728,7 @@ namespace ExpressPackingMonitoring.ViewModels
             string cpuEncoder = GetCpuEncoder();
             bool hasAudio = Config.EnableAudioRecording && !string.IsNullOrEmpty(Config.AudioDeviceName);
             string lastError = "";
+            string requestedEncoder = encoder;
 
             // 第 1 步：首选编码器
             var (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, encoder, hasAudio);
@@ -719,13 +740,17 @@ namespace ExpressPackingMonitoring.ViewModels
             }
             lastError = err;
 
-            // 第 2 步：GPU 失败 → 回退 CPU + 音频
+            // 第 2 步：GPU 失败 → 回退同编解码 CPU + 音频
             if (encoder != cpuEncoder && !token.IsCancellationRequested)
             {
                 _ = Application.Current.Dispatcher.BeginInvoke(() =>
-                    ShowToast($"⚠ {encoder} 不可用，切换 CPU 编码"));
+                    ShowToast($"⚠ {GetEncoderLabel(encoder)} 不可用，切换 CPU 编码"));
                 (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, cpuEncoder, hasAudio);
-                if (ok) return;
+                if (ok)
+                {
+                    ApplyEncoderFallback(requestedEncoder, cpuEncoder);
+                    return;
+                }
                 lastError = err;
             }
 
@@ -735,7 +760,26 @@ namespace ExpressPackingMonitoring.ViewModels
                 _ = Application.Current.Dispatcher.BeginInvoke(() =>
                     ShowToast("⚠ 音频设备不可用，已禁用录音"));
                 (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, cpuEncoder, false);
-                if (ok) return;
+                if (ok)
+                {
+                    ApplyEncoderFallback(requestedEncoder, cpuEncoder);
+                    return;
+                }
+                lastError = err;
+            }
+
+            // 第 4 步：所有编码器失败 → 最终回退 libx264（万能兜底）
+            if (encoder != "libx264" && cpuEncoder != "libx264" && !token.IsCancellationRequested)
+            {
+                _ = Application.Current.Dispatcher.BeginInvoke(() =>
+                    ShowToast("⚠ 所选编码器不可用，使用 H.264 CPU 兜底"));
+                (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, "libx264", hasAudio);
+                if (ok) { ApplyEncoderFallback(requestedEncoder, "libx264"); return; }
+                if (hasAudio && !token.IsCancellationRequested)
+                {
+                    (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, "libx264", false);
+                    if (ok) { ApplyEncoderFallback(requestedEncoder, "libx264"); return; }
+                }
                 lastError = err;
             }
 
@@ -749,6 +793,39 @@ namespace ExpressPackingMonitoring.ViewModels
                     IsRecording = false;
                     ShowToast($"⚠ 录制失败，请检查 FFmpeg{errMsg}");
                     Speak("录制失败");
+                    MessageBox.Show(
+                        $"当前设置无法完成录制，视频未保存。\n\n请求编码器: {GetEncoderLabel(requestedEncoder)}\n最后错误: {lastError}",
+                        "录制失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+                });
+            }
+        }
+
+        /// <summary>编码器回退成功后，同步更新配置中的 VideoCodec 和 GpuEncoder，使设置界面与实际一致</summary>
+        private void ApplyEncoderFallback(string requestedEncoder, string actualEncoder)
+        {
+            string newCodec = actualEncoder switch
+            {
+                "libx264" or "h264_nvenc" or "h264_amf" or "h264_qsv" => "h264",
+                "libx265" or "hevc_nvenc" or "hevc_amf" or "hevc_qsv" => "h265",
+                "libsvtav1" or "av1_nvenc" or "av1_amf" or "av1_qsv" => "av1",
+                _ => "h264"
+            };
+            string newGpu = NormalizeGpuSetting(actualEncoder);
+
+            bool changed = false;
+            if (Config.VideoCodec != newCodec) { Config.VideoCodec = newCodec; changed = true; }
+            if (NormalizeGpuSetting(Config.GpuEncoder ?? "auto") != newGpu) { Config.GpuEncoder = newGpu; changed = true; }
+
+            if (changed)
+            {
+                SaveConfig();
+                string label = GetEncoderLabel(actualEncoder);
+                _ = Application.Current.Dispatcher.BeginInvoke(() =>
+                {
+                    ShowToast($"⚙ 编码已自动切换为 {label}，设置已同步");
+                    MessageBox.Show(
+                        $"请求编码器 {GetEncoderLabel(requestedEncoder)} 不可用，已自动回退为 {label}。\n\n设置已同步更新。",
+                        "编码器已回退", MessageBoxButton.OK, MessageBoxImage.Information);
                 });
             }
         }
@@ -825,6 +902,7 @@ namespace ExpressPackingMonitoring.ViewModels
             Stream stdin = null;
             bool anyFrameWritten = false;
             string stderrText = "";
+            bool stdinClosed = false;
 
             try
             {
@@ -847,8 +925,9 @@ namespace ExpressPackingMonitoring.ViewModels
                 // 异步捕获 stderr
                 var stderrTask = Task.Run(() => { try { return ffmpeg.StandardError.ReadToEnd(); } catch { return ""; } });
 
-                // 给 GPU 编码器更长的初始化时间
-                Thread.Sleep(encoder == "libx264" ? 300 : 600);
+                // 短暂等待检测 FFmpeg 是否立即崩溃（编码器不支持等）
+                for (int wait = 0; wait < 150 && !ffmpeg.HasExited; wait += 30)
+                    Thread.Sleep(30);
                 if (ffmpeg.HasExited)
                 {
                     stderrText = stderrTask.GetAwaiter().GetResult();
@@ -903,7 +982,36 @@ namespace ExpressPackingMonitoring.ViewModels
                     if (pipeError) break;
                 }
 
-                return (anyFrameWritten, "");
+                try
+                {
+                    stdin?.Close();
+                    stdinClosed = true;
+                }
+                catch { }
+
+                if (ffmpeg != null && !ffmpeg.HasExited)
+                {
+                    if (!ffmpeg.WaitForExit(15000))
+                    {
+                        try { ffmpeg.Kill(); } catch { }
+                    }
+                }
+
+                stderrText = stderrTask.GetAwaiter().GetResult();
+                bool fileOk = false;
+                try { fileOk = File.Exists(filePath) && new FileInfo(filePath).Length > 0; } catch { }
+                bool processOk = ffmpeg != null && ffmpeg.HasExited && ffmpeg.ExitCode == 0;
+
+                if (token.IsCancellationRequested)
+                    return (fileOk, fileOk ? "" : ExtractFFmpegError(stderrText));
+
+                if (anyFrameWritten && processOk && fileOk)
+                    return (true, "");
+
+                string finalErr = ExtractFFmpegError(stderrText);
+                if (string.IsNullOrWhiteSpace(finalErr))
+                    finalErr = !fileOk ? "FFmpeg 未生成有效视频文件" : $"FFmpeg 退出码: {ffmpeg?.ExitCode}";
+                return (false, finalErr);
             }
             catch (OperationCanceledException) { return (anyFrameWritten, ""); }
             catch (IOException) { return (anyFrameWritten, ""); }
@@ -911,7 +1019,10 @@ namespace ExpressPackingMonitoring.ViewModels
             finally
             {
                 // 关闭管道，FFmpeg 收到 EOF 后自动写入文件 trailer
-                try { stdin?.Close(); } catch { }
+                if (!stdinClosed)
+                {
+                    try { stdin?.Close(); } catch { }
+                }
 
                 // 同步等待 FFmpeg 完成（必须同步，否则回退重试时文件被锁）
                 try
@@ -955,7 +1066,7 @@ namespace ExpressPackingMonitoring.ViewModels
         /// </summary>
         private string BuildFFmpegArgs(int w, int h, int fps, string filePath, string encoder, bool withAudio)
         {
-            string args = $"-y -f rawvideo -video_size {w}x{h} -pixel_format bgr24 -framerate {fps} -i pipe:0";
+            string args = $"-y -use_wallclock_as_timestamps 1 -f rawvideo -video_size {w}x{h} -pixel_format bgr24 -framerate {fps} -i pipe:0";
 
             bool hasAudio = withAudio && Config.EnableAudioRecording && !string.IsNullOrEmpty(Config.AudioDeviceName);
             if (hasAudio)
@@ -1142,7 +1253,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 new GpuEncoderOption { Value = "auto", DisplayName = "自动检测（优先独显）" },
                 new GpuEncoderOption { Value = "cpu", DisplayName = "CPU 软编码" }
             };
-            var validated = new HashSet<string> { "libx264", "libx265", "libsvtav1" }; // CPU 编码器始终可用
+            var validated = new HashSet<string> { "libx264", "libx265" }; // H.264/H.265 CPU 编码器始终可用
 
             string ffmpegPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg.exe");
             log.AppendLine($"FFmpeg 路径: {ffmpegPath}");
@@ -1198,6 +1309,24 @@ namespace ExpressPackingMonitoring.ViewModels
                     list.Insert(list.Count - 1, new GpuEncoderOption { Value = gpu, DisplayName = label });
             }
 
+            // 检测 CPU AV1 编码器（libsvtav1 可能不包含在 FFmpeg essentials 构建中）
+            {
+                log.AppendLine($"\n=== CPU AV1 (libsvtav1) ===");
+                bool svtInList = output.Contains("libsvtav1");
+                log.AppendLine($"  ffmpeg -encoders 包含: {svtInList}");
+                if (svtInList)
+                {
+                    var (testOk, testDetail) = TestEncoder(ffmpegPath, "libsvtav1");
+                    log.AppendLine($"  试编码结果: {(testOk ? "✓ 通过" : "✗ 失败")}");
+                    log.AppendLine($"  详情: {testDetail}");
+                    if (testOk) validated.Add("libsvtav1");
+                }
+                else
+                {
+                    log.AppendLine($"  跳过试编码（不在编码器列表中）");
+                }
+            }
+
             log.AppendLine($"\nGPU 选项: {string.Join(", ", list.Select(e => e.Value))}");
             log.AppendLine($"已验证编码器: {string.Join(", ", validated)}");
             log.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] === 检测结束 ===");
@@ -1221,56 +1350,40 @@ namespace ExpressPackingMonitoring.ViewModels
             IsRecording = false; _isScanning = false; _delayBeforeZooming = false; _isZooming = false;
             _autoStopWarned = false; _maxDurationWarned = false;
 
+            CancellationTokenSource oldCts;
+            BlockingCollection<Mat> oldQueue;
+            Task oldWriteTask;
+
             lock (_videoLock)
             {
-                // 先取消，让写入线程立即跳出循环
-                _writeCts?.Cancel();
-                // 再标记队列结束
-                try { _videoWriteQueue?.CompleteAdding(); } catch { }
-                // 短等待写入线程退出（关闭管道），FFmpeg 结束在后台异步完成
-                try { _writeTask?.Wait(2000); } catch { }
-                _writeCts?.Dispose(); _writeCts = null;
-
-                // 清理队列残留帧
-                if (_videoWriteQueue != null)
-                {
-                    while (_videoWriteQueue.TryTake(out var leftover))
-                        leftover?.Dispose();
-                    _videoWriteQueue.Dispose();
-                    _videoWriteQueue = null;
-                }
+                oldCts = _writeCts;
+                oldQueue = _videoWriteQueue;
+                oldWriteTask = _writeTask;
+                _writeCts = null;
+                _videoWriteQueue = null;
                 _writeTask = null;
             }
 
-            var duration = DateTime.Now - _recordStartTime;
-            if (duration.TotalSeconds > 0 && _recordStartTime.Year > 2000)
-            {
-                if (_currentScanRecord != null)
-                {
-                    _currentScanRecord.Duration = $"{(int)duration.TotalSeconds}s";
-                    _currentScanRecord.IsActive = false;
-                }
+            // 立即发出停止信号，不阻塞主线程
+            oldCts?.Cancel();
+            try { oldQueue?.CompleteAdding(); } catch { }
 
-                // 录制结束后写入数据库（仅文件存在时才插入，避免回放列表显示丢失）
-                try
-                {
-                    if (!string.IsNullOrEmpty(_currentVideoFilePath) && File.Exists(_currentVideoFilePath))
-                    {
-                        long fileSize = new FileInfo(_currentVideoFilePath).Length;
-                        _currentVideoRecordId = _db?.InsertVideoRecord(_recordingOrderId, _recordingMode, _currentVideoFilePath, _recordStartTime) ?? 0;
-                        _db?.UpdateVideoRecordOnStop(_currentVideoRecordId, DateTime.Now, duration.TotalSeconds, fileSize, _stopReason);
-                    }
-                }
-                catch { }
-
-                // 从数据库刷新今日统计（保证与统计窗口一致）
-                RefreshTodayStats();
-            }
+            // 捕获当前录制信息，后台完成收尾
+            var filePath = _currentVideoFilePath;
+            var recordStart = _recordStartTime;
+            var orderId = _recordingOrderId;
+            var mode = _recordingMode;
+            var stopReason = _stopReason;
+            var scanRecord = _currentScanRecord;
 
             _recordStartTime = DateTime.MinValue;
             _currentScanRecord = null;
-            _currentVideoRecordId = 0;
             _currentVideoFilePath = null;
+
+            // 后台等待 FFmpeg 退出 + 写入数据库（不阻塞扫码/UI）
+            _lastFinalizeTask = Task.Run(() =>
+                FinalizeRecording(oldWriteTask, oldCts, oldQueue,
+                    filePath, recordStart, orderId, mode, stopReason, scanRecord));
 
             // 录制中修改过摄像头配置，延迟到现在生效
             if (_pendingCameraRestart)
@@ -1278,6 +1391,45 @@ namespace ExpressPackingMonitoring.ViewModels
                 _pendingCameraRestart = false;
                 RestartCamera();
                 ShowToast("摄像头配置已生效");
+            }
+        }
+
+        /// <summary>后台完成录制收尾：等待 FFmpeg 退出、清理资源、写入数据库</summary>
+        private void FinalizeRecording(Task writeTask, CancellationTokenSource cts, BlockingCollection<Mat> queue,
+            string filePath, DateTime recordStart, string orderId, string mode, string stopReason, ScanRecord scanRecord)
+        {
+            try { writeTask?.Wait(15000); } catch { }
+            cts?.Dispose();
+            if (queue != null)
+            {
+                while (queue.TryTake(out var leftover)) leftover?.Dispose();
+                queue.Dispose();
+            }
+
+            var duration = recordStart.Year > 2000 ? (DateTime.Now - recordStart) : TimeSpan.Zero;
+            if (duration.TotalSeconds > 0)
+            {
+                if (scanRecord != null)
+                {
+                    _ = Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    {
+                        scanRecord.Duration = $"{(int)duration.TotalSeconds}s";
+                        scanRecord.IsActive = false;
+                    });
+                }
+
+                try
+                {
+                    if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
+                    {
+                        long fileSize = new FileInfo(filePath).Length;
+                        long id = _db?.InsertVideoRecord(orderId, mode, filePath, recordStart) ?? 0;
+                        _db?.UpdateVideoRecordOnStop(id, DateTime.Now, duration.TotalSeconds, fileSize, stopReason);
+                    }
+                }
+                catch { }
+
+                _ = Application.Current?.Dispatcher?.InvokeAsync(() => RefreshTodayStats());
             }
         }
 
@@ -1418,6 +1570,7 @@ namespace ExpressPackingMonitoring.ViewModels
             StopRecording();
             StopCamera();
             try { _videoTask?.Wait(3000); } catch { }
+            try { _lastFinalizeTask?.Wait(15000); } catch { }
             _cts?.Dispose();
             lock (_videoLock) { _previousCheckFrame?.Dispose(); }
             lock (_speechLock) { _speechSynth?.Dispose(); _speechSynth = null; }
