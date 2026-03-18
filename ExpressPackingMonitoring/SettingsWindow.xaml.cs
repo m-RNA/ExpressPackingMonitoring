@@ -289,7 +289,6 @@ namespace ExpressPackingMonitoring
                     new GpuEncoderOption { Value = "cpu", DisplayName = "CPU 软编码" }
                 };
             GpuEncoderComboBox.ItemsSource = encoders;
-            // 兼容旧配置：将旧版编码器名映射为 GPU 标识
             string normalized = NormalizeGpuSetting(Config.GpuEncoder ?? "auto");
             var match = encoders.FirstOrDefault(e => e.Value == normalized)
                      ?? encoders.FirstOrDefault();
@@ -309,7 +308,6 @@ namespace ExpressPackingMonitoring
             VideoCodecComboBox.SelectedItem = items.FirstOrDefault(i => i.Value == current) ?? items[0];
         }
 
-        /// <summary>兼容旧版配置：将编码器名映射为 GPU 标识</summary>
         private static string NormalizeGpuSetting(string setting) => EncodingHelper.NormalizeGpuSetting(setting);
 
         private void BtnBrowsePath_Click(object sender, RoutedEventArgs e)

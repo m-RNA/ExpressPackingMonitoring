@@ -448,16 +448,34 @@
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
-                                            <TextBlock Text="目标码率 / kbps" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="0 表示自动；手动指定后会按目标码率编码。常用参考：720P 1500-3000，1080P 3000-6000。"
+                                            <TextBlock Text="编码质量 / CQP" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="默认 25。数值越小画质越高、体积越大；数值越大压缩越强。此值会映射到各编码器的 CQ/CRF/QP。默认录制容器为 MKV。"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:IntegerUpDown Grid.Column="1"
                                                            Height="32"
-                                                           Value="{Binding Config.VideoBitrateKbps}"
-                                                           Minimum="0"
-                                                           Maximum="50000"
-                                                           Increment="250"/>
+                                                           Value="{Binding Config.VideoCqp}"
+                                                           Minimum="1"
+                                                           Maximum="51"
+                                                           Increment="1"/>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,12,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="音频同步偏移 / ms" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="默认 -1000。负数表示让音频提前，正数表示让音频延后；0 表示不额外偏移。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <xctk:IntegerUpDown Grid.Column="1"
+                                                           Height="32"
+                                                           Value="{Binding Config.AudioSyncOffsetMs}"
+                                                           Minimum="-5000"
+                                                           Maximum="5000"
+                                                           Increment="50"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>
