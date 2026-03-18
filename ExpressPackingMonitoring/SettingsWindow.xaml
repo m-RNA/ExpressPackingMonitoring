@@ -441,6 +441,24 @@
                                                   Height="32"
                                                   Cursor="Hand"/>
                                     </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,12,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="目标码率 / kbps" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="0 表示自动；手动指定后会按目标码率编码。常用参考：720P 1500-3000，1080P 3000-6000。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <xctk:IntegerUpDown Grid.Column="1"
+                                                           Height="32"
+                                                           Value="{Binding Config.VideoBitrateKbps}"
+                                                           Minimum="0"
+                                                           Maximum="50000"
+                                                           Increment="250"/>
+                                    </Grid>
                                 </StackPanel>
                             </Border>
                         </StackPanel>

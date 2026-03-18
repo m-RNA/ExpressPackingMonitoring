@@ -310,17 +310,7 @@ namespace ExpressPackingMonitoring
         }
 
         /// <summary>兼容旧版配置：将编码器名映射为 GPU 标识</summary>
-        private static string NormalizeGpuSetting(string setting)
-        {
-            return (setting?.Trim().ToLowerInvariant()) switch
-            {
-                "h264_nvenc" or "hevc_nvenc" or "av1_nvenc" or "nvidia" => "nvidia",
-                "h264_amf" or "hevc_amf" or "av1_amf" or "amd" => "amd",
-                "h264_qsv" or "hevc_qsv" or "av1_qsv" or "intel" => "intel",
-                "libx264" or "libx265" or "libsvtav1" or "cpu" => "cpu",
-                _ => setting ?? "auto"
-            };
-        }
+        private static string NormalizeGpuSetting(string setting) => EncodingHelper.NormalizeGpuSetting(setting);
 
         private void BtnBrowsePath_Click(object sender, RoutedEventArgs e)
         {
@@ -345,9 +335,79 @@ namespace ExpressPackingMonitoring
             if (FpsComboBox.SelectedItem is ComboBoxItem fpsItem && fpsItem.Tag is int fps) { Config.Fps = fps; }
             if (GpuEncoderComboBox.SelectedItem is GpuEncoderOption gpuOpt) { Config.GpuEncoder = gpuOpt.Value; }
             if (VideoCodecComboBox.SelectedItem is GpuEncoderOption codecOpt) { Config.VideoCodec = codecOpt.Value; }
+
+            if (!ValidateEncoderSelectionBeforeSave())
+                return;
+
             ApplyAutoStart(Config.AutoStartOnBoot);
             this.DialogResult = true; this.Close();
         }
+
+        private bool ValidateEncoderSelectionBeforeSave()
+        {
+            string codec = (Config.VideoCodec ?? "h264").Trim().ToLowerInvariant();
+            string gpu = NormalizeGpuSetting(Config.GpuEncoder ?? "auto");
+            var validated = MainViewModel.ValidatedEncoders ?? new HashSet<string>();
+
+            string requestedEncoder = EncodingHelper.ResolveRequestedEncoder(gpu, codec);
+            string fallbackEncoder = EncodingHelper.ResolveFallbackEncoder(gpu, codec, validated);
+
+            if (fallbackEncoder == requestedEncoder)
+            {
+                if (!string.Equals(NormalizeGpuSetting(Config.GpuEncoder ?? "auto"), NormalizeGpuSetting(fallbackEncoder), StringComparison.OrdinalIgnoreCase)
+                    && gpu != "auto")
+                {
+                    string fallbackGpu = NormalizeGpuSetting(fallbackEncoder);
+                    Config.GpuEncoder = string.IsNullOrEmpty(fallbackGpu) ? "cpu" : fallbackGpu;
+                }
+                return true;
+            }
+
+            string requestedLabel = EncodingHelper.GetEncoderLabel(requestedEncoder);
+            string fallbackLabel = EncodingHelper.GetEncoderLabel(fallbackEncoder);
+
+            // 该编解码器完全不可用：保存前直接改成可用方案
+            if (codec != EncodingHelper.GetCodecFromEncoder(fallbackEncoder))
+            {
+                var result = MessageBox.Show(
+                    $"当前设备或 FFmpeg 不支持 {EncodingHelper.GetCodecLabel(codec)}。\n\n" +
+                    $"请求方案: {requestedLabel}\n" +
+                    $"建议切换到: {fallbackLabel}\n\n" +
+                    $"是否在保存时自动改为 {fallbackLabel}？",
+                    "编码器不可用", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+
+                if (result != MessageBoxResult.Yes)
+                    return false;
+
+                EncodingHelper.ApplyEncoderSelectionToConfig(Config, fallbackEncoder);
+                SyncEncoderComboboxes(fallbackEncoder);
+                return true;
+            }
+
+            // 同一编解码器可用，但会回退到别的实现
+            MessageBox.Show(
+                $"当前选择的 {requestedLabel} 不可用。\n\n" +
+                $"保存后实际会回退到: {fallbackLabel}\n\n" +
+                $"设置将按可用方案保存。",
+                "编码器将自动回退", MessageBoxButton.OK, MessageBoxImage.Information);
+
+            EncodingHelper.ApplyEncoderSelectionToConfig(Config, fallbackEncoder);
+            SyncEncoderComboboxes(fallbackEncoder);
+            return true;
+        }
+
+        private void SyncEncoderComboboxes(string encoder)
+        {
+            string codec = EncodingHelper.GetCodecFromEncoder(encoder);
+            string gpu = NormalizeGpuSetting(encoder);
+
+            if (VideoCodecComboBox.ItemsSource is IEnumerable<GpuEncoderOption> codecs)
+                VideoCodecComboBox.SelectedItem = codecs.FirstOrDefault(i => i.Value == codec);
+
+            if (GpuEncoderComboBox.ItemsSource is IEnumerable<GpuEncoderOption> gpus)
+                GpuEncoderComboBox.SelectedItem = gpus.FirstOrDefault(i => i.Value == gpu);
+        }
+
 
         private void ApplyAutoStart(bool enable)
         {

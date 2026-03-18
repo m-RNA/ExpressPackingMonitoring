@@ -76,6 +76,7 @@ namespace ExpressPackingMonitoring.ViewModels
         public double BarcodeCooldownSeconds { get; set; } = 2.0;
         public string GpuEncoder { get; set; } = "auto";
         public string VideoCodec { get; set; } = "h264"; // "h264" or "h265"
+        public int VideoBitrateKbps { get; set; } = 0;
     }
 
     public class MainViewModel : ObservableObject, IDisposable
@@ -128,6 +129,8 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private ScanRecord _currentScanRecord;
         private string _currentVideoFilePath;  // 当前录制文件路径
+        private string _currentVideoCodec;
+        private string _currentVideoEncoder;
         private string _stopReason = "手动";     // 停止录制的原因
         private string _recordingOrderId;       // 录制开始时的单号
         private string _recordingMode;          // 录制开始时的模式
@@ -690,6 +693,8 @@ namespace ExpressPackingMonitoring.ViewModels
             _stopReason = "手动";
             _recordingOrderId = CurrentOrderId;
             _recordingMode = CurrentMode;
+            _currentVideoCodec = Config.VideoCodec?.Trim().ToLowerInvariant() ?? "h264";
+            _currentVideoEncoder = ResolveEncoder();
 
             string ffmpegPath = FindFFmpeg();
             if (string.IsNullOrEmpty(ffmpegPath))
@@ -734,8 +739,10 @@ namespace ExpressPackingMonitoring.ViewModels
             var (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, encoder, hasAudio);
             if (ok)
             {
+                _currentVideoEncoder = encoder;
+                _currentVideoCodec = EncodingHelper.GetCodecFromEncoder(encoder);
                 _ = Application.Current.Dispatcher.BeginInvoke(() =>
-                    ShowToast($"▶ 录像中 ({GetEncoderLabel(encoder)})"));
+                    ShowToast($"▶ 录像中 ({EncodingHelper.GetEncoderLabel(encoder)})"));
                 return;
             }
             lastError = err;
@@ -744,7 +751,7 @@ namespace ExpressPackingMonitoring.ViewModels
             if (encoder != cpuEncoder && !token.IsCancellationRequested)
             {
                 _ = Application.Current.Dispatcher.BeginInvoke(() =>
-                    ShowToast($"⚠ {GetEncoderLabel(encoder)} 不可用，切换 CPU 编码"));
+                    ShowToast($"⚠ {EncodingHelper.GetEncoderLabel(encoder)} 不可用，切换 CPU 编码"));
                 (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, cpuEncoder, hasAudio);
                 if (ok)
                 {
@@ -794,7 +801,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     ShowToast($"⚠ 录制失败，请检查 FFmpeg{errMsg}");
                     Speak("录制失败");
                     MessageBox.Show(
-                        $"当前设置无法完成录制，视频未保存。\n\n请求编码器: {GetEncoderLabel(requestedEncoder)}\n最后错误: {lastError}",
+                        $"当前设置无法完成录制，视频未保存。\n\n请求编码器: {EncodingHelper.GetEncoderLabel(requestedEncoder)}\n最后错误: {lastError}",
                         "录制失败", MessageBoxButton.OK, MessageBoxImage.Warning);
                 });
             }
@@ -803,49 +810,28 @@ namespace ExpressPackingMonitoring.ViewModels
         /// <summary>编码器回退成功后，同步更新配置中的 VideoCodec 和 GpuEncoder，使设置界面与实际一致</summary>
         private void ApplyEncoderFallback(string requestedEncoder, string actualEncoder)
         {
-            string newCodec = actualEncoder switch
-            {
-                "libx264" or "h264_nvenc" or "h264_amf" or "h264_qsv" => "h264",
-                "libx265" or "hevc_nvenc" or "hevc_amf" or "hevc_qsv" => "h265",
-                "libsvtav1" or "av1_nvenc" or "av1_amf" or "av1_qsv" => "av1",
-                _ => "h264"
-            };
-            string newGpu = NormalizeGpuSetting(actualEncoder);
+            string newCodec = EncodingHelper.GetCodecFromEncoder(actualEncoder);
+            string newGpu = EncodingHelper.NormalizeGpuSetting(actualEncoder);
+            _currentVideoCodec = newCodec;
+            _currentVideoEncoder = actualEncoder;
 
             bool changed = false;
             if (Config.VideoCodec != newCodec) { Config.VideoCodec = newCodec; changed = true; }
-            if (NormalizeGpuSetting(Config.GpuEncoder ?? "auto") != newGpu) { Config.GpuEncoder = newGpu; changed = true; }
+            if (EncodingHelper.NormalizeGpuSetting(Config.GpuEncoder ?? "auto") != newGpu) { Config.GpuEncoder = newGpu; changed = true; }
 
             if (changed)
             {
                 SaveConfig();
-                string label = GetEncoderLabel(actualEncoder);
+                string label = EncodingHelper.GetEncoderLabel(actualEncoder);
                 _ = Application.Current.Dispatcher.BeginInvoke(() =>
                 {
                     ShowToast($"⚙ 编码已自动切换为 {label}，设置已同步");
                     MessageBox.Show(
-                        $"请求编码器 {GetEncoderLabel(requestedEncoder)} 不可用，已自动回退为 {label}。\n\n设置已同步更新。",
+                        $"请求编码器 {EncodingHelper.GetEncoderLabel(requestedEncoder)} 不可用，已自动回退为 {label}。\n\n设置已同步更新。",
                         "编码器已回退", MessageBoxButton.OK, MessageBoxImage.Information);
                 });
             }
         }
-
-        private static string GetEncoderLabel(string encoder) => encoder switch
-        {
-            "h264_nvenc" => "NVIDIA NVENC (H.264)",
-            "h264_amf" => "AMD AMF (H.264)",
-            "h264_qsv" => "Intel QSV (H.264)",
-            "libx264" => "CPU (H.264)",
-            "hevc_nvenc" => "NVIDIA NVENC (H.265)",
-            "hevc_amf" => "AMD AMF (H.265)",
-            "hevc_qsv" => "Intel QSV (H.265)",
-            "libx265" => "CPU (H.265)",
-            "av1_nvenc" => "NVIDIA NVENC (AV1)",
-            "av1_amf" => "AMD AMF (AV1)",
-            "av1_qsv" => "Intel QSV (AV1)",
-            "libsvtav1" => "CPU (AV1)",
-            _ => encoder
-        };
 
         /// <summary>根据当前 VideoCodec 设置获取 CPU 编码器名称</summary>
         private string GetCpuEncoder()
@@ -859,38 +845,6 @@ namespace ExpressPackingMonitoring.ViewModels
         }
 
         /// <summary>将 GPU 名称和编解码器映射为具体的 FFmpeg 编码器名称</summary>
-        private static string MapGpuToEncoder(string gpu, string codec)
-        {
-            return (gpu, codec) switch
-            {
-                ("nvidia", "h264") => "h264_nvenc",
-                ("nvidia", "h265") => "hevc_nvenc",
-                ("nvidia", "av1")  => "av1_nvenc",
-                ("amd", "h264") => "h264_amf",
-                ("amd", "h265") => "hevc_amf",
-                ("amd", "av1")  => "av1_amf",
-                ("intel", "h264") => "h264_qsv",
-                ("intel", "h265") => "hevc_qsv",
-                ("intel", "av1")  => "av1_qsv",
-                ("cpu", "h264") => "libx264",
-                ("cpu", "h265") => "libx265",
-                ("cpu", "av1")  => "libsvtav1",
-                _ => codec switch { "h265" => "libx265", "av1" => "libsvtav1", _ => "libx264" }
-            };
-        }
-
-        /// <summary>将旧版编码器名称或新 GPU 标识符统一为 GPU 标识</summary>
-        private static string NormalizeGpuSetting(string setting)
-        {
-            return setting switch
-            {
-                "h264_nvenc" or "hevc_nvenc" or "av1_nvenc" or "nvidia" => "nvidia",
-                "h264_amf" or "hevc_amf" or "av1_amf" or "amd" => "amd",
-                "h264_qsv" or "hevc_qsv" or "av1_qsv" or "intel" => "intel",
-                "libx264" or "libx265" or "libsvtav1" or "cpu" => "cpu",
-                _ => setting
-            };
-        }
 
         /// <summary>
         /// 启动 FFmpeg 进程并通过管道写入帧数据。返回 (true, "") 表示正常录制，(false, stderr) 表示失败。
@@ -1067,6 +1021,8 @@ namespace ExpressPackingMonitoring.ViewModels
         private string BuildFFmpegArgs(int w, int h, int fps, string filePath, string encoder, bool withAudio)
         {
             string args = $"-y -use_wallclock_as_timestamps 1 -f rawvideo -video_size {w}x{h} -pixel_format bgr24 -framerate {fps} -i pipe:0";
+            int targetBitrateKbps = GetTargetBitrateKbps(w, h, fps, EncodingHelper.GetCodecFromEncoder(encoder));
+            bool useCustomBitrate = Config.VideoBitrateKbps > 0;
 
             bool hasAudio = withAudio && Config.EnableAudioRecording && !string.IsNullOrEmpty(Config.AudioDeviceName);
             if (hasAudio)
@@ -1076,33 +1032,51 @@ namespace ExpressPackingMonitoring.ViewModels
 
             // H.264 编码器
             if (encoder == "h264_nvenc")
-                args += " -c:v h264_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -cq 30 -b:v 0 -g 150";
+                args += useCustomBitrate
+                    ? $" -c:v h264_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -b:v {targetBitrateKbps}k -maxrate {GetMaxRateKbps(targetBitrateKbps)}k -bufsize {GetBufferSizeKbps(targetBitrateKbps)}k -g 150"
+                    : " -c:v h264_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -cq 30 -b:v 0 -g 150";
             else if (encoder == "h264_amf")
-                args += " -c:v h264_amf -pix_fmt yuv420p -quality balanced -rc cqp -qp_i 30 -qp_p 30 -g 150";
+                args += useCustomBitrate
+                    ? $" -c:v h264_amf -pix_fmt yuv420p -quality balanced -rc cbr -b:v {targetBitrateKbps}k -g 150"
+                    : " -c:v h264_amf -pix_fmt yuv420p -quality balanced -rc cqp -qp_i 30 -qp_p 30 -g 150";
             else if (encoder == "h264_qsv")
-                args += " -c:v h264_qsv -pix_fmt nv12 -preset medium -global_quality 30 -g 150";
+                args += useCustomBitrate
+                    ? $" -c:v h264_qsv -pix_fmt nv12 -preset medium -b:v {targetBitrateKbps}k -maxrate {GetMaxRateKbps(targetBitrateKbps)}k -bufsize {GetBufferSizeKbps(targetBitrateKbps)}k -g 150"
+                    : " -c:v h264_qsv -pix_fmt nv12 -preset medium -global_quality 30 -g 150";
             else if (encoder == "libx264")
-                args += " -c:v libx264 -pix_fmt yuv420p -preset fast -crf 30 -g 150";
+                args += useCustomBitrate
+                    ? $" -c:v libx264 -pix_fmt yuv420p -preset fast -b:v {targetBitrateKbps}k -maxrate {GetMaxRateKbps(targetBitrateKbps)}k -bufsize {GetBufferSizeKbps(targetBitrateKbps)}k -g 150"
+                    : " -c:v libx264 -pix_fmt yuv420p -preset fast -crf 30 -g 150";
             // H.265 (HEVC) 编码器
             else if (encoder == "hevc_nvenc")
-                args += " -c:v hevc_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -cq 30 -b:v 0 -g 150 -tag:v hvc1";
+                args += useCustomBitrate
+                    ? $" -c:v hevc_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -b:v {targetBitrateKbps}k -maxrate {GetMaxRateKbps(targetBitrateKbps)}k -bufsize {GetBufferSizeKbps(targetBitrateKbps)}k -g 150 -tag:v hvc1"
+                    : " -c:v hevc_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -cq 30 -b:v 0 -g 150 -tag:v hvc1";
             else if (encoder == "hevc_amf")
-                args += " -c:v hevc_amf -pix_fmt yuv420p -quality balanced -rc cqp -qp_i 30 -qp_p 30 -g 150 -tag:v hvc1";
+                args += useCustomBitrate
+                    ? $" -c:v hevc_amf -pix_fmt yuv420p -quality balanced -rc cbr -b:v {targetBitrateKbps}k -g 150 -tag:v hvc1"
+                    : " -c:v hevc_amf -pix_fmt yuv420p -quality balanced -rc cqp -qp_i 30 -qp_p 30 -g 150 -tag:v hvc1";
             else if (encoder == "hevc_qsv")
-                args += " -c:v hevc_qsv -pix_fmt nv12 -preset medium -global_quality 30 -g 150 -tag:v hvc1";
+                args += useCustomBitrate
+                    ? $" -c:v hevc_qsv -pix_fmt nv12 -preset medium -b:v {targetBitrateKbps}k -maxrate {GetMaxRateKbps(targetBitrateKbps)}k -bufsize {GetBufferSizeKbps(targetBitrateKbps)}k -g 150 -tag:v hvc1"
+                    : " -c:v hevc_qsv -pix_fmt nv12 -preset medium -global_quality 30 -g 150 -tag:v hvc1";
             else if (encoder == "libx265")
-                args += " -c:v libx265 -pix_fmt yuv420p -preset fast -crf 30 -g 150 -tag:v hvc1";
+                args += useCustomBitrate
+                    ? $" -c:v libx265 -pix_fmt yuv420p -preset fast -b:v {targetBitrateKbps}k -maxrate {GetMaxRateKbps(targetBitrateKbps)}k -bufsize {GetBufferSizeKbps(targetBitrateKbps)}k -g 150 -tag:v hvc1"
+                    : " -c:v libx265 -pix_fmt yuv420p -preset fast -crf 30 -g 150 -tag:v hvc1";
             // AV1 编码器 — 使用分辨率自适应目标码率
             else if (encoder == "av1_nvenc")
-                args += $" -c:v av1_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -b:v {CalcAv1Bitrate(w, h, fps)}k -g 150";
+                args += $" -c:v av1_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -b:v {targetBitrateKbps}k -maxrate {GetMaxRateKbps(targetBitrateKbps)}k -bufsize {GetBufferSizeKbps(targetBitrateKbps)}k -g 150";
             else if (encoder == "av1_amf")
-                args += $" -c:v av1_amf -pix_fmt yuv420p -quality balanced -b:v {CalcAv1Bitrate(w, h, fps)}k -g 150";
+                args += $" -c:v av1_amf -pix_fmt yuv420p -quality balanced -b:v {targetBitrateKbps}k -g 150";
             else if (encoder == "av1_qsv")
-                args += $" -c:v av1_qsv -pix_fmt nv12 -preset medium -b:v {CalcAv1Bitrate(w, h, fps)}k -g 150";
+                args += $" -c:v av1_qsv -pix_fmt nv12 -preset medium -b:v {targetBitrateKbps}k -maxrate {GetMaxRateKbps(targetBitrateKbps)}k -bufsize {GetBufferSizeKbps(targetBitrateKbps)}k -g 150";
             else if (encoder == "libsvtav1")
-                args += $" -c:v libsvtav1 -pix_fmt yuv420p -preset 8 -b:v {CalcAv1Bitrate(w, h, fps)}k -g 150";
+                args += $" -c:v libsvtav1 -pix_fmt yuv420p -preset {GetCpuAv1Preset(w, h, fps)} -svtav1-params tune=0 -b:v {targetBitrateKbps}k -g 150";
             else
                 args += $" -c:v {encoder} -pix_fmt yuv420p -g 150";
+
+            args += $" -r {fps} -fps_mode cfr";
 
             if (hasAudio)
             {
@@ -1112,6 +1086,39 @@ namespace ExpressPackingMonitoring.ViewModels
             args += $" \"{filePath}\"";
             return args;
         }
+
+        private static int GetCpuAv1Preset(int w, int h, int fps)
+        {
+            long pixels = (long)w * h;
+            if (pixels >= 1920L * 1080 && fps >= 30) return 10;
+            if (pixels >= 1920L * 1080 || fps >= 25) return 9;
+            return 8;
+        }
+
+        private int GetTargetBitrateKbps(int w, int h, int fps, string codec)
+        {
+            if (Config.VideoBitrateKbps > 0)
+                return Config.VideoBitrateKbps;
+
+            return codec switch
+            {
+                "av1" => CalcAv1Bitrate(w, h, fps),
+                "h265" => CalcDefaultBitrate(w, h, fps, 0.6),
+                _ => CalcDefaultBitrate(w, h, fps, 1.0)
+            };
+        }
+
+        private static int CalcDefaultBitrate(int w, int h, int fps, double codecFactor)
+        {
+            double megapixels = (w * h) / 1000000.0;
+            double fpsFactor = Math.Max(0.5, fps / 15.0);
+            int kbps = (int)Math.Round(2200 * megapixels * fpsFactor * codecFactor);
+            return Math.Max(600, kbps);
+        }
+
+        private static int GetMaxRateKbps(int bitrateKbps) => Math.Max(800, (int)Math.Round(bitrateKbps * 1.3));
+
+        private static int GetBufferSizeKbps(int bitrateKbps) => Math.Max(1200, bitrateKbps * 2);
 
         /// <summary>
         /// 根据分辨率和帧率计算 AV1 目标码率 (kb/s)。
@@ -1167,12 +1174,12 @@ namespace ExpressPackingMonitoring.ViewModels
             if (codec != "h264" && codec != "h265" && codec != "av1") codec = "h264";
             string cpuEncoder = codec switch { "h265" => "libx265", "av1" => "libsvtav1", _ => "libx264" };
 
-            string gpu = NormalizeGpuSetting(Config.GpuEncoder?.Trim().ToLowerInvariant() ?? "auto");
+            string gpu = EncodingHelper.NormalizeGpuSetting(Config.GpuEncoder?.Trim().ToLowerInvariant() ?? "auto");
 
             if (gpu != "auto")
             {
                 // 用户指定了具体 GPU
-                string encoder = MapGpuToEncoder(gpu, codec);
+                string encoder = EncodingHelper.ResolveRequestedEncoder(gpu, codec);
                 if (encoder == cpuEncoder || (ValidatedEncoders != null && ValidatedEncoders.Contains(encoder)))
                     return encoder;
                 return cpuEncoder;
@@ -1181,7 +1188,7 @@ namespace ExpressPackingMonitoring.ViewModels
             // 自动模式：按 NVIDIA > AMD > Intel > CPU 优先级
             foreach (var g in new[] { "nvidia", "amd", "intel" })
             {
-                string encoder = MapGpuToEncoder(g, codec);
+                string encoder = EncodingHelper.ResolveRequestedEncoder(g, codec);
                 if (ValidatedEncoders != null && ValidatedEncoders.Contains(encoder))
                     return encoder;
             }
@@ -1370,6 +1377,8 @@ namespace ExpressPackingMonitoring.ViewModels
 
             // 捕获当前录制信息，后台完成收尾
             var filePath = _currentVideoFilePath;
+            var videoCodec = _currentVideoCodec;
+            var videoEncoder = _currentVideoEncoder;
             var recordStart = _recordStartTime;
             var orderId = _recordingOrderId;
             var mode = _recordingMode;
@@ -1379,11 +1388,13 @@ namespace ExpressPackingMonitoring.ViewModels
             _recordStartTime = DateTime.MinValue;
             _currentScanRecord = null;
             _currentVideoFilePath = null;
+            _currentVideoCodec = null;
+            _currentVideoEncoder = null;
 
             // 后台等待 FFmpeg 退出 + 写入数据库（不阻塞扫码/UI）
             _lastFinalizeTask = Task.Run(() =>
                 FinalizeRecording(oldWriteTask, oldCts, oldQueue,
-                    filePath, recordStart, orderId, mode, stopReason, scanRecord));
+                    filePath, videoCodec, videoEncoder, recordStart, orderId, mode, stopReason, scanRecord));
 
             // 录制中修改过摄像头配置，延迟到现在生效
             if (_pendingCameraRestart)
@@ -1396,7 +1407,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
         /// <summary>后台完成录制收尾：等待 FFmpeg 退出、清理资源、写入数据库</summary>
         private void FinalizeRecording(Task writeTask, CancellationTokenSource cts, BlockingCollection<Mat> queue,
-            string filePath, DateTime recordStart, string orderId, string mode, string stopReason, ScanRecord scanRecord)
+            string filePath, string videoCodec, string videoEncoder, DateTime recordStart, string orderId, string mode, string stopReason, ScanRecord scanRecord)
         {
             try { writeTask?.Wait(15000); } catch { }
             cts?.Dispose();
@@ -1423,8 +1434,8 @@ namespace ExpressPackingMonitoring.ViewModels
                     if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
                     {
                         long fileSize = new FileInfo(filePath).Length;
-                        long id = _db?.InsertVideoRecord(orderId, mode, filePath, recordStart) ?? 0;
-                        _db?.UpdateVideoRecordOnStop(id, DateTime.Now, duration.TotalSeconds, fileSize, stopReason);
+                        long id = _db?.InsertVideoRecord(orderId, mode, videoCodec, videoEncoder, filePath, recordStart) ?? 0;
+                        _db?.UpdateVideoRecordOnStop(id, DateTime.Now, duration.TotalSeconds, fileSize, stopReason, videoCodec, videoEncoder);
                     }
                 }
                 catch { }
