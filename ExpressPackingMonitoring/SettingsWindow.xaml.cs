@@ -18,6 +18,7 @@ namespace ExpressPackingMonitoring
 
     public partial class SettingsWindow : Window
     {
+        public MainViewModel MainVM { get; set; }
         public AppConfig Config { get; set; }
         public double CurrentDiskUsagePercent { get; set; }
         public string CurrentDiskUsageText { get; set; }
@@ -26,9 +27,10 @@ namespace ExpressPackingMonitoring
         private bool _isRecording;
         private bool _isLoadingDevices;
 
-        public SettingsWindow(AppConfig clonedConfig, double diskUsagePercent, string diskUsageText, bool isRecording = false)
+        public SettingsWindow(MainViewModel mainVM, AppConfig clonedConfig, double diskUsagePercent, string diskUsageText, bool isRecording = false)
         {
             InitializeComponent();
+            MainVM = mainVM;
             _originalTheme = clonedConfig.Theme;
             _isRecording = isRecording;
             Config = clonedConfig;

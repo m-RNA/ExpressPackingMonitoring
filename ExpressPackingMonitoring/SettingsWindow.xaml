@@ -853,6 +853,23 @@
                                                            Maximum="10.0"
                                                            Increment="0.5"/>
                                     </Grid>
+
+                                    <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,12,0,12"/>
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="重置编码器检测" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="清除已保存的检测结果，重新分析可用 GPU 编码器。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Content="立即重新检测" 
+                                                Command="{Binding MainVM.ResetEncoderDetectCommand}"
+                                                Style="{StaticResource SecondaryActionButtonStyle}"
+                                                Height="32" Padding="12,0" HorizontalAlignment="Left" />
+                                    </Grid>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
