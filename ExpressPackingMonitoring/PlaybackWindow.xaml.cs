@@ -77,6 +77,8 @@ namespace ExpressPackingMonitoring
         private bool _isLoadingVideos;
         private bool _playerInitializationFailed;
         private long _currentMediaLengthMs;
+        private Process? _currentExportProcess;
+        private readonly SemaphoreSlim _playerSemaphore = new SemaphoreSlim(1, 1);
 
         public PlaybackWindow(string folderPath, VideoDatabase? db = null, bool showDeletedVideos = true)
         {
@@ -253,20 +255,78 @@ namespace ExpressPackingMonitoring
 
         private void Window_Closing(object sender, CancelEventArgs e)
         {
-            _timer.Stop();
-            try { _mediaPlayer?.Stop(); } catch { }
-            PlayerView.MediaPlayer = null;
-            try { _mediaPlayer?.Dispose(); } catch { }
-            try { _libVLC?.Dispose(); } catch { }
+            // 1. 停止计时器
+            _timer?.Stop();
+
+            // 2. 如果正在转码，必须杀掉 FFmpeg 进程，否则会内存溢出
+            if (_isTranscoding)
+            {
+                try
+                {
+                    if (_currentExportProcess != null && !_currentExportProcess.HasExited)
+                    {
+                        _currentExportProcess.Kill();
+                    }
+                    else
+                    {
+                        // 兜底：找到当前正在运行的 ffmpeg 并强制结束
+                        var processes = Process.GetProcessesByName("ffmpeg");
+                        foreach (var p in processes)
+                        {
+                            p.Kill();
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            // 3. 彻底释放 LibVLC 资源（注意顺序）
+            if (_mediaPlayer != null)
+            {
+                try
+                {
+                    // 重要：先解除事件订阅，防止销毁时触发回调导致死锁
+                    _mediaPlayer.LengthChanged -= MediaPlayer_LengthChanged;
+                    _mediaPlayer.TimeChanged -= MediaPlayer_TimeChanged;
+                    _mediaPlayer.EndReached -= MediaPlayer_EndReached;
+                    _mediaPlayer.EncounteredError -= MediaPlayer_EncounteredError;
+
+                    if (_mediaPlayer.IsPlaying)
+                    {
+                        _mediaPlayer.Stop();
+                    }
+
+                    // 断开视图连接
+                    PlayerView.MediaPlayer = null;
+
+                    _mediaPlayer.Dispose();
+                    _mediaPlayer = null;
+                }
+                catch { }
+            }
+
+            if (_libVLC != null)
+            {
+                try
+                {
+                    _libVLC.Dispose();
+                    _libVLC = null;
+                }
+                catch { }
+            }
         }
 
-        private void VideoList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private async void VideoList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (VideoList.SelectedItem is not VideoItem video)
             {
                 UpdateExportButtonState();
                 return;
             }
+
+            // 增加 100ms 的防抖，防止极速连点
+            await Task.Delay(100);
+            if (VideoList.SelectedItem != video) return; // 如果选中的已经变了，就不执行了
 
             if (video.IsDeleted)
             {
@@ -292,22 +352,37 @@ namespace ExpressPackingMonitoring
             UpdateExportButtonState(video);
         }
 
-        private void PlaySelectedVideo(VideoItem video)
+        private async void PlaySelectedVideo(VideoItem video)
         {
+            // 1. 尝试获取信号量，如果已经在切换中，则直接返回，防止疯狂点击导致的排队
+            if (!await _playerSemaphore.WaitAsync(0)) return;
+
             try
             {
                 if (!EnsurePlayerReady())
                     return;
 
+                // UI 状态立即重置
                 _timer.Stop();
-                _mediaPlayer!.Stop();
                 _currentMediaLengthMs = 0;
                 TimelineSlider.Maximum = 0;
                 TimelineSlider.Value = 0;
-                TimeLabel.Text = "00:00:00 / 00:00:00";
+                TimeLabel.Text = "正在切换视频...";
 
+                // 2. 在后台线程执行阻塞的 Stop 操作
+                await Task.Run(() =>
+                {
+                    _mediaPlayer?.Stop();
+                });
+
+                // 3. 准备新媒体
                 using var media = new Media(_libVLC!, new Uri(video.FullPath));
-                if (!_mediaPlayer.Play(media))
+
+                // 增加一些优化参数，减少内存压力
+                media.AddOption(":no-audio"); // 如果回放不需要声音可以加上，减轻解码负担
+                media.AddOption(":file-caching=300"); // 减小缓存
+
+                if (!_mediaPlayer!.Play(media))
                     throw new InvalidOperationException("播放器未能启动该文件。");
 
                 _timer.Start();
@@ -317,6 +392,11 @@ namespace ExpressPackingMonitoring
             {
                 UpdatePlayState(false);
                 MessageBox.Show($"视频播放失败：{ex.Message}", "播放错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally
+            {
+                // 4. 释放信号量，允许下一次切换
+                _playerSemaphore.Release();
             }
         }
 
@@ -339,37 +419,38 @@ namespace ExpressPackingMonitoring
             }
         }
 
-        private async void BtnExportH264_Click(object sender, RoutedEventArgs e)
+        private async void BtnExportMp4_Click(object sender, RoutedEventArgs e)
         {
             if (_isTranscoding)
                 return;
 
             if (VideoList.SelectedItem is not VideoItem video || video.IsUnavailable || string.IsNullOrWhiteSpace(video.FullPath))
             {
-                MessageBox.Show("请先选择一个可用视频。", "导出 H.264", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            if (string.Equals(video.VideoCodec, "h264", StringComparison.OrdinalIgnoreCase))
-            {
-                MessageBox.Show("当前视频已经是 H.264，无需再次导出。", "导出 H.264", MessageBoxButton.OK, MessageBoxImage.Information);
-                UpdateExportButtonState(video);
+                MessageBox.Show("请先选择一个可用视频。", "导出 MP4", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
             string outputPath = Path.Combine(
                 Path.GetDirectoryName(video.FullPath) ?? _folderPath,
-                $"{Path.GetFileNameWithoutExtension(video.FullPath)}_H264.mp4");
+                $"{Path.GetFileNameWithoutExtension(video.FullPath)}.mp4");
 
-            bool ok = await ExportToH264Async(video.FullPath, outputPath);
+            bool ok = await ExportToMp4Async(video.FullPath, outputPath);
             if (ok)
             {
-                MessageBox.Show($"已导出 H.264 MP4：\n{outputPath}", "导出完成", MessageBoxButton.OK, MessageBoxImage.Information);
+                // 导出成功后，在资源管理器中选中该文件
+                try
+                {
+                    string argument = $"/select,\"{outputPath}\"";
+                    Process.Start("explorer.exe", argument);
+                }
+                catch { }
+
+                MessageBox.Show($"已导出 MP4：\n{outputPath}", "导出完成", MessageBoxButton.OK, MessageBoxImage.Information);
                 await LoadVideosAsync();
             }
         }
 
-        private async Task<bool> ExportToH264Async(string sourcePath, string outputPath)
+        private async Task<bool> ExportToMp4Async(string sourcePath, string outputPath)
         {
             string ffmpegPath = FindFFmpeg();
             if (string.IsNullOrEmpty(ffmpegPath))
@@ -381,8 +462,9 @@ namespace ExpressPackingMonitoring
             try
             {
                 _isTranscoding = true;
-                SetExportUiState(false, "正在导出 H.264 MP4...");
-                string args = $"-y -i \"{sourcePath}\" -c:v libx264 -preset medium -crf 23 -pix_fmt yuv420p -movflags +faststart -c:a aac -b:a 128k \"{outputPath}\"";
+                SetExportUiState(false, "正在转换容器...");
+                // 使用 -vcodec copy -acodec copy 实现无损快速转换容器
+                string args = $"-y -i \"{sourcePath}\" -vcodec copy -acodec copy \"{outputPath}\"";
 
                 var result = await Task.Run(() =>
                 {
@@ -396,13 +478,13 @@ namespace ExpressPackingMonitoring
                         RedirectStandardOutput = true
                     };
 
-                    using var process = Process.Start(psi);
-                    if (process == null)
+                    _currentExportProcess = Process.Start(psi);
+                    if (_currentExportProcess == null)
                         return (false, "FFmpeg 进程启动失败");
 
-                    string stderr = process.StandardError.ReadToEnd();
-                    process.WaitForExit();
-                    bool success = process.ExitCode == 0 && File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
+                    string stderr = _currentExportProcess.StandardError.ReadToEnd();
+                    _currentExportProcess.WaitForExit();
+                    bool success = _currentExportProcess.ExitCode == 0 && File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
                     return (success, stderr);
                 });
 
@@ -421,6 +503,7 @@ namespace ExpressPackingMonitoring
             }
             finally
             {
+                _currentExportProcess = null;
                 _isTranscoding = false;
                 SetExportUiState(true, "00:00:00 / 00:00:00");
                 UpdateExportButtonState();
@@ -452,11 +535,12 @@ namespace ExpressPackingMonitoring
 
         private void MediaPlayer_TimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e)
         {
-            if (_isDragging)
+            if (_isDragging || _mediaPlayer == null)
                 return;
 
-            Dispatcher.Invoke(() =>
+            Dispatcher.BeginInvoke(() =>
             {
+                if (!this.IsLoaded) return;
                 TimelineSlider.Value = Math.Max(0, e.Time / 1000.0);
                 TimeLabel.Text = $"{TimeSpan.FromMilliseconds(e.Time):hh\\:mm\\:ss} / {TimeSpan.FromMilliseconds(_currentMediaLengthMs):hh\\:mm\\:ss}";
             });
@@ -520,25 +604,26 @@ namespace ExpressPackingMonitoring
         private void SetExportUiState(bool enabled, string statusText)
         {
             BtnTogglePlay.IsEnabled = enabled && _mediaPlayer != null;
-            BtnExportH264.IsEnabled = enabled && CanExportCurrentSelection();
+            BtnExportMp4.IsEnabled = enabled && CanExportCurrentSelection();
             TimelineSlider.IsEnabled = enabled && _mediaPlayer != null;
             TimeLabel.Text = statusText;
         }
 
         private bool CanExportCurrentSelection()
         {
-            return VideoList.SelectedItem is VideoItem video
-                && !video.IsUnavailable
-                && !string.Equals(video.VideoCodec, "h264", StringComparison.OrdinalIgnoreCase);
+            if (VideoList.SelectedItem is not VideoItem video) return false;
+            if (video.IsUnavailable) return false;
+
+            // 即使是 h264，也允许导出（转码/复制容器），这样最保险
+            return true;
         }
 
         private void UpdateExportButtonState(VideoItem? video = null)
         {
             var current = video ?? VideoList.SelectedItem as VideoItem;
-            BtnExportH264.IsEnabled = !_isTranscoding
+            BtnExportMp4.IsEnabled = !_isTranscoding
                 && current != null
-                && !current.IsUnavailable
-                && !string.Equals(current.VideoCodec, "h264", StringComparison.OrdinalIgnoreCase);
+                && !current.IsUnavailable;
         }
 
         private string FindFFmpeg()
