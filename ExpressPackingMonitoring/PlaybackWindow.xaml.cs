@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -21,10 +22,23 @@ namespace ExpressPackingMonitoring
         public string Duration { get; set; } = "";
         public string FileSize { get; set; } = "";
         public string StopReason { get; set; } = "";
+        public string VideoCodec { get; set; } = "";
+        public string VideoEncoder { get; set; } = "";
         public bool IsMissing { get; set; }
         public bool IsDeleted { get; set; }
         public string DeleteReason { get; set; } = "";
         public DateTime? DeletedAt { get; set; }
+        public string EncoderDisplay
+        {
+            get
+            {
+                if (!string.IsNullOrWhiteSpace(VideoEncoder))
+                    return EncodingHelper.GetEncoderLabel(VideoEncoder);
+                if (!string.IsNullOrWhiteSpace(VideoCodec))
+                    return EncodingHelper.GetCodecLabel(VideoCodec);
+                return "";
+            }
+        }
         public string StatusText
         {
             get
@@ -53,6 +67,7 @@ namespace ExpressPackingMonitoring
         private bool _isDragging = false;
         private bool _isPlaying = false;
         private bool _suppressMediaFailed = false;
+        private bool _isTranscoding = false;
 
         public PlaybackWindow(string folderPath, VideoDatabase? db = null, bool showDeletedVideos = true)
         {
@@ -101,6 +116,8 @@ namespace ExpressPackingMonitoring
                             Duration = r.DurationSeconds > 0 ? $"{(int)r.DurationSeconds}s" : "",
                             FileSize = (deleted || missing) ? FormatFileSize(r.FileSizeBytes) : FormatFileSize(fi!.Length),
                             StopReason = r.StopReason,
+                            VideoCodec = r.VideoCodec,
+                            VideoEncoder = r.VideoEncoder,
                             IsMissing = missing,
                             IsDeleted = deleted,
                             DeleteReason = r.DeleteReason,
@@ -223,6 +240,29 @@ namespace ExpressPackingMonitoring
             else { MediaPlayer.Play(); _timer.Start(); UpdatePlayState(true); }
         }
 
+        private async void BtnExportH264_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isTranscoding)
+                return;
+
+            if (VideoList.SelectedItem is not VideoItem video || video.IsUnavailable || string.IsNullOrWhiteSpace(video.FullPath))
+            {
+                MessageBox.Show("请先选择一个可用视频。", "导出 H.264", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            string outputPath = Path.Combine(
+                Path.GetDirectoryName(video.FullPath) ?? _folderPath,
+                $"{Path.GetFileNameWithoutExtension(video.FullPath)}_H264.mp4");
+
+            bool ok = await ExportToH264Async(video.FullPath, outputPath, playAfterExport: false);
+            if (ok)
+            {
+                MessageBox.Show($"已导出 H.264 视频：\n{outputPath}", "导出完成", MessageBoxButton.OK, MessageBoxImage.Information);
+                LoadVideos();
+            }
+        }
+
         private void UpdatePlayState(bool isPlaying)
         {
             _isPlaying = isPlaying;
@@ -258,11 +298,15 @@ namespace ExpressPackingMonitoring
             if (VideoList.SelectedItem is VideoItem video && !string.IsNullOrEmpty(video.FullPath))
             {
                 var result = MessageBox.Show(
-                    $"内置播放器不支持此视频格式（可能是 H.265/AV1 编码）。\n\n" +
-                    $"是否使用系统默认播放器打开？\n\n" +
-                    $"提示：也可从 Microsoft Store 安装 \"HEVC 视频扩展\" 和 \"AV1 视频扩展\" 来支持内置播放。",
-                    "播放错误", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                    $"内置播放器不支持此视频格式（通常是 H.265/AV1 或系统缺少解码扩展）。\n\n" +
+                    $"选择“是”会先转码为 H.264 再在内置播放器中播放。\n" +
+                    $"选择“否”则使用系统默认播放器打开原文件。",
+                    "播放错误", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
                 if (result == MessageBoxResult.Yes)
+                {
+                    _ = ExportToH264Async(video.FullPath, GetTranscodedPlaybackPath(video.FullPath), playAfterExport: true);
+                }
+                else if (result == MessageBoxResult.No)
                 {
                     try
                     {
@@ -278,6 +322,101 @@ namespace ExpressPackingMonitoring
             {
                 MessageBox.Show($"视频播放失败：{e.ErrorException?.Message}", "播放错误", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
+        }
+
+        private string GetTranscodedPlaybackPath(string sourcePath)
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "ExpressPackingMonitoring", "PlaybackCache");
+            Directory.CreateDirectory(tempDir);
+            return Path.Combine(tempDir, $"{Path.GetFileNameWithoutExtension(sourcePath)}_play_h264.mp4");
+        }
+
+        private async Task<bool> ExportToH264Async(string sourcePath, string outputPath, bool playAfterExport)
+        {
+            string ffmpegPath = FindFFmpeg();
+            if (string.IsNullOrEmpty(ffmpegPath))
+            {
+                MessageBox.Show("未找到 FFmpeg，无法执行转码。", "转码失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
+
+            try
+            {
+                _isTranscoding = true;
+                SetExportUiState(false, playAfterExport ? "正在转码播放版本..." : "正在导出 H.264...");
+
+                string args = $"-y -i \"{sourcePath}\" -c:v libx264 -preset medium -crf 23 -pix_fmt yuv420p -movflags +faststart -c:a aac -b:a 128k \"{outputPath}\"";
+                var result = await Task.Run(() =>
+                {
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = ffmpegPath,
+                        Arguments = args,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardError = true,
+                        RedirectStandardOutput = true
+                    };
+
+                    using var process = Process.Start(psi);
+                    if (process == null)
+                        return (false, "FFmpeg 进程启动失败");
+
+                    string stderr = process.StandardError.ReadToEnd();
+                    process.WaitForExit();
+                    bool ok = process.ExitCode == 0 && File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
+                    return (ok, stderr);
+                });
+
+                if (!result.Item1)
+                {
+                    MessageBox.Show($"转码失败：\n{result.Item2}", "转码失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+
+                if (playAfterExport)
+                {
+                    _suppressMediaFailed = true;
+                    MediaPlayer.Stop();
+                    MediaPlayer.Source = null;
+                    MediaPlayer.Close();
+                    _suppressMediaFailed = false;
+                    MediaPlayer.Source = new Uri(outputPath);
+                    MediaPlayer.Play();
+                    _timer.Start();
+                    UpdatePlayState(true);
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"转码失败：{ex.Message}", "转码失败", MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
+            }
+            finally
+            {
+                _isTranscoding = false;
+                SetExportUiState(true, "00:00:00 / 00:00:00");
+            }
+        }
+
+        private void SetExportUiState(bool enabled, string statusText)
+        {
+            if (BtnTogglePlay != null)
+                BtnTogglePlay.IsEnabled = enabled;
+            if (BtnExportH264 != null)
+                BtnExportH264.IsEnabled = enabled;
+            if (TimelineSlider != null)
+                TimelineSlider.IsEnabled = enabled;
+            if (TimeLabel != null)
+                TimeLabel.Text = statusText;
+        }
+
+        private string FindFFmpeg()
+        {
+            string appDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg.exe");
+            return File.Exists(appDir) ? appDir : string.Empty;
         }
     }
 }

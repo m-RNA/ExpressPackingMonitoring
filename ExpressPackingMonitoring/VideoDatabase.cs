@@ -14,6 +14,8 @@ namespace ExpressPackingMonitoring
         public long Id { get; set; }
         public string OrderId { get; set; } = "";
         public string Mode { get; set; } = "";       // 发货/退货
+        public string VideoCodec { get; set; } = "";
+        public string VideoEncoder { get; set; } = "";
         public string FilePath { get; set; } = "";
         public string FileName { get; set; } = "";
         public long FileSizeBytes { get; set; }
@@ -108,22 +110,27 @@ namespace ExpressPackingMonitoring
             ExecuteNonQuery("CREATE INDEX IF NOT EXISTS idx_video_starttime ON VideoRecords(StartTime);");
             ExecuteNonQuery("CREATE INDEX IF NOT EXISTS idx_video_filepath ON VideoRecords(FilePath);");
             ExecuteNonQuery("CREATE INDEX IF NOT EXISTS idx_video_isdeleted ON VideoRecords(IsDeleted);");
+
+            EnsureColumnExists("VideoRecords", "VideoCodec", "TEXT DEFAULT ''");
+            EnsureColumnExists("VideoRecords", "VideoEncoder", "TEXT DEFAULT ''");
         }
 
         /// <summary>
         /// 录制开始时插入记录，返回记录 ID
         /// </summary>
-        public long InsertVideoRecord(string orderId, string mode, string filePath, DateTime startTime)
+        public long InsertVideoRecord(string orderId, string mode, string videoCodec, string videoEncoder, string filePath, DateTime startTime)
         {
             lock (_lock)
             {
                 using var cmd = _connection.CreateCommand();
                 cmd.CommandText = @"
-                    INSERT INTO VideoRecords (OrderId, Mode, FilePath, FileName, StartTime)
-                    VALUES (@orderId, @mode, @filePath, @fileName, @startTime);
+                    INSERT INTO VideoRecords (OrderId, Mode, VideoCodec, VideoEncoder, FilePath, FileName, StartTime)
+                    VALUES (@orderId, @mode, @videoCodec, @videoEncoder, @filePath, @fileName, @startTime);
                     SELECT last_insert_rowid();";
                 cmd.Parameters.AddWithValue("@orderId", orderId ?? "");
                 cmd.Parameters.AddWithValue("@mode", mode ?? "");
+                cmd.Parameters.AddWithValue("@videoCodec", videoCodec ?? "");
+                cmd.Parameters.AddWithValue("@videoEncoder", videoEncoder ?? "");
                 cmd.Parameters.AddWithValue("@filePath", filePath ?? "");
                 cmd.Parameters.AddWithValue("@fileName", Path.GetFileName(filePath ?? ""));
                 cmd.Parameters.AddWithValue("@startTime", startTime.ToString("yyyy-MM-dd HH:mm:ss"));
@@ -134,7 +141,7 @@ namespace ExpressPackingMonitoring
         /// <summary>
         /// 录制结束时更新记录
         /// </summary>
-        public void UpdateVideoRecordOnStop(long recordId, DateTime endTime, double durationSeconds, long fileSizeBytes, string stopReason)
+        public void UpdateVideoRecordOnStop(long recordId, DateTime endTime, double durationSeconds, long fileSizeBytes, string stopReason, string videoCodec = null, string videoEncoder = null)
         {
             lock (_lock)
             {
@@ -144,13 +151,17 @@ namespace ExpressPackingMonitoring
                         EndTime = @endTime, 
                         DurationSeconds = @duration, 
                         FileSizeBytes = @fileSize,
-                        StopReason = @stopReason
+                        StopReason = @stopReason,
+                        VideoCodec = COALESCE(@videoCodec, VideoCodec),
+                        VideoEncoder = COALESCE(@videoEncoder, VideoEncoder)
                     WHERE Id = @id;";
                 cmd.Parameters.AddWithValue("@id", recordId);
                 cmd.Parameters.AddWithValue("@endTime", endTime.ToString("yyyy-MM-dd HH:mm:ss"));
                 cmd.Parameters.AddWithValue("@duration", durationSeconds);
                 cmd.Parameters.AddWithValue("@fileSize", fileSizeBytes);
                 cmd.Parameters.AddWithValue("@stopReason", stopReason ?? "");
+                cmd.Parameters.AddWithValue("@videoCodec", (object)videoCodec ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@videoEncoder", (object)videoEncoder ?? DBNull.Value);
                 cmd.ExecuteNonQuery();
             }
         }
@@ -226,8 +237,8 @@ namespace ExpressPackingMonitoring
                 using var cmd = _connection.CreateCommand();
 
                 string sql = @"
-                    SELECT Id, OrderId, Mode, FilePath, FileName, FileSizeBytes, 
-                           StartTime, EndTime, DurationSeconds, StopReason,
+                      SELECT Id, OrderId, Mode, VideoCodec, VideoEncoder, FilePath, FileName, FileSizeBytes, 
+                          StartTime, EndTime, DurationSeconds, StopReason,
                            IsDeleted, DeletedAt, DeleteReason
                     FROM VideoRecords 
                     WHERE StartTime >= @startDate 
@@ -252,16 +263,18 @@ namespace ExpressPackingMonitoring
                         Id = reader.GetInt64(0),
                         OrderId = reader.GetString(1),
                         Mode = reader.GetString(2),
-                        FilePath = reader.GetString(3),
-                        FileName = reader.GetString(4),
-                        FileSizeBytes = reader.GetInt64(5),
-                        StartTime = DateTime.Parse(reader.GetString(6)),
-                        EndTime = reader.IsDBNull(7) ? DateTime.MinValue : DateTime.Parse(reader.GetString(7)),
-                        DurationSeconds = reader.GetDouble(8),
-                        StopReason = reader.IsDBNull(9) ? "" : reader.GetString(9),
-                        IsDeleted = reader.GetInt64(10) == 1,
-                        DeletedAt = reader.IsDBNull(11) ? null : DateTime.Parse(reader.GetString(11)),
-                        DeleteReason = reader.IsDBNull(12) ? "" : reader.GetString(12)
+                        VideoCodec = reader.IsDBNull(3) ? "" : reader.GetString(3),
+                        VideoEncoder = reader.IsDBNull(4) ? "" : reader.GetString(4),
+                        FilePath = reader.GetString(5),
+                        FileName = reader.GetString(6),
+                        FileSizeBytes = reader.GetInt64(7),
+                        StartTime = DateTime.Parse(reader.GetString(8)),
+                        EndTime = reader.IsDBNull(9) ? DateTime.MinValue : DateTime.Parse(reader.GetString(9)),
+                        DurationSeconds = reader.GetDouble(10),
+                        StopReason = reader.IsDBNull(11) ? "" : reader.GetString(11),
+                        IsDeleted = reader.GetInt64(12) == 1,
+                        DeletedAt = reader.IsDBNull(13) ? null : DateTime.Parse(reader.GetString(13)),
+                        DeleteReason = reader.IsDBNull(14) ? "" : reader.GetString(14)
                     });
                 }
                 return results;
@@ -420,6 +433,20 @@ namespace ExpressPackingMonitoring
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = sql;
             cmd.ExecuteNonQuery();
+        }
+
+        private void EnsureColumnExists(string tableName, string columnName, string columnDefinition)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = $"PRAGMA table_info({tableName});";
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
+                    return;
+            }
+
+            ExecuteNonQuery($"ALTER TABLE {tableName} ADD COLUMN {columnName} {columnDefinition};");
         }
 
         public void Dispose()
