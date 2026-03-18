@@ -764,7 +764,6 @@ namespace ExpressPackingMonitoring.ViewModels
         /// <summary>
         /// 主录制模式：通过管道将原始帧数据写入 FFmpeg，同时由 FFmpeg 录制麦克风音频，
         /// 一次性输出带声音的 mp4，无需后期合并。
-        /// 完整回退链：GPU → CPU+音频 → CPU无音频 → 失败
         /// </summary>
         private void BackgroundFFmpegRecordingLoop(string filePath, string ffmpegPath, CancellationToken token)
         {
@@ -772,13 +771,12 @@ namespace ExpressPackingMonitoring.ViewModels
             int h = Config.FrameHeight;
             int fps = _actualCameraFps > 0 ? _actualCameraFps : Config.Fps;
             string encoder = ResolveEncoder();
-            string cpuEncoder = GetCpuEncoder();
             bool hasAudio = Config.EnableAudioRecording && !string.IsNullOrEmpty(Config.AudioDeviceName);
-            string lastError = "";
             string requestedEncoder = encoder;
 
-            // 第 1 步：首选编码器
+            // 仅使用用户选定的编码器进行录制，不进行自动回退
             var (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, encoder, hasAudio);
+            
             if (ok)
             {
                 _currentVideoEncoder = encoder;
@@ -787,90 +785,20 @@ namespace ExpressPackingMonitoring.ViewModels
                     ShowToast($"▶ 录像中 ({EncodingHelper.GetEncoderLabel(encoder)})"));
                 return;
             }
-            lastError = err;
 
-            // 第 2 步：GPU 失败 → 回退同编解码 CPU + 音频
-            if (encoder != cpuEncoder && !token.IsCancellationRequested)
-            {
-                _ = Application.Current.Dispatcher.BeginInvoke(() =>
-                    ShowToast($"⚠ {EncodingHelper.GetEncoderLabel(encoder)} 不可用，切换 CPU 编码"));
-                (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, cpuEncoder, hasAudio);
-                if (ok)
-                {
-                    ApplyEncoderFallback(requestedEncoder, cpuEncoder);
-                    return;
-                }
-                lastError = err;
-            }
-
-            // 第 3 步：音频设备可能不存在 → 禁用音频重试
-            if (hasAudio && !token.IsCancellationRequested)
-            {
-                _ = Application.Current.Dispatcher.BeginInvoke(() =>
-                    ShowToast("⚠ 音频设备不可用，已禁用录音"));
-                (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, cpuEncoder, false);
-                if (ok)
-                {
-                    ApplyEncoderFallback(requestedEncoder, cpuEncoder);
-                    return;
-                }
-                lastError = err;
-            }
-
-            // 第 4 步：所有编码器失败 → 最终回退 libx264（万能兜底）
-            if (encoder != "libx264" && cpuEncoder != "libx264" && !token.IsCancellationRequested)
-            {
-                _ = Application.Current.Dispatcher.BeginInvoke(() =>
-                    ShowToast("⚠ 所选编码器不可用，使用 H.264 CPU 兜底"));
-                (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, "libx264", hasAudio);
-                if (ok) { ApplyEncoderFallback(requestedEncoder, "libx264"); return; }
-                if (hasAudio && !token.IsCancellationRequested)
-                {
-                    (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, "libx264", false);
-                    if (ok) { ApplyEncoderFallback(requestedEncoder, "libx264"); return; }
-                }
-                lastError = err;
-            }
-
-            // 全部失败
+            // 全部失败或用户取消
             if (!token.IsCancellationRequested)
             {
                 try { if (File.Exists(filePath) && new FileInfo(filePath).Length == 0) File.Delete(filePath); } catch { }
-                string errMsg = string.IsNullOrEmpty(lastError) ? "" : $"\n{lastError}";
+                string errMsg = string.IsNullOrEmpty(err) ? "" : $"\n{err}";
                 _ = Application.Current.Dispatcher.BeginInvoke(() =>
                 {
                     IsRecording = false;
-                    ShowToast($"⚠ 录制失败，请检查 FFmpeg{errMsg}");
+                    ShowToast($"⚠ 录制失败，请检查配置{errMsg}");
                     Speak("录制失败");
                     MessageBox.Show(
-                        $"当前设置无法完成录制，视频未保存。\n\n请求编码器: {EncodingHelper.GetEncoderLabel(requestedEncoder)}\n最后错误: {lastError}",
+                        $"当前设置的编码器无法完成录制，视频未保存。\n\n请求编码器: {EncodingHelper.GetEncoderLabel(requestedEncoder)}\n错误详情: {err}\n\n建议在设置中更换编码器或尝试 CPU 软编码。",
                         "录制失败", MessageBoxButton.OK, MessageBoxImage.Warning);
-                });
-            }
-        }
-
-        /// <summary>编码器回退成功后，同步更新配置中的 VideoCodec 和 GpuEncoder，使设置界面与实际一致</summary>
-        private void ApplyEncoderFallback(string requestedEncoder, string actualEncoder)
-        {
-            string newCodec = EncodingHelper.GetCodecFromEncoder(actualEncoder);
-            string newGpu = EncodingHelper.NormalizeGpuSetting(actualEncoder);
-            _currentVideoCodec = newCodec;
-            _currentVideoEncoder = actualEncoder;
-
-            bool changed = false;
-            if (Config.VideoCodec != newCodec) { Config.VideoCodec = newCodec; changed = true; }
-            if (EncodingHelper.NormalizeGpuSetting(Config.GpuEncoder ?? "auto") != newGpu) { Config.GpuEncoder = newGpu; changed = true; }
-
-            if (changed)
-            {
-                SaveConfig();
-                string label = EncodingHelper.GetEncoderLabel(actualEncoder);
-                _ = Application.Current.Dispatcher.BeginInvoke(() =>
-                {
-                    ShowToast($"⚙ 编码已自动切换为 {label}，设置已同步");
-                    MessageBox.Show(
-                        $"请求编码器 {EncodingHelper.GetEncoderLabel(requestedEncoder)} 不可用，已自动回退为 {label}。\n\n设置已同步更新。",
-                        "编码器已回退", MessageBoxButton.OK, MessageBoxImage.Information);
                 });
             }
         }
