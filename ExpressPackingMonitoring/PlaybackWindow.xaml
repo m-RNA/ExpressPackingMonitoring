@@ -170,9 +170,16 @@
                 <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.1"/>
             </Border.Effect>
             <Grid>
-                <vlc:VideoView x:Name="PlayerView"/>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-                <Border VerticalAlignment="Bottom" Background="{DynamicResource ToastBackground}" Padding="15,10" Panel.ZIndex="99">
+                <!-- 1. 视频窗口放在第 0 行 -->
+                <vlc:VideoView x:Name="PlayerView" Grid.Row="0"/>
+
+                <!-- 2. 控制条放在第 1 行 -->
+                <Border Grid.Row="1" Background="{DynamicResource ToastBackground}" Padding="15,10" Panel.ZIndex="99">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
