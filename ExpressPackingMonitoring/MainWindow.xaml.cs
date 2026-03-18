@@ -123,21 +123,30 @@ private void ScanInputTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
             var vm = DataContext as MainViewModel;
-            string msg = vm != null && vm.IsRecording
-                ? "当前正在录制，退出将自动保存视频。\n当前正在录制，退出将自动保存视频。\n当前正在录制，退出将自动保存视频。\n确定要退出吗？"
-                : "确定要退出程序吗？";
 
-            var dialog = new ConfirmDialog(msg, "退出确认") { Owner = this };
-            var result = dialog.ShowDialog();
-            
-            if (result != true)
+            // 1. 判断是否需要提示：只有正在录制时才提示
+            if (vm != null && vm.IsRecording)
             {
-                e.Cancel = true;
-                return;
+                string msg = "当前正在录制，退出将自动保存当前视频。\n确定要退出程序吗？";
+                var dialog = new ConfirmDialog(msg, "正在录制 - 退出确认") { Owner = this };
+                
+                // 如果用户在弹窗中点击了“取消”，则拦截退出事件
+                if (dialog.ShowDialog() != true)
+                {
+                    e.Cancel = true;
+                    return;
+                }
             }
 
-            // 正常退出：Dispose 会先 StopRecording（保存视频）再停相机
-            if (vm is System.IDisposable disposable) disposable.Dispose();
+            // 2. 执行到这里说明：要么没在录制，要么用户点击了确定退出
+            
+            // 调用 Dispose 确保资源释放（内部会触发 StopRecording 保存视频）
+            if (vm is System.IDisposable disposable) 
+            {
+                disposable.Dispose();
+            }
+
+            // 彻底杀掉进程，防止后台残留
             System.Environment.Exit(0);
         }
     }
