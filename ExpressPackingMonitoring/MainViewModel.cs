@@ -815,7 +815,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 _currentVideoEncoder = encoder;
                 _currentVideoCodec = EncodingHelper.GetCodecFromEncoder(encoder);
                 _ = Application.Current.Dispatcher.BeginInvoke(() =>
-                    ShowToast($"▶ 录像中 ({EncodingHelper.GetEncoderLabel(encoder)})"));
+                    ShowToast($"编码器 {EncodingHelper.GetEncoderLabel(encoder)}"));
                 return;
             }
 
