@@ -138,6 +138,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private bool _autoStopWarned = false;
         private bool _maxDurationWarned = false;
         private bool _pendingCameraRestart = false; // 录制中修改了摄像头配置，录制结束后重启
+        private bool _isEncoderDetectRunning = true; // 是否正在进行 GPU 编码器检测
 
         private int _totalPieces;
         private TimeSpan _totalPackTime;
@@ -292,9 +293,11 @@ namespace ExpressPackingMonitoring.ViewModels
             LoadConfig();
             // 在起动时后台探测可用 GPU 编码器并缓存
             Task.Run(() => {
+                _isEncoderDetectRunning = true;
                 var (options, validated) = DetectAvailableEncodersSync();
                 CachedEncoderOptions = options;
                 ValidatedEncoders = validated;
+                _isEncoderDetectRunning = false;
             });
             InitDatabase();
             RefreshTodayStats();
@@ -375,6 +378,12 @@ namespace ExpressPackingMonitoring.ViewModels
 
         public void OpenSettings()
         {
+            if (_isEncoderDetectRunning)
+            {
+                ShowToast("⏳ 编码器环境检测中，请稍后打开设置...");
+                return;
+            }
+
             try
             {
                 var clonedConfig = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(Config)) ?? new AppConfig();
