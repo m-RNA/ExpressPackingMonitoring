@@ -44,18 +44,18 @@ namespace ExpressPackingMonitoring
         {
             return encoder switch
             {
-                "h264_nvenc" => "NVIDIA NVENC (H.264)",
-                "h264_amf" => "AMD AMF (H.264)",
-                "h264_qsv" => "Intel QSV (H.264)",
-                "libx264" => "CPU (H.264)",
-                "hevc_nvenc" => "NVIDIA NVENC (H.265)",
-                "hevc_amf" => "AMD AMF (H.265)",
-                "hevc_qsv" => "Intel QSV (H.265)",
-                "libx265" => "CPU (H.265)",
-                "av1_nvenc" => "NVIDIA NVENC (AV1)",
-                "av1_amf" => "AMD AMF (AV1)",
-                "av1_qsv" => "Intel QSV (AV1)",
-                "libsvtav1" => "CPU (AV1)",
+                "h264_nvenc" => "N 264",
+                "h264_amf" => "A 264",
+                "h264_qsv" => "I 264",
+                "libx264" => "C 264",
+                "hevc_nvenc" => "N 265",
+                "hevc_amf" => "A 265",
+                "hevc_qsv" => "I 265)",
+                "libx265" => "C 265)",
+                "av1_nvenc" => "N AV1",
+                "av1_amf" => "A AV1",
+                "av1_qsv" => "I AV1",
+                "libsvtav1" => "C AV1",
                 _ => encoder
             };
         }
