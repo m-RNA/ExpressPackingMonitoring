@@ -224,74 +224,105 @@
                     <ListView Grid.Row="2" ItemsSource="{Binding FilteredLogs}" AlternationCount="2" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                         <ListView.ItemTemplate>
                             <DataTemplate>
-                                <Border Background="{DynamicResource ControlBackground}" CornerRadius="6" Margin="2,2,2,6" Padding="10,8">
+                                <!-- 容器 Border -->
+                                <Border x:Name="ItemBorder" Background="{DynamicResource ControlBackground}" CornerRadius="6" Margin="2,2,2,6" Padding="10,8" ClipToBounds="True">
                                     <Border.Effect>
                                         <DropShadowEffect BlurRadius="4" ShadowDepth="1" Opacity="0.04" Color="{DynamicResource ShadowColor}"/>
                                     </Border.Effect>
+                                    
                                     <Grid>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                        </Grid.RowDefinitions>
-                                        
+                                        <!-- 1. 优化后的流光背景层：增加对比度，使用平移变换 -->
+                                        <Rectangle x:Name="ShimmerLayer" Margin="-10,-8" Visibility="Collapsed" IsHitTestVisible="False">
+                                            <Rectangle.Fill>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                    <!-- 使用相对变换来平移整个画刷 -->
+                                                    <LinearGradientBrush.RelativeTransform>
+                                                        <TranslateTransform x:Name="ShimmerTransform" X="-1" />
+                                                    </LinearGradientBrush.RelativeTransform>
+                                                    <!-- 渐变点设计：透明 -> 浅红 -> 高亮白红(核心) -> 浅红 -> 透明 -->
+                                                    <GradientStop Color="Transparent" Offset="0"/>
+                                                    <GradientStop Color="#10FF0000" Offset="0.3"/>
+                                                    <GradientStop Color="#B0FF2222" Offset="0.5"/> <!-- 高对比度核心 -->
+                                                    <GradientStop Color="#10FF0000" Offset="0.7"/>
+                                                    <GradientStop Color="Transparent" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Rectangle.Fill>
+                                        </Rectangle>
+
+                                        <!-- 2. 内容层 (保持不变) -->
                                         <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="{Binding OrderId}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                            <Border Grid.Column="2" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
-                                                <Border.Style>
-                                                    <Style TargetType="Border">
-                                                        <Setter Property="Background" Value="{DynamicResource BadgePackBg}"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                                <Setter Property="Background" Value="{DynamicResource BadgeErrorBg}"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding Mode}" Value="退货">
-                                                                <Setter Property="Background" Value="{DynamicResource BadgeReturnBg}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Border.Style>
-                                                <TextBlock Text="{Binding Mode}" FontSize="12" FontWeight="SemiBold">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="Foreground" Value="{DynamicResource BadgePackText}"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                                    <Setter Property="Foreground" Value="{DynamicResource BadgeErrorText}"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Mode}" Value="退货">
-                                                                    <Setter Property="Foreground" Value="{DynamicResource BadgeReturnText}"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-                                            </Border>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding OrderId}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                
+                                                <!-- 状态标签 -->
+                                                <Border Grid.Column="2" x:Name="BadgeBorder" CornerRadius="4" Padding="6,2" VerticalAlignment="Center" Background="{DynamicResource BadgePackBg}">
+                                                    <TextBlock x:Name="BadgeText" Text="{Binding Mode}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource BadgePackText}"/>
+                                                </Border>
+                                            </Grid>
+                                            
+                                            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,4,0,0">
+                                                <TextBlock Text="⏱ " Foreground="{DynamicResource TextMuted}" FontSize="12"/>
+                                                <TextBlock x:Name="DurationText" Text="{Binding Duration}" FontWeight="Bold" FontSize="12" Margin="0,0,12,0" Foreground="{DynamicResource TextSecondary}"/>
+                                                <TextBlock Text="📅 " Foreground="{DynamicResource TextMuted}" FontSize="12"/>
+                                                <TextBlock Text="{Binding DateStr}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
+                                            </StackPanel>
                                         </Grid>
-                                        
-                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,4,0,0">
-                                            <TextBlock Text="⏱ " Foreground="{DynamicResource TextMuted}" FontSize="12"/>
-                                            <TextBlock Text="{Binding Duration}" FontWeight="Bold" FontSize="12" Margin="0,0,12,0">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                                <Setter Property="Foreground" Value="{DynamicResource AccentRed}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                            <TextBlock Text="📅 " Foreground="{DynamicResource TextMuted}" FontSize="12"/>
-                                            <TextBlock Text="{Binding DateStr}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
-                                        </StackPanel>
                                     </Grid>
                                 </Border>
+
+                                <!-- 触发器部分 -->
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                        <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{DynamicResource AccentRed}"/>
+                                        <Setter TargetName="ItemBorder" Property="BorderThickness" Value="1.5"/>
+                                        <Setter TargetName="BadgeBorder" Property="Background" Value="{DynamicResource BadgeErrorBg}"/>
+                                        <Setter TargetName="BadgeText" Property="Foreground" Value="{DynamicResource BadgeErrorText}"/>
+                                        <Setter TargetName="DurationText" Property="Foreground" Value="{DynamicResource AccentRed}"/>
+                                        
+                                        <DataTrigger.EnterActions>
+                                            <BeginStoryboard x:Name="ShimmerStoryboard">
+                                                <Storyboard>
+                                                    <!-- 显示流光层 -->
+                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ShimmerLayer" Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="{x:Static Visibility.Visible}"/>
+                                                    </ObjectAnimationUsingKeyFrames>
+                                                    
+                                                    <!-- 核心动效：让整个画刷从左侧完全消失的位置(-1.5)滑动到右侧完全消失的位置(1.5) -->
+                                                    <!-- 这种方式保证了渐变的“小尾巴”是平滑进入和出的，不会在中间拉伸 -->
+                                                    <DoubleAnimation Storyboard.TargetName="ShimmerTransform" 
+                                                                     Storyboard.TargetProperty="X"
+                                                                     From="-1.5" To="1.5" 
+                                                                     Duration="0:0:2" 
+                                                                     RepeatBehavior="Forever">
+                                                        <!-- 使用缓动函数，让滑动更具质感 -->
+                                                        <DoubleAnimation.EasingFunction>
+                                                            <QuadraticEase EasingMode="EaseInOut"/>
+                                                        </DoubleAnimation.EasingFunction>
+                                                    </DoubleAnimation>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </DataTrigger.EnterActions>
+                                        
+                                        <DataTrigger.ExitActions>
+                                            <StopStoryboard BeginStoryboardName="ShimmerStoryboard"/>
+                                        </DataTrigger.ExitActions>
+                                    </DataTrigger>
+
+                                    <DataTrigger Binding="{Binding Mode}" Value="退货">
+                                        <Setter TargetName="BadgeBorder" Property="Background" Value="{DynamicResource BadgeReturnBg}"/>
+                                        <Setter TargetName="BadgeText" Property="Foreground" Value="{DynamicResource BadgeReturnText}"/>
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
                             </DataTemplate>
                         </ListView.ItemTemplate>
                         <ListView.ItemContainerStyle>
