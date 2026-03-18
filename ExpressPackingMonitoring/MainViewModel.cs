@@ -73,10 +73,11 @@ namespace ExpressPackingMonitoring.ViewModels
         public bool AutoStartOnBoot { get; set; } = false;
         public bool EnableAudioRecording { get; set; } = true;
         public string AudioDeviceName { get; set; } = "";
+        public int AudioSyncOffsetMs { get; set; } = 400;
         public double BarcodeCooldownSeconds { get; set; } = 2.0;
-        public string GpuEncoder { get; set; } = "auto";
-        public string VideoCodec { get; set; } = "h264"; // "h264" or "h265"
-        public int VideoBitrateKbps { get; set; } = 0;
+        public string GpuEncoder { get; set; } = "nvidia";
+        public string VideoCodec { get; set; } = "h265"; // "h264" or "h265"
+        public int VideoCqp { get; set; } = 30;
     }
 
     public class MainViewModel : ObservableObject, IDisposable
@@ -355,6 +356,10 @@ namespace ExpressPackingMonitoring.ViewModels
                 } 
             } 
             catch { Config = new AppConfig(); } 
+
+            if (Config.VideoCqp <= 0)
+                Config.VideoCqp = 25;
+            Config.AudioSyncOffsetMs = Math.Clamp(Config.AudioSyncOffsetMs, -5000, 5000);
             
             // Apply Theme
             if (Enum.TryParse<ExpressPackingMonitoring.Themes.AppTheme>(Config.Theme, out var themeEnum))
@@ -440,9 +445,16 @@ namespace ExpressPackingMonitoring.ViewModels
         {
             string folderPath = Path.IsPathRooted(Config.VideoStoragePath) ? Config.VideoStoragePath : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Config.VideoStoragePath);
             if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
-            var playbackWin = new PlaybackWindow(folderPath, _db, Config.ShowDeletedVideos);
-            if (Application.Current?.MainWindow != null) playbackWin.Owner = Application.Current.MainWindow;
-            playbackWin.ShowDialog();
+            try
+            {
+                var playbackWin = new PlaybackWindow(folderPath, _db, Config.ShowDeletedVideos);
+                if (Application.Current?.MainWindow != null) playbackWin.Owner = Application.Current.MainWindow;
+                playbackWin.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"打开回放窗口失败：{ex.Message}", "回放错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         private void InitializeSystem()
@@ -687,7 +699,7 @@ namespace ExpressPackingMonitoring.ViewModels
             string dateFolder = Path.Combine(baseFolder, DateTime.Now.ToString("yyyy-MM-dd"));
             if (!Directory.Exists(dateFolder)) Directory.CreateDirectory(dateFolder);
 
-            string fileName = $"{CurrentOrderId}_{DateTime.Now:yyyyMMdd_HHmmss}_{CurrentMode}.mp4";
+            string fileName = $"{CurrentOrderId}_{DateTime.Now:yyyyMMdd_HHmmss}_{CurrentMode}.mkv";
             string filePath = Path.Combine(dateFolder, fileName);
             _currentVideoFilePath = filePath;
             _stopReason = "手动";
@@ -1020,68 +1032,55 @@ namespace ExpressPackingMonitoring.ViewModels
         /// </summary>
         private string BuildFFmpegArgs(int w, int h, int fps, string filePath, string encoder, bool withAudio)
         {
-            string args = $"-y -use_wallclock_as_timestamps 1 -f rawvideo -video_size {w}x{h} -pixel_format bgr24 -framerate {fps} -i pipe:0";
-            int targetBitrateKbps = GetTargetBitrateKbps(w, h, fps, EncodingHelper.GetCodecFromEncoder(encoder));
-            bool useCustomBitrate = Config.VideoBitrateKbps > 0;
+            string args = $"-y -fflags +genpts -use_wallclock_as_timestamps 1 -f rawvideo -video_size {w}x{h} -pixel_format bgr24 -framerate {fps} -i pipe:0";
+            int cqp = GetVideoCqp();
+            int gop = Math.Max(1, fps * 2);
 
             bool hasAudio = withAudio && Config.EnableAudioRecording && !string.IsNullOrEmpty(Config.AudioDeviceName);
             if (hasAudio)
             {
-                args += $" -f dshow -thread_queue_size 1024 -i audio=\"{Config.AudioDeviceName}\"";
+                args += $" -thread_queue_size 256 -use_wallclock_as_timestamps 1 -f dshow -audio_buffer_size 50 -i audio=\"{Config.AudioDeviceName}\"";
             }
 
             // H.264 编码器
             if (encoder == "h264_nvenc")
-                args += useCustomBitrate
-                    ? $" -c:v h264_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -b:v {targetBitrateKbps}k -maxrate {GetMaxRateKbps(targetBitrateKbps)}k -bufsize {GetBufferSizeKbps(targetBitrateKbps)}k -g 150"
-                    : " -c:v h264_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -cq 30 -b:v 0 -g 150";
+                args += $" -c:v h264_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -cq {cqp} -b:v 0 -g {gop}";
             else if (encoder == "h264_amf")
-                args += useCustomBitrate
-                    ? $" -c:v h264_amf -pix_fmt yuv420p -quality balanced -rc cbr -b:v {targetBitrateKbps}k -g 150"
-                    : " -c:v h264_amf -pix_fmt yuv420p -quality balanced -rc cqp -qp_i 30 -qp_p 30 -g 150";
+                args += $" -c:v h264_amf -pix_fmt yuv420p -quality balanced -rc cqp -qp_i {cqp} -qp_p {cqp} -g {gop}";
             else if (encoder == "h264_qsv")
-                args += useCustomBitrate
-                    ? $" -c:v h264_qsv -pix_fmt nv12 -preset medium -b:v {targetBitrateKbps}k -maxrate {GetMaxRateKbps(targetBitrateKbps)}k -bufsize {GetBufferSizeKbps(targetBitrateKbps)}k -g 150"
-                    : " -c:v h264_qsv -pix_fmt nv12 -preset medium -global_quality 30 -g 150";
+                args += $" -c:v h264_qsv -pix_fmt nv12 -preset medium -global_quality {cqp} -g {gop}";
             else if (encoder == "libx264")
-                args += useCustomBitrate
-                    ? $" -c:v libx264 -pix_fmt yuv420p -preset fast -b:v {targetBitrateKbps}k -maxrate {GetMaxRateKbps(targetBitrateKbps)}k -bufsize {GetBufferSizeKbps(targetBitrateKbps)}k -g 150"
-                    : " -c:v libx264 -pix_fmt yuv420p -preset fast -crf 30 -g 150";
+                args += $" -c:v libx264 -pix_fmt yuv420p -preset fast -crf {cqp} -g {gop}";
             // H.265 (HEVC) 编码器
             else if (encoder == "hevc_nvenc")
-                args += useCustomBitrate
-                    ? $" -c:v hevc_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -b:v {targetBitrateKbps}k -maxrate {GetMaxRateKbps(targetBitrateKbps)}k -bufsize {GetBufferSizeKbps(targetBitrateKbps)}k -g 150 -tag:v hvc1"
-                    : " -c:v hevc_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -cq 30 -b:v 0 -g 150 -tag:v hvc1";
+                args += $" -c:v hevc_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -cq {cqp} -b:v 0 -g {gop}";
             else if (encoder == "hevc_amf")
-                args += useCustomBitrate
-                    ? $" -c:v hevc_amf -pix_fmt yuv420p -quality balanced -rc cbr -b:v {targetBitrateKbps}k -g 150 -tag:v hvc1"
-                    : " -c:v hevc_amf -pix_fmt yuv420p -quality balanced -rc cqp -qp_i 30 -qp_p 30 -g 150 -tag:v hvc1";
+                args += $" -c:v hevc_amf -pix_fmt yuv420p -quality balanced -rc cqp -qp_i {cqp} -qp_p {cqp} -g {gop}";
             else if (encoder == "hevc_qsv")
-                args += useCustomBitrate
-                    ? $" -c:v hevc_qsv -pix_fmt nv12 -preset medium -b:v {targetBitrateKbps}k -maxrate {GetMaxRateKbps(targetBitrateKbps)}k -bufsize {GetBufferSizeKbps(targetBitrateKbps)}k -g 150 -tag:v hvc1"
-                    : " -c:v hevc_qsv -pix_fmt nv12 -preset medium -global_quality 30 -g 150 -tag:v hvc1";
+                args += $" -c:v hevc_qsv -pix_fmt nv12 -preset medium -global_quality {cqp} -g {gop}";
             else if (encoder == "libx265")
-                args += useCustomBitrate
-                    ? $" -c:v libx265 -pix_fmt yuv420p -preset fast -b:v {targetBitrateKbps}k -maxrate {GetMaxRateKbps(targetBitrateKbps)}k -bufsize {GetBufferSizeKbps(targetBitrateKbps)}k -g 150 -tag:v hvc1"
-                    : " -c:v libx265 -pix_fmt yuv420p -preset fast -crf 30 -g 150 -tag:v hvc1";
+                args += $" -c:v libx265 -pix_fmt yuv420p -preset fast -crf {cqp} -g {gop}";
             // AV1 编码器 — 使用分辨率自适应目标码率
             else if (encoder == "av1_nvenc")
-                args += $" -c:v av1_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -b:v {targetBitrateKbps}k -maxrate {GetMaxRateKbps(targetBitrateKbps)}k -bufsize {GetBufferSizeKbps(targetBitrateKbps)}k -g 150";
+                args += $" -c:v av1_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -cq {cqp} -b:v 0 -g {gop}";
             else if (encoder == "av1_amf")
-                args += $" -c:v av1_amf -pix_fmt yuv420p -quality balanced -b:v {targetBitrateKbps}k -g 150";
+                args += $" -c:v av1_amf -pix_fmt yuv420p -quality balanced -rc cqp -qp_i {cqp} -qp_p {cqp} -g {gop}";
             else if (encoder == "av1_qsv")
-                args += $" -c:v av1_qsv -pix_fmt nv12 -preset medium -b:v {targetBitrateKbps}k -maxrate {GetMaxRateKbps(targetBitrateKbps)}k -bufsize {GetBufferSizeKbps(targetBitrateKbps)}k -g 150";
+                args += $" -c:v av1_qsv -pix_fmt nv12 -preset medium -global_quality {cqp} -g {gop}";
             else if (encoder == "libsvtav1")
-                args += $" -c:v libsvtav1 -pix_fmt yuv420p -preset {GetCpuAv1Preset(w, h, fps)} -svtav1-params tune=0 -b:v {targetBitrateKbps}k -g 150";
+                args += $" -c:v libsvtav1 -pix_fmt yuv420p -preset {GetCpuAv1Preset(w, h, fps)} -crf {cqp} -svtav1-params tune=0 -g {gop}";
             else
-                args += $" -c:v {encoder} -pix_fmt yuv420p -g 150";
+                args += $" -c:v {encoder} -pix_fmt yuv420p -g {gop}";
 
             args += $" -r {fps} -fps_mode cfr";
 
             if (hasAudio)
             {
-                args += " -c:a aac -b:a 64k -shortest";
+                string audioFilter = BuildAudioSyncFilter();
+                args += $" -af {audioFilter} -c:a aac -b:a 64k -shortest";
             }
+
+            args += " -muxdelay 0 -muxpreload 0";
 
             args += $" \"{filePath}\"";
             return args;
@@ -1095,30 +1094,21 @@ namespace ExpressPackingMonitoring.ViewModels
             return 8;
         }
 
-        private int GetTargetBitrateKbps(int w, int h, int fps, string codec)
+        private string BuildAudioSyncFilter()
         {
-            if (Config.VideoBitrateKbps > 0)
-                return Config.VideoBitrateKbps;
-
-            return codec switch
+            int offsetMs = Math.Clamp(Config.AudioSyncOffsetMs, -5000, 5000);
+            if (offsetMs > 0)
+                return $"adelay={offsetMs}:all=1,aresample=async=1:first_pts=0";
+            if (offsetMs < 0)
             {
-                "av1" => CalcAv1Bitrate(w, h, fps),
-                "h265" => CalcDefaultBitrate(w, h, fps, 0.6),
-                _ => CalcDefaultBitrate(w, h, fps, 1.0)
-            };
+                double trimStartSec = Math.Abs(offsetMs) / 1000.0;
+                return $"atrim=start={trimStartSec:0.###},asetpts=PTS-STARTPTS,aresample=async=1:first_pts=0";
+            }
+
+            return "aresample=async=1:first_pts=0";
         }
 
-        private static int CalcDefaultBitrate(int w, int h, int fps, double codecFactor)
-        {
-            double megapixels = (w * h) / 1000000.0;
-            double fpsFactor = Math.Max(0.5, fps / 15.0);
-            int kbps = (int)Math.Round(2200 * megapixels * fpsFactor * codecFactor);
-            return Math.Max(600, kbps);
-        }
-
-        private static int GetMaxRateKbps(int bitrateKbps) => Math.Max(800, (int)Math.Round(bitrateKbps * 1.3));
-
-        private static int GetBufferSizeKbps(int bitrateKbps) => Math.Max(1200, bitrateKbps * 2);
+        private int GetVideoCqp() => Config.VideoCqp > 0 ? Config.VideoCqp : 25;
 
         /// <summary>
         /// 根据分辨率和帧率计算 AV1 目标码率 (kb/s)。
@@ -1457,7 +1447,7 @@ namespace ExpressPackingMonitoring.ViewModels
                         string folderPath = Path.IsPathRooted(Config.VideoStoragePath) ? Config.VideoStoragePath : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Config.VideoStoragePath);
                         if (Directory.Exists(folderPath))
                         {
-                            foreach (var fi in new DirectoryInfo(folderPath).EnumerateFiles("*.mp4", SearchOption.AllDirectories))
+                            foreach (var fi in EnumerateVideoFiles(folderPath))
                                 currentSizeBytes += fi.Length;
                         }
                     }
@@ -1534,7 +1524,7 @@ namespace ExpressPackingMonitoring.ViewModels
                             string folderPath = Path.IsPathRooted(Config.VideoStoragePath) ? Config.VideoStoragePath : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Config.VideoStoragePath);
                             if (Directory.Exists(folderPath))
                             {
-                                foreach (var file in new DirectoryInfo(folderPath).EnumerateFiles("*.mp4", SearchOption.AllDirectories).OrderBy(fi => fi.LastWriteTime))
+                                foreach (var file in EnumerateVideoFiles(folderPath).OrderBy(fi => fi.LastWriteTime))
                                 {
                                     try
                                     {
@@ -1586,6 +1576,13 @@ namespace ExpressPackingMonitoring.ViewModels
             lock (_videoLock) { _previousCheckFrame?.Dispose(); }
             lock (_speechLock) { _speechSynth?.Dispose(); _speechSynth = null; }
             try { _db?.Dispose(); } catch { }
+        }
+
+        private static IEnumerable<FileInfo> EnumerateVideoFiles(string folderPath)
+        {
+            var dir = new DirectoryInfo(folderPath);
+            foreach (var file in dir.EnumerateFiles("*.mkv", SearchOption.AllDirectories))
+                yield return file;
         }
 
         private void InitSpeechSynthesizer()

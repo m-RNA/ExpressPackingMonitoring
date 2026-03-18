@@ -7,7 +7,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <NoWarn>$(NoWarn);NU1701</NoWarn>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin_publish_tmp\**;obj_publish_tmp\**;publish-test\**</DefaultItemExcludes>
     
     <!-- 单文件打包相关配置 -->
     <PublishSingleFile>true</PublishSingleFile>
@@ -34,6 +36,20 @@
 
   <ItemGroup>
     <Resource Include="app.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="App.xaml.cs" />
+    <Compile Include="BarcodeHelper.cs" />
+    <Compile Include="ConfirmDialog.xaml.cs" />
+    <Compile Include="EncodingHelper.cs" />
+    <Compile Include="MainViewModel.cs" />
+    <Compile Include="MainWindow.xaml.cs" />
+    <Compile Include="PlaybackWindow.xaml.cs" />
+    <Compile Include="SettingsWindow.xaml.cs" />
+    <Compile Include="StatisticsWindow.xaml.cs" />
+    <Compile Include="Themes\ThemeManager.cs" />
+    <Compile Include="VideoDatabase.cs" />
   </ItemGroup>
 
   <!-- 排除不需要的 OpenCV 内置 ffmpeg（已使用独立 ffmpeg.exe 管道录制） -->
@@ -71,5 +87,35 @@
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
   </ItemGroup>
+
+  <Target Name="IncludeLibVlcFilesForPublish" AfterTargets="ComputeFilesToPublish" Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(NuGetPackageRoot)videolan.libvlc.windows\3.0.21\build\x64\libvlc.dll">
+        <RelativePath>libvlc\win-x64\libvlc.dll</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(NuGetPackageRoot)videolan.libvlc.windows\3.0.21\build\x64\libvlccore.dll">
+        <RelativePath>libvlc\win-x64\libvlccore.dll</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(NuGetPackageRoot)videolan.libvlc.windows\3.0.21\build\x64\plugins\**\*">
+        <RelativePath>libvlc\win-x64\plugins\%(RecursiveDir)%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(NuGetPackageRoot)videolan.libvlc.windows\3.0.21\build\x64\lua\**\*">
+        <RelativePath>libvlc\win-x64\lua\%(RecursiveDir)%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="$(NuGetPackageRoot)videolan.libvlc.windows\3.0.21\build\x64\hrtfs\**\*">
+        <RelativePath>libvlc\win-x64\hrtfs\%(RecursiveDir)%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 
 </Project>
