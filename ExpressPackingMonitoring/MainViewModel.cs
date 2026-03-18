@@ -78,6 +78,11 @@ namespace ExpressPackingMonitoring.ViewModels
         public string GpuEncoder { get; set; } = "nvidia";
         public string VideoCodec { get; set; } = "h265"; // "h264" or "h265"
         public int VideoCqp { get; set; } = 30;
+
+        // 缓存的检测结果
+        public List<GpuEncoderOption> EncoderOptionsCache { get; set; }
+        public List<string> ValidatedEncodersCache { get; set; }
+        public bool IsEncoderDetected { get; set; } = false;
     }
 
     public class MainViewModel : ObservableObject, IDisposable
@@ -273,6 +278,7 @@ namespace ExpressPackingMonitoring.ViewModels
         public ICommand ToggleModeCommand { get; }
         public ICommand ToggleRecordingCommand { get; }
         public ICommand OpenStatsCommand { get; } // 【新增】：打开统计面板
+        public ICommand ResetEncoderDetectCommand { get; } // 【新增】：重置编码器检测
 
         public MainViewModel()
         {
@@ -294,9 +300,23 @@ namespace ExpressPackingMonitoring.ViewModels
             // 在起动时后台探测可用 GPU 编码器并缓存
             Task.Run(() => {
                 _isEncoderDetectRunning = true;
-                var (options, validated) = DetectAvailableEncodersSync();
-                CachedEncoderOptions = options;
-                ValidatedEncoders = validated;
+                if (Config.IsEncoderDetected && Config.EncoderOptionsCache != null && Config.ValidatedEncodersCache != null)
+                {
+                    CachedEncoderOptions = Config.EncoderOptionsCache;
+                    ValidatedEncoders = new HashSet<string>(Config.ValidatedEncodersCache);
+                }
+                else
+                {
+                    var (options, validated) = DetectAvailableEncodersSync();
+                    CachedEncoderOptions = options;
+                    ValidatedEncoders = validated;
+                    
+                    // 保存到配置中
+                    Config.EncoderOptionsCache = options;
+                    Config.ValidatedEncodersCache = validated.ToList();
+                    Config.IsEncoderDetected = true;
+                    SaveConfig();
+                }
                 _isEncoderDetectRunning = false;
             });
             InitDatabase();
@@ -308,6 +328,7 @@ namespace ExpressPackingMonitoring.ViewModels
             ToggleModeCommand = new RelayCommand(ToggleMode);
             ToggleRecordingCommand = new RelayCommand(ToggleRecording);
             OpenStatsCommand = new RelayCommand(OpenStatsWindow);
+            ResetEncoderDetectCommand = new RelayCommand(ResetEncoderDetect);
             ClearScanInputCommand = new RelayCommand(() => ScanInputText = "");
             ClearSearchCommand = new RelayCommand(() => LogSearchText = "");
             InitializeSystem();
@@ -387,7 +408,7 @@ namespace ExpressPackingMonitoring.ViewModels
             try
             {
                 var clonedConfig = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(Config)) ?? new AppConfig();
-                var settingsWin = new SettingsWindow(clonedConfig, DiskUsagePercent, DiskUsageText, IsRecording);
+                var settingsWin = new SettingsWindow(this, clonedConfig, DiskUsagePercent, DiskUsageText, IsRecording);
                 if (Application.Current?.MainWindow != null) settingsWin.Owner = Application.Current.MainWindow;
                 if (settingsWin.ShowDialog() == true) { 
                     // 判断摄像头相关配置是否变更
@@ -1216,6 +1237,37 @@ namespace ExpressPackingMonitoring.ViewModels
                 return output ?? "";
             }
             catch { return ""; }
+        }
+
+        /// <summary>
+        /// 重新执行 GPU 编码器检测并更新缓存。
+        /// </summary>
+        public void ResetEncoderDetect()
+        {
+            if (_isEncoderDetectRunning)
+            {
+                ShowToast("⏳ 检测已在运行中...");
+                return;
+            }
+
+            Task.Run(() =>
+            {
+                _isEncoderDetectRunning = true;
+                ShowToast("🔄 正在重新检测 GPU 编码器，请稍候...");
+
+                var (options, validated) = DetectAvailableEncodersSync();
+                CachedEncoderOptions = options;
+                ValidatedEncoders = validated;
+
+                // 更新并保存配置
+                Config.EncoderOptionsCache = options;
+                Config.ValidatedEncodersCache = validated.ToList();
+                Config.IsEncoderDetected = true;
+                SaveConfig();
+
+                _isEncoderDetectRunning = false;
+                ShowToast("✅ 编码器重新检测完成");
+            });
         }
 
         /// <summary>
