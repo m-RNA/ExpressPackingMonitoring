@@ -430,10 +430,39 @@ namespace ExpressPackingMonitoring
                 return;
             }
 
-            string outputPath = Path.Combine(
-                Path.GetDirectoryName(video.FullPath) ?? _folderPath,
-                $"{Path.GetFileNameWithoutExtension(video.FullPath)}.mp4");
+            // 1. 生成目标路径
+            string outputDir = Path.GetDirectoryName(video.FullPath) ?? _folderPath;
+            string fileName = Path.GetFileNameWithoutExtension(video.FullPath) + ".mp4";
+            string outputPath = Path.Combine(outputDir, fileName);
 
+            // 2. 检查文件是否已存在
+            if (File.Exists(outputPath))
+            {
+                var result = MessageBox.Show(
+                    $"文件已存在：\n{fileName}\n\n是否覆盖原有视频？",
+                    "导出提示",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                // 如果用户选择“否”，则取消导出
+                if (result != MessageBoxResult.Yes)
+                {
+                    return; 
+                }
+
+                // 如果用户选择“是”，尝试先删除旧文件（防止进程占用或其他异常）
+                try
+                {
+                    File.Delete(outputPath);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"无法覆盖现有文件，请检查文件是否被占用：\n{ex.Message}", "导出失败", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+            }
+
+            // 3. 执行导出
             bool ok = await ExportToMp4Async(video.FullPath, outputPath);
             if (ok)
             {
