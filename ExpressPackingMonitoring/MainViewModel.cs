@@ -601,8 +601,12 @@ namespace ExpressPackingMonitoring.ViewModels
                             try
                             {
                                 var clone = processedFrame.Clone();
-                                if (!_videoWriteQueue.TryAdd(clone))
-                                    clone.Dispose(); // 队列已满，丢帧而不阻塞，保证预览流畅
+                                // 修改：使用 TryAdd 并设置极短的超时（例如 100ms）
+                                // 如果 10ms 进不去队列，说明磁盘或编码器卡了，直接丢弃这一帧，保住预览不卡死
+                                if (!_videoWriteQueue.TryAdd(clone, 200))
+                                {
+                                    clone.Dispose();
+                                }
                             }
                             catch (ObjectDisposedException) { }
                             catch (InvalidOperationException) { }
@@ -713,11 +717,23 @@ namespace ExpressPackingMonitoring.ViewModels
             StartRecordingProcess();
         }
 
-        private void StartRecordingProcess()
+        private async void StartRecordingProcess()
         {
-            if (IsRecording) StopRecording();
-            IsRecording = true; _lastMotionTime = DateTime.Now; _lastScanTime = DateTime.Now; _recordStartTime = DateTime.Now;
-            _isScanning = true; _delayBeforeZooming = true; _isZooming = false;
+            if (IsRecording)
+            {
+                StopRecording();
+                // 强制等待 300ms，给系统和 GPU 释放资源的时间
+                await Task.Delay(300);
+            }
+
+            // 重置状态
+            IsRecording = true;
+            _lastMotionTime = DateTime.Now;
+            _lastScanTime = DateTime.Now;
+            _recordStartTime = DateTime.Now;
+            _isScanning = true;
+            _delayBeforeZooming = true;
+            _isZooming = false;
             _autoStopWarned = false;
             _maxDurationWarned = false;
             // 重置参考帧，避免旧帧与新帧比较产生假运动
@@ -747,6 +763,23 @@ namespace ExpressPackingMonitoring.ViewModels
                 return;
             }
 
+            // 关键点：在启动前，先尝试清理可能残留的 ffmpeg 僵尸进程
+            // 特别是针对上一个视频是长视频的情况
+            await Task.Run(() =>
+            {
+                try
+                {
+                    var processes = Process.GetProcessesByName("ffmpeg");
+                    foreach (var p in processes)
+                    {
+                        // 如果进程已经运行很久了（可能是残留），杀掉它
+                        if ((DateTime.Now - p.StartTime).TotalMinutes > 5) p.Kill();
+                    }
+                }
+                catch { }
+            });
+
+            // 启动新的 FFmpeg 线程
             lock (_videoLock)
             {
                 _writeCts = new CancellationTokenSource();
@@ -1333,9 +1366,17 @@ namespace ExpressPackingMonitoring.ViewModels
         private void StopRecording()
         {
             if (!IsRecording) return;
-            IsRecording = false; _isScanning = false; _delayBeforeZooming = false; _isZooming = false;
-            _autoStopWarned = false; _maxDurationWarned = false;
 
+            // 1. 立即设置状态，停止数据流入
+            IsRecording = false;
+            _isScanning = false;
+            _delayBeforeZooming = false;
+            _isZooming = false;
+            _autoStopWarned = false;
+            _maxDurationWarned = false;
+
+            // 2. 将当前的录制资源抓取到局部变量，然后立即清空全局引用
+            // 这一步是关键：防止新录制启动时还在用旧的 CTS 或 Queue
             CancellationTokenSource oldCts;
             BlockingCollection<Mat> oldQueue;
             Task oldWriteTask;
@@ -1345,16 +1386,17 @@ namespace ExpressPackingMonitoring.ViewModels
                 oldCts = _writeCts;
                 oldQueue = _videoWriteQueue;
                 oldWriteTask = _writeTask;
+
                 _writeCts = null;
                 _videoWriteQueue = null;
                 _writeTask = null;
             }
 
-            // 立即发出停止信号，不阻塞主线程
-            oldCts?.Cancel();
+            // 3. 通知旧队列停止接收数据
             try { oldQueue?.CompleteAdding(); } catch { }
+            oldCts?.Cancel();
 
-            // 捕获当前录制信息，后台完成收尾
+            // 4. 获取必要的元数据用于保存数据库
             var filePath = _currentVideoFilePath;
             var videoCodec = _currentVideoCodec;
             var videoEncoder = _currentVideoEncoder;
@@ -1370,10 +1412,19 @@ namespace ExpressPackingMonitoring.ViewModels
             _currentVideoCodec = null;
             _currentVideoEncoder = null;
 
-            // 后台等待 FFmpeg 退出 + 写入数据库（不阻塞扫码/UI）
+            // 5. 后台执行收尾，但不再阻塞主线程
             _lastFinalizeTask = Task.Run(() =>
+            {
+                try
+                {
+                    // 给旧进程最多 5 秒收尾时间，如果收不掉就强制杀掉
+                    oldWriteTask?.Wait(5000);
+                }
+                catch { }
+
                 FinalizeRecording(oldWriteTask, oldCts, oldQueue,
-                    filePath, videoCodec, videoEncoder, recordStart, orderId, mode, stopReason, scanRecord));
+                    filePath, videoCodec, videoEncoder, recordStart, orderId, mode, stopReason, scanRecord);
+            });
 
             // 录制中修改过摄像头配置，延迟到现在生效
             if (_pendingCameraRestart)
