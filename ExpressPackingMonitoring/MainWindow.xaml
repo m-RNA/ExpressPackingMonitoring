@@ -12,6 +12,49 @@
     </Window.DataContext>
 
     <Window.Resources>
+        <!-- 修复 ComboBox 稳定性问题的核心代码 -->
+        <Style TargetType="ComboBoxItem">
+            <!-- 手动指定对齐方式，不再让系统去 FindAncestor，从而消除报错 -->
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="Gd" 
+                                Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                BorderThickness="{TemplateBinding BorderThickness}" 
+                                Padding="{TemplateBinding Padding}" 
+                                SnapsToDevicePixels="true"
+                                CornerRadius="4"
+                                Margin="2,1">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" 
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <!-- 增加悬浮效果，提升交互感 -->
+                            <Trigger Property="IsMouseOver" Value="true">
+                                <Setter TargetName="Gd" Property="Background" Value="{DynamicResource ControlBackgroundHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="true">
+                                <Setter TargetName="Gd" Property="Background" Value="{DynamicResource AccentBlue}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 确保 ComboBox 容器本身也是稳定的 -->
+        <Style TargetType="ComboBox">
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="ScrollViewer.CanContentScroll" Value="False"/> <!-- 禁用像素级滚动有助于稳定性 -->
+        </Style>
+
         <Style TargetType="Button" x:Key="ModernBtn">
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
