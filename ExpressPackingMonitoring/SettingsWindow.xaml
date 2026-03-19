@@ -8,6 +8,12 @@
         Background="{DynamicResource WindowBackground}" FontFamily="Microsoft YaHei UI, Segoe UI">
 
     <Window.Resources>
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <!-- 显式设置这些属性，切断系统默认样式中 FindAncestor 的错误绑定 -->
+        </Style>
+
         <Style TargetType="TextBox">
             <Setter Property="Padding" Value="6,4"/>
             <Setter Property="Height" Value="32"/>
