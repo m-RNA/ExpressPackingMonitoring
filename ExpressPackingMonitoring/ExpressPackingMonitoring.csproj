@@ -40,10 +40,14 @@
 
   <ItemGroup>
     <Compile Include="App.xaml.cs" />
+    <Compile Include="AppConfig.cs" />
     <Compile Include="BarcodeHelper.cs" />
     <Compile Include="ConfirmDialog.xaml.cs" />
     <Compile Include="EncodingHelper.cs" />
+    <Compile Include="MainViewModel.Cleanup.cs" />
     <Compile Include="MainViewModel.cs" />
+    <Compile Include="MainViewModel.Encoder.cs" />
+    <Compile Include="MainViewModel.Recording.cs" />
     <Compile Include="MainWindow.xaml.cs" />
     <Compile Include="PlaybackWindow.xaml.cs" />
     <Compile Include="SettingsWindow.xaml.cs" />
