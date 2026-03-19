@@ -114,6 +114,8 @@ namespace ExpressPackingMonitoring.ViewModels
         private Task _videoTask;
         private object _videoLock = new object();
 
+        private bool _isInputOnCooldown = false; // 全局输入冷却锁
+
         private SpeechSynthesizer _speechSynth;
         private readonly object _speechLock = new object();
 
@@ -598,12 +600,19 @@ namespace ExpressPackingMonitoring.ViewModels
 
                         if (IsRecording && _videoWriteQueue != null && !_videoWriteQueue.IsAddingCompleted)
                         {
+                            // 如果后台录制任务已经报错停止（Task 已完成但不是因为取消请求）
+                            if (_writeTask != null && _writeTask.IsCompleted)
+                            {
+                                // 这种情况下不应该继续填充队列
+                                continue;
+                            }
+
                             try
                             {
                                 var clone = processedFrame.Clone();
                                 // 修改：使用 TryAdd 并设置极短的超时（例如 100ms）
-                                // 如果 10ms 进不去队列，说明磁盘或编码器卡了，直接丢弃这一帧，保住预览不卡死
-                                if (!_videoWriteQueue.TryAdd(clone, 200))
+                                // 如果 5ms 进不去队列，说明磁盘或编码器卡了，直接丢弃这一帧，保住预览不卡死
+                                if (!_videoWriteQueue.TryAdd(clone, 5))
                                 {
                                     clone.Dispose();
                                 }
@@ -701,20 +710,52 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private void HandleScan(string scanResult)
         {
+            // 1. 如果处于冷却期，直接清空输入并拦截
+            if (_isInputOnCooldown)
+            {
+                ScanInputText = "";
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(scanResult)) return;
             string upperResult = scanResult.ToUpper().Trim();
 
-            if (upperResult.Contains("CLEAR") || upperResult.Contains("清除")) { ScanInputText = ""; HideBarcode1Temporarily(); ShowToast("🧹 扫码框已清除"); return; }
-            if (upperResult.Contains("SHIP") || upperResult.Contains("发货")) { CurrentMode = "发货"; ScanInputText = ""; HideBarcode1Temporarily(); ShowToast("切换为发货模式"); Speak("切换发货"); return; }
-            if (upperResult.Contains("BACK") || upperResult.Contains("退货")) { CurrentMode = "退货"; ScanInputText = ""; HideBarcode1Temporarily(); ShowToast("切换为退货模式"); Speak("切换退货"); return; }
-            if (upperResult.Contains("START") || upperResult.Contains("开始录制")) { ScanInputText = ""; HideBarcode2Temporarily(); ToggleRecording(); return; }
-            if (upperResult.Contains("STOP") || upperResult.Contains("停止录制")) { ScanInputText = ""; HideBarcode2Temporarily(); StopRecordingManual(); return; }
+            // 指令处理
+            if (upperResult.Contains("CLEAR") || upperResult.Contains("清除")) { ScanInputText = ""; ShowToast("🧹 扫码框已清除"); return; }
+            if (upperResult.Contains("SHIP") || upperResult.Contains("发货")) { CurrentMode = "发货"; ScanInputText = ""; StartInputCooldown(); ShowToast("切换为发货模式"); Speak("切换发货"); return; }
+            if (upperResult.Contains("BACK") || upperResult.Contains("退货")) { CurrentMode = "退货"; ScanInputText = ""; StartInputCooldown(); ShowToast("切换为退货模式"); Speak("切换退货"); return; }
+            if (upperResult.Contains("START") || upperResult.Contains("开始录制")) { ScanInputText = ""; ToggleRecording(); return; } // ToggleRecording 内部会触发冷却
+            if (upperResult.Contains("STOP") || upperResult.Contains("停止录制")) { ScanInputText = ""; StopRecordingManual(); return; }
 
-            try { if (!System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex)) { ScanInputText = ""; ShowToast("非法单号，已拦截");Speak("非法单号"); return; } } catch { }
-                                                         
+            // 正则验证
+            try { if (!System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex)) { ScanInputText = ""; ShowToast("非法单号，已拦截"); Speak("非法单号"); return; } } catch { }
+
+            // 2. 触发冷却并执行录制转换
+            StartInputCooldown();
             CurrentOrderId = upperResult;
             if (IsRecording) _stopReason = "扫码切换";
             StartRecordingProcess();
+        }
+
+        // 新增：启动输入冷却控制
+        private async void StartInputCooldown()
+        {
+            if (_isInputOnCooldown) return;
+            _isInputOnCooldown = true;
+
+            // 复用配置中的冷却秒数
+            double cooldownMs = Config.BarcodeCooldownSeconds * 1000;
+
+            // 启动定时任务清除冷却状态
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay((int)cooldownMs);
+                _isInputOnCooldown = false;
+            });
+
+            // 同时触发原有条码图标的隐藏逻辑
+            HideBarcode1Temporarily();
+            HideBarcode2Temporarily();
         }
 
         private async void StartRecordingProcess()
@@ -824,9 +865,24 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 try { if (File.Exists(filePath) && new FileInfo(filePath).Length == 0) File.Delete(filePath); } catch { }
                 string errMsg = string.IsNullOrEmpty(err) ? "" : $"\n{err}";
+
                 _ = Application.Current.Dispatcher.BeginInvoke(() =>
                 {
+                    // --- 核心修复：立即重置 UI 状态 ---
                     IsRecording = false;
+                    CurrentOrderId = "";
+                    ScanInputText = "";
+
+                    // 彻底清理队列，防止内存堆积
+                    lock (_videoLock)
+                    {
+                        if (_videoWriteQueue != null)
+                        {
+                            _videoWriteQueue.CompleteAdding();
+                            while (_videoWriteQueue.TryTake(out var m)) m?.Dispose();
+                        }
+                    }
+
                     ShowToast($"⚠ 录制失败，请检查配置{errMsg}");
                     Speak("录制失败");
                     MessageBox.Show(
