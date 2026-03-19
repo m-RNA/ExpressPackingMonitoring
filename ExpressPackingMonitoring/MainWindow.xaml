@@ -185,10 +185,15 @@
                                             <Setter Property="Background" Value="{DynamicResource AccentRed}"/>
                                             <Setter Property="Content" Value="⏹ 停止录制"/>
                                         </DataTrigger>
+                                        <!-- 新增：Busy过渡状态，优先于 IsRecording -->
+                                        <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                            <Setter Property="Background" Value="#A0A0A0"/> <!-- 灰色表示被锁定 -->
+                                            <Setter Property="Content" Value="{Binding BusyText}"/> <!-- 显示正在启动/停止 -->
+                                        </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
                             </Button.Style>
-                        </Button> 
+                        </Button>
                     </Grid>
                 </Border>
 

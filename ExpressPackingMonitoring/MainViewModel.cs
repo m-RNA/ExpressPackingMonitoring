@@ -114,7 +114,17 @@ namespace ExpressPackingMonitoring.ViewModels
         private Task _videoTask;
         private object _videoLock = new object();
 
-        private bool _isInputOnCooldown = false; // 全局输入冷却锁
+        private readonly SemaphoreSlim _recorderLock = new SemaphoreSlim(1, 1);
+        private bool _isInputOnCooldown = false;
+        private Process _currentFfmpegProcess;
+        private bool _isDisposed = false; // 新增：防止销毁后操作 UI
+
+        private bool _isBusy;
+        public bool IsBusy { get => _isBusy; set => SetProperty(ref _isBusy, value); }
+
+        private string _busyText = "";
+        public string BusyText { get => _busyText; set => SetProperty(ref _busyText, value); }
+        // ====================================
 
         private SpeechSynthesizer _speechSynth;
         private readonly object _speechLock = new object();
@@ -136,6 +146,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private bool _delayBeforeZooming = false;
 
         private ScanRecord _currentScanRecord;
+        private long _currentRecordId; 
         private string _currentVideoFilePath;  // 当前录制文件路径
         private string _currentVideoCodec;
         private string _currentVideoEncoder;
@@ -279,8 +290,8 @@ namespace ExpressPackingMonitoring.ViewModels
         public ICommand OpenPlaybackCommand { get; }
         public ICommand ToggleModeCommand { get; }
         public ICommand ToggleRecordingCommand { get; }
-        public ICommand OpenStatsCommand { get; } // 【新增】：打开统计面板
-        public ICommand ResetEncoderDetectCommand { get; } // 【新增】：重置编码器检测
+        public ICommand OpenStatsCommand { get; } // 打开统计面板
+        public ICommand ResetEncoderDetectCommand { get; } // 重置编码器检测
 
         public MainViewModel()
         {
@@ -362,7 +373,336 @@ namespace ExpressPackingMonitoring.ViewModels
         }
 
         private void ToggleMode() { CurrentMode = CurrentMode == "发货" ? "退货" : "发货"; ShowToast($"已切换为: {CurrentMode}"); Speak(CurrentMode == "发货" ? "切换发货" : "切换退货"); }
-        private void ToggleRecording() { if (IsRecording) StopRecordingManual(); else StartRecordingManual(); }
+
+        // ========================== 核心逻辑：恢复 MAN_ 前缀 ==========================
+        private async void ToggleRecording() 
+        {
+            if (IsBusy || _isDisposed) return;
+            if (!await _recorderLock.WaitAsync(0)) return; 
+
+            try 
+            {
+                if (IsRecording) 
+                {
+                    await InternalStopRecordingAsync(); 
+                }
+                else 
+                {
+                    // 恢复逻辑：如果扫码框为空，使用 MAN_ 前缀
+                    string input = ScanInputText?.Trim().ToUpper() ?? "";
+                    if (string.IsNullOrWhiteSpace(input))
+                    {
+                        CurrentOrderId = $"MAN_{DateTime.Now:HHmmss}";
+                    }
+                    else
+                    {
+                        CurrentOrderId = input;
+                    }
+                    
+                    await InternalStartRecordingAsync();
+                    ScanInputText = ""; // 启动录制后清空
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[ToggleRecording] 严重异常: {ex.Message}");
+            }
+            finally 
+            { 
+                _recorderLock.Release(); 
+            }
+        }
+
+        private async void HandleScan(string scanResult)
+        {
+            if (IsBusy || _isDisposed) { ScanInputText = ""; return; }
+            if (_isInputOnCooldown) { ScanInputText = ""; return; }
+
+            if (string.IsNullOrWhiteSpace(scanResult)) return;
+            string upperResult = scanResult.ToUpper().Trim();
+            
+            // 立即清空扫码框，防止重复触发
+            ScanInputText = ""; 
+
+            // 指令处理
+            if (upperResult.Contains("CLEAR") || upperResult.Contains("清除")) { ShowToast("🧹 扫码框已清除"); return; }
+            if (upperResult.Contains("SHIP") || upperResult.Contains("发货")) { CurrentMode = "发货"; StartInputCooldown(); ShowToast("切换为发货模式"); Speak("切换发货"); return; }
+            if (upperResult.Contains("BACK") || upperResult.Contains("退货")) { CurrentMode = "退货"; StartInputCooldown(); ShowToast("切换为退货模式"); Speak("切换退货"); return; }
+            if (upperResult.Contains("START") || upperResult.Contains("开始录制")) { ToggleRecording(); return; }
+            if (upperResult.Contains("STOP") || upperResult.Contains("停止录制")) { _ = SafeStopRecordingAsync(true); return; }
+
+            // 正则验证
+            try { if (!System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex)) { ShowToast("非法单号，已拦截"); Speak("非法单号"); return; } } catch { }
+
+            StartInputCooldown();
+            CurrentOrderId = upperResult;
+            if (IsRecording) _stopReason = "扫码切换";
+
+            if (!await _recorderLock.WaitAsync(0)) return;
+            try
+            {
+                if (IsRecording) await InternalStopRecordingAsync();
+                await InternalStartRecordingAsync();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[HandleScan] 严重异常: {ex.Message}");
+            }
+            finally
+            {
+                _recorderLock.Release();
+            }
+        }
+
+        private async void StartInputCooldown()
+        {
+            if (_isInputOnCooldown) return;
+            _isInputOnCooldown = true;
+            double cooldownMs = Config.BarcodeCooldownSeconds * 1000;
+            HideBarcode1Temporarily();
+            HideBarcode2Temporarily();
+            await Task.Delay((int)cooldownMs);
+            _isInputOnCooldown = false;
+        }
+
+        private async Task SafeStopRecordingAsync(bool isManual = false)
+        {
+            if (IsBusy || !IsRecording || _isDisposed) return;
+            if (!await _recorderLock.WaitAsync(0)) return;
+            try
+            {
+                await InternalStopRecordingAsync();
+                if (isManual)
+                {
+                    CurrentOrderId = "";
+                    ScanInputText = "";
+                    ShowToast("已手动停止录制");
+                    Speak("停止录制");
+                }
+            }
+            finally
+            {
+                _recorderLock.Release();
+            }
+        }
+        // =======================================================================
+
+        private async Task InternalStopRecordingAsync()
+        {
+            if (!IsRecording || _isDisposed) return;
+
+            IsBusy = true;
+            BusyText = "正在停止...";
+            IsRecording = false; // 1. 立即改变 UI 状态
+            _isScanning = false;
+            _delayBeforeZooming = false;
+            _isZooming = false;
+            _autoStopWarned = false;
+            _maxDurationWarned = false;
+
+            CancellationTokenSource oldCts;
+            BlockingCollection<Mat> oldQueue;
+            Task oldWriteTask;
+
+            lock (_videoLock)
+            {
+                oldCts = _writeCts;
+                oldQueue = _videoWriteQueue;
+                oldWriteTask = _writeTask;
+                _writeCts = null;
+                _videoWriteQueue = null;
+                _writeTask = null;
+            }
+
+            // 2. 停止生产
+            try { oldQueue?.CompleteAdding(); } catch { }
+            oldCts?.Cancel(); // 3. 通知 FFmpeg 线程停止
+
+            // 4. 等待录制线程真正退出（FFmpeg 进程关闭）
+            try
+            {
+                if (oldWriteTask != null)
+                {
+                    // 给 FFmpeg 3秒时间正常写入尾部信息并关闭
+                    var completedTask = await Task.WhenAny(oldWriteTask, Task.Delay(3000));
+                    if (completedTask != oldWriteTask)
+                    {
+                        Debug.WriteLine("[MainVM] FFmpeg 正常停止超时，执行强杀...");
+                        try 
+                        {
+                            if (_currentFfmpegProcess != null && !_currentFfmpegProcess.HasExited)
+                            {
+                                _currentFfmpegProcess.Kill();
+                                Debug.WriteLine("[MainVM] 僵尸 FFmpeg 已强杀！");
+                            }
+                        } 
+                        catch { }
+                        
+                        // 再等1秒确认彻底死亡
+                        await Task.WhenAny(oldWriteTask, Task.Delay(1000));
+                    }
+                }
+            }
+            catch { }
+
+            // 5. 彻底清空内存中的残余 Mat 对象 (防止泄漏的核心)
+            if (oldQueue != null)
+            {
+                while (oldQueue.TryTake(out var mat)) mat?.Dispose();
+                oldQueue.Dispose();
+            }
+            oldCts?.Dispose();
+
+            // 6. 保存元数据到数据库
+            var filePath = _currentVideoFilePath;
+            var videoCodec = _currentVideoCodec;
+            var videoEncoder = _currentVideoEncoder;
+            var recordStart = _recordStartTime;
+            var orderId = _recordingOrderId;
+            var mode = _recordingMode;
+            var stopReason = _stopReason;
+            var scanRecord = _currentScanRecord;
+            var recordId = _currentRecordId; 
+
+            _recordStartTime = DateTime.MinValue;
+            _currentScanRecord = null;
+            _currentVideoFilePath = null;
+            _currentVideoCodec = null;
+            _currentVideoEncoder = null;
+            _currentRecordId = 0;
+            _currentFfmpegProcess = null;
+
+            _lastFinalizeTask = Task.Run(() => 
+            {
+                if (_isDisposed) return; // 销毁中不再执行数据库后的 UI 更新
+                try
+                {
+                    long fileSize = File.Exists(filePath) ? new FileInfo(filePath).Length : 0;
+
+                    // 如果文件小于 50KB (比如启动报错或没数据)，作为异常数据丢弃
+                    if (fileSize < 1024 * 50)
+                    {
+                        try { if (File.Exists(filePath)) File.Delete(filePath); } catch { }
+                        _ = Application.Current.Dispatcher.InvokeAsync(() => {
+                            if (!_isDisposed) {
+                                _allLogs.Remove(scanRecord);
+                                FilteredLogs.Remove(scanRecord);
+                            }
+                        });
+                    }
+                    else
+                    {
+                        double dur = (DateTime.Now - recordStart).TotalSeconds;
+                        int durSec = (int)dur;
+                        if (durSec < 1) durSec = 1;
+                        string durStr = durSec < 60 ? $"{durSec}s" : $"{(int)durSec / 60}m {durSec % 60}s";
+
+                        _db?.UpdateVideoRecordOnStop(recordId, DateTime.Now, durSec, fileSize, stopReason, videoCodec, videoEncoder);
+
+                        _ = Application.Current.Dispatcher.InvokeAsync(() => {
+                            if (!_isDisposed && scanRecord != null)
+                            {
+                                scanRecord.Duration = "已保存";
+                                scanRecord.IsActive = false;
+                                RefreshTodayStats();
+                            }
+                        });
+                    }
+                }
+                catch { }
+            });
+            
+            // 如果是在关闭窗口时发生，不要解除 Busy，防止被再次点击
+            if (Application.Current?.MainWindow != null && !_isDisposed)
+            {
+                IsBusy = false;
+            }
+
+            if (_pendingCameraRestart && !_isDisposed)
+            {
+                _pendingCameraRestart = false;
+                RestartCamera();
+                ShowToast("摄像头配置已生效");
+            }
+        }
+
+        private async Task InternalStartRecordingAsync()
+        {
+            IsBusy = true;
+            BusyText = "正在启动...";
+
+            try
+            {
+                // 1. 彻底清理环境：如果系统残留了任何挂死的 ffmpeg，全部清掉
+                await Task.Run(() => {
+                    try {
+                        foreach (var p in Process.GetProcessesByName("ffmpeg")) 
+                        {
+                            if ((DateTime.Now - p.StartTime).TotalMinutes > 2) p.Kill();
+                        }
+                    } catch { }
+                });
+
+                // 2. 初始化路径和文件名
+                string baseFolder = Path.IsPathRooted(Config.VideoStoragePath) ? Config.VideoStoragePath : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Config.VideoStoragePath);
+                string dateFolder = Path.Combine(baseFolder, DateTime.Now.ToString("yyyy-MM-dd"));
+                if (!Directory.Exists(dateFolder)) Directory.CreateDirectory(dateFolder);
+
+                string fileName = $"{CurrentOrderId}_{DateTime.Now:yyyyMMdd_HHmmss}_{CurrentMode}.mkv";
+                string filePath = Path.Combine(dateFolder, fileName);
+                _currentVideoFilePath = filePath;
+                _stopReason = "手动";
+                _recordingOrderId = CurrentOrderId;
+                _recordingMode = CurrentMode;
+                _currentVideoCodec = Config.VideoCodec?.Trim().ToLowerInvariant() ?? "h264";
+                _currentVideoEncoder = ResolveEncoder();
+
+                string ffmpegPath = FindFFmpeg();
+                if (string.IsNullOrEmpty(ffmpegPath))
+                {
+                    ShowToast("⚠ 未找到 FFmpeg，无法录制");
+                    return;
+                }
+
+                // 3. 开启新的生产者-消费者通道
+                lock (_videoLock)
+                {
+                    _videoWriteQueue = new BlockingCollection<Mat>(60);
+                    _writeCts = new CancellationTokenSource();
+                }
+
+                // 4. 启动录制任务
+                _writeTask = Task.Run(() => BackgroundFFmpegRecordingLoop(filePath, ffmpegPath, _writeCts.Token));
+
+                // 5. 等待 250ms 给 FFmpeg 初始化。如果闪退，Task 会立刻完成
+                await Task.Delay(250); 
+                if (_writeTask.IsCompleted) 
+                {
+                    Debug.WriteLine("[MainVM] 启动检测：_writeTask 瞬间结束，说明 FFmpeg 启动失败");
+                    return; // 内部错误处理已经在 Loop 里面通过 Dispatcher 报错了，这里只需返回
+                }
+
+                IsRecording = true;
+                _recordStartTime = DateTime.Now;
+                _lastMotionTime = DateTime.Now;
+                _autoStopWarned = false;
+                _maxDurationWarned = false;
+                _previousCheckFrame?.Dispose();
+                _previousCheckFrame = new Mat();
+
+                // 6. 在数据库中创建记录占位符
+                _currentRecordId = _db?.InsertVideoRecord(_recordingOrderId, _recordingMode, _currentVideoCodec, _currentVideoEncoder, filePath, _recordStartTime) ?? 0;
+
+                ShowToast("▶ 开始录像");
+                Speak("开始录制");
+                _currentScanRecord = new ScanRecord(_recordingOrderId, "0s", DateTime.Now.ToString("HH:mm:ss"), _recordingMode, true);
+                AddRecord(_currentScanRecord);
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
 
         public void ShowToast(string message) { Application.Current.Dispatcher.InvokeAsync(async () => { _toastCts?.Cancel(); _toastCts = new CancellationTokenSource(); var token = _toastCts.Token; ToastMessage = message; IsToastVisible = true; try { await Task.Delay(2500, token); } catch (OperationCanceledException) { return; } IsToastVisible = false; }); }
 
@@ -406,7 +746,6 @@ namespace ExpressPackingMonitoring.ViewModels
                 ShowToast("⏳ 编码器环境检测中，请稍后打开设置...");
                 return;
             }
-
             try
             {
                 var clonedConfig = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(Config)) ?? new AppConfig();
@@ -461,18 +800,6 @@ namespace ExpressPackingMonitoring.ViewModels
             statsWin.ShowDialog();
         }
 
-        private void StartRecordingManual()
-        {
-            if (IsRecording) return;
-            string input = ScanInputText?.Trim().ToUpper() ?? "";
-            if (string.IsNullOrWhiteSpace(input) || input.Contains("CMD_") || input.Contains("MODE_") || input.Contains("发货") || input.Contains("退货") || input.Contains("录制"))
-                CurrentOrderId = $"MAN_{DateTime.Now:HHmmss}";
-            else CurrentOrderId = input;
-            StartRecordingProcess();
-        }
-
-        private void StopRecordingManual() { if (!IsRecording) return; StopRecording(); CurrentOrderId = ""; ScanInputText = ""; ShowToast("已手动停止录制"); Speak("停止录制"); }
-
         private void OpenPlaybackWindow()
         {
             string folderPath = Path.IsPathRooted(Config.VideoStoragePath) ? Config.VideoStoragePath : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Config.VideoStoragePath);
@@ -496,7 +823,8 @@ namespace ExpressPackingMonitoring.ViewModels
             _videoTask = Task.Run(() => VideoProcessLoop(_cts.Token), _cts.Token);
             Task.Run(CheckDiskAndCleanup);
         }
-        private void RestartCamera() { StopRecording(); StopCamera(); StartCamera(); }
+
+        private void RestartCamera() { _ = SafeStopRecordingAsync(); StopCamera(); StartCamera(); }
 
         private void StartCamera()
         {
@@ -556,6 +884,7 @@ namespace ExpressPackingMonitoring.ViewModels
             }
             lock (_frameLock) { _latestFrame?.Dispose(); _latestFrame = null; }
         }
+        
         private void VideoSource_NewFrame(object sender, NewFrameEventArgs eventArgs) { try { Mat newMat = BitmapToMat(eventArgs.Frame); lock (_frameLock) { _latestFrame?.Dispose(); _latestFrame = newMat; } } catch { } }
 
         private Mat BitmapToMat(Bitmap bitmap)
@@ -600,7 +929,8 @@ namespace ExpressPackingMonitoring.ViewModels
 
                         if (IsRecording && _videoWriteQueue != null && !_videoWriteQueue.IsAddingCompleted)
                         {
-                            // 如果后台录制任务已经报错停止（Task 已完成但不是因为取消请求）
+                            // === 防熔断检查机制 ===
+                            // 如果后台任务意外报错结束，绝对不要继续往队列塞数据
                             if (_writeTask != null && _writeTask.IsCompleted)
                             {
                                 // 这种情况下不应该继续填充队列
@@ -610,20 +940,23 @@ namespace ExpressPackingMonitoring.ViewModels
                             try
                             {
                                 var clone = processedFrame.Clone();
-                                // 修改：使用 TryAdd 并设置极短的超时（例如 100ms）
-                                // 如果 5ms 进不去队列，说明磁盘或编码器卡了，直接丢弃这一帧，保住预览不卡死
+                                // === 防卡死核心机制 ===
+                                // 给队列的塞入设定 5ms 极限超时。如果 5ms 放不进去，证明后台卡住了。
+                                // 此时宁可抛弃这一帧，也绝对不能让当前的 UI/预览线程被挂起！
                                 if (!_videoWriteQueue.TryAdd(clone, 5))
                                 {
                                     clone.Dispose();
                                 }
                             }
-                            catch (ObjectDisposedException) { }
-                            catch (InvalidOperationException) { }
+                            catch { } // 忽略对象被清理时的异常
                         }
 
                         var bitmap = processedFrame.ToWriteableBitmap();
                         bitmap.Freeze();
-                        _ = Application.Current.Dispatcher.BeginInvoke(() => { VideoFrame = bitmap; });
+                        _ = Application.Current.Dispatcher.BeginInvoke(() => { 
+                            if (_isDisposed) return;
+                            VideoFrame = bitmap; 
+                        });
                         if (frameTickCounter % 30 == 0) PerformMotionDetection(currentFrame);
                         if (processedFrame != currentFrame) processedFrame.Dispose(); currentFrame.Dispose();
                     }
@@ -679,10 +1012,30 @@ namespace ExpressPackingMonitoring.ViewModels
                         }
 
                         if (!inGracePeriod && Config.EnableAutoStop && (DateTime.Now - _lastMotionTime).TotalSeconds >= Config.AutoStopMinutes * 60.0)
-                        { _stopReason = "静止超时"; _ = Application.Current.Dispatcher.InvokeAsync(() => { StopRecording(); ShowToast("画面静止超时，自动停录"); Speak("静止超时，停止录制"); CurrentOrderId = ""; ScanInputText = ""; }); }
+                        { 
+                            _stopReason = "静止超时"; 
+                            _ = Application.Current.Dispatcher.InvokeAsync(async () => { 
+                                if (_isDisposed) return;
+                                await SafeStopRecordingAsync(); 
+                                ShowToast("画面静止超时，自动停录"); 
+                                Speak("静止超时，停止录制"); 
+                                CurrentOrderId = ""; 
+                                ScanInputText = ""; 
+                            }); 
+                        }
 
                         if (!inGracePeriod && Config.EnableMaxDuration && elapsedSec >= Config.MaxDurationMinutes * 60.0)
-                        { _stopReason = "时长超时"; _ = Application.Current.Dispatcher.InvokeAsync(() => { StopRecording(); ShowToast("⏳ 已达最大录像限制时长"); Speak("时长超时，停止录制"); CurrentOrderId = ""; ScanInputText = ""; }); }
+                        { 
+                            _stopReason = "时长超时"; 
+                            _ = Application.Current.Dispatcher.InvokeAsync(async () => { 
+                                if (_isDisposed) return;
+                                await SafeStopRecordingAsync(); 
+                                ShowToast("⏳ 已达最大录像限制时长"); 
+                                Speak("时长超时，停止录制"); 
+                                CurrentOrderId = ""; 
+                                ScanInputText = ""; 
+                            }); 
+                        }
                     }
 
                     frameTickCounter++;
@@ -701,144 +1054,10 @@ namespace ExpressPackingMonitoring.ViewModels
             using var diff = new Mat(); using var thresh = new Mat();
             Cv2.Absdiff(cGray, pGray, diff); Cv2.Threshold(diff, thresh, Config.MotionDetectThreshold, 255, ThresholdTypes.Binary);
             double changeRatio = (double)Cv2.CountNonZero(thresh) / (thresh.Width * thresh.Height);
-            if (changeRatio > 0.01)
-            {
-                _lastMotionTime = DateTime.Now;
-            }
+            if (changeRatio > 0.01) { _lastMotionTime = DateTime.Now; }
             currentFrame.CopyTo(_previousCheckFrame);
         }
 
-        private void HandleScan(string scanResult)
-        {
-            // 1. 如果处于冷却期，直接清空输入并拦截
-            if (_isInputOnCooldown)
-            {
-                ScanInputText = "";
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(scanResult)) return;
-            string upperResult = scanResult.ToUpper().Trim();
-
-            // 指令处理
-            if (upperResult.Contains("CLEAR") || upperResult.Contains("清除")) { ScanInputText = ""; ShowToast("🧹 扫码框已清除"); return; }
-            if (upperResult.Contains("SHIP") || upperResult.Contains("发货")) { CurrentMode = "发货"; ScanInputText = ""; StartInputCooldown(); ShowToast("切换为发货模式"); Speak("切换发货"); return; }
-            if (upperResult.Contains("BACK") || upperResult.Contains("退货")) { CurrentMode = "退货"; ScanInputText = ""; StartInputCooldown(); ShowToast("切换为退货模式"); Speak("切换退货"); return; }
-            if (upperResult.Contains("START") || upperResult.Contains("开始录制")) { ScanInputText = ""; ToggleRecording(); return; } // ToggleRecording 内部会触发冷却
-            if (upperResult.Contains("STOP") || upperResult.Contains("停止录制")) { ScanInputText = ""; StopRecordingManual(); return; }
-
-            // 正则验证
-            try { if (!System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex)) { ScanInputText = ""; ShowToast("非法单号，已拦截"); Speak("非法单号"); return; } } catch { }
-
-            // 2. 触发冷却并执行录制转换
-            StartInputCooldown();
-            CurrentOrderId = upperResult;
-            if (IsRecording) _stopReason = "扫码切换";
-            StartRecordingProcess();
-        }
-
-        // 新增：启动输入冷却控制
-        private async void StartInputCooldown()
-        {
-            if (_isInputOnCooldown) return;
-            _isInputOnCooldown = true;
-
-            // 复用配置中的冷却秒数
-            double cooldownMs = Config.BarcodeCooldownSeconds * 1000;
-
-            // 启动定时任务清除冷却状态
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay((int)cooldownMs);
-                _isInputOnCooldown = false;
-            });
-
-            // 同时触发原有条码图标的隐藏逻辑
-            HideBarcode1Temporarily();
-            HideBarcode2Temporarily();
-        }
-
-        private async void StartRecordingProcess()
-        {
-            if (IsRecording)
-            {
-                StopRecording();
-                // 强制等待 300ms，给系统和 GPU 释放资源的时间
-                await Task.Delay(300);
-            }
-
-            // 重置状态
-            IsRecording = true;
-            _lastMotionTime = DateTime.Now;
-            _lastScanTime = DateTime.Now;
-            _recordStartTime = DateTime.Now;
-            _isScanning = true;
-            _delayBeforeZooming = true;
-            _isZooming = false;
-            _autoStopWarned = false;
-            _maxDurationWarned = false;
-            // 重置参考帧，避免旧帧与新帧比较产生假运动
-            _previousCheckFrame?.Dispose();
-            _previousCheckFrame = new Mat();
-            ScanInputText = "";
-
-            string baseFolder = Path.IsPathRooted(Config.VideoStoragePath) ? Config.VideoStoragePath : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Config.VideoStoragePath);
-            string dateFolder = Path.Combine(baseFolder, DateTime.Now.ToString("yyyy-MM-dd"));
-            if (!Directory.Exists(dateFolder)) Directory.CreateDirectory(dateFolder);
-
-            string fileName = $"{CurrentOrderId}_{DateTime.Now:yyyyMMdd_HHmmss}_{CurrentMode}.mkv";
-            string filePath = Path.Combine(dateFolder, fileName);
-            _currentVideoFilePath = filePath;
-            _stopReason = "手动";
-            _recordingOrderId = CurrentOrderId;
-            _recordingMode = CurrentMode;
-            _currentVideoCodec = Config.VideoCodec?.Trim().ToLowerInvariant() ?? "h264";
-            _currentVideoEncoder = ResolveEncoder();
-
-            string ffmpegPath = FindFFmpeg();
-            if (string.IsNullOrEmpty(ffmpegPath))
-            {
-                IsRecording = false;
-                ShowToast("⚠ 未找到 FFmpeg，无法录制");
-                Speak("编码器不可用");
-                return;
-            }
-
-            // 关键点：在启动前，先尝试清理可能残留的 ffmpeg 僵尸进程
-            // 特别是针对上一个视频是长视频的情况
-            await Task.Run(() =>
-            {
-                try
-                {
-                    var processes = Process.GetProcessesByName("ffmpeg");
-                    foreach (var p in processes)
-                    {
-                        // 如果进程已经运行很久了（可能是残留），杀掉它
-                        if ((DateTime.Now - p.StartTime).TotalMinutes > 5) p.Kill();
-                    }
-                }
-                catch { }
-            });
-
-            // 启动新的 FFmpeg 线程
-            lock (_videoLock)
-            {
-                _writeCts = new CancellationTokenSource();
-                _videoWriteQueue = new BlockingCollection<Mat>(boundedCapacity: 60);
-                _writeTask = Task.Run(() => BackgroundFFmpegRecordingLoop(filePath, ffmpegPath, _writeCts.Token));
-            }
-
-            ShowToast("▶ 开始录像");
-            Speak("开始录制");
-            // 设置 IsActive 为 true，触发红色高亮
-            _currentScanRecord = new ScanRecord(CurrentOrderId, "0s", DateTime.Now.ToString("HH:mm:ss"), CurrentMode, true);
-            AddRecord(_currentScanRecord);
-        }
-
-        /// <summary>
-        /// 主录制模式：通过管道将原始帧数据写入 FFmpeg，同时由 FFmpeg 录制麦克风音频，
-        /// 一次性输出带声音的 mp4，无需后期合并。
-        /// </summary>
         private void BackgroundFFmpegRecordingLoop(string filePath, string ffmpegPath, CancellationToken token)
         {
             int w = Config.FrameWidth;
@@ -848,7 +1067,6 @@ namespace ExpressPackingMonitoring.ViewModels
             bool hasAudio = Config.EnableAudioRecording && !string.IsNullOrEmpty(Config.AudioDeviceName);
             string requestedEncoder = encoder;
 
-            // 仅使用用户选定的编码器进行录制，不进行自动回退
             var (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, encoder, hasAudio);
             
             if (ok)
@@ -860,7 +1078,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 return;
             }
 
-            // 全部失败或用户取消
+            // 如果失败，强制重置 UI 状态
             if (!token.IsCancellationRequested)
             {
                 try { if (File.Exists(filePath) && new FileInfo(filePath).Length == 0) File.Delete(filePath); } catch { }
@@ -868,8 +1086,8 @@ namespace ExpressPackingMonitoring.ViewModels
 
                 _ = Application.Current.Dispatcher.BeginInvoke(() =>
                 {
-                    // --- 核心修复：立即重置 UI 状态 ---
                     IsRecording = false;
+                    IsBusy = false; // 释放 Busy 状态
                     CurrentOrderId = "";
                     ScanInputText = "";
 
@@ -880,6 +1098,8 @@ namespace ExpressPackingMonitoring.ViewModels
                         {
                             _videoWriteQueue.CompleteAdding();
                             while (_videoWriteQueue.TryTake(out var m)) m?.Dispose();
+                            _videoWriteQueue.Dispose();
+                            _videoWriteQueue = null;
                         }
                     }
 
@@ -935,7 +1155,9 @@ namespace ExpressPackingMonitoring.ViewModels
                 ffmpeg = Process.Start(psi);
                 if (ffmpeg == null) return (false, "FFmpeg 进程启动失败");
 
-                // 异步捕获 stderr
+                // 将进程保存为全局变量，允许从外部强制 Kill
+                _currentFfmpegProcess = ffmpeg;
+
                 var stderrTask = Task.Run(() => { try { return ffmpeg.StandardError.ReadToEnd(); } catch { return ""; } });
 
                 // 短暂等待检测 FFmpeg 是否立即崩溃（编码器不支持等）
@@ -995,12 +1217,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     if (pipeError) break;
                 }
 
-                try
-                {
-                    stdin?.Close();
-                    stdinClosed = true;
-                }
-                catch { }
+                try { stdin?.Close(); stdinClosed = true; } catch { }
 
                 if (ffmpeg != null && !ffmpeg.HasExited)
                 {
@@ -1128,7 +1345,6 @@ namespace ExpressPackingMonitoring.ViewModels
             }
 
             args += " -muxdelay 0 -muxpreload 0";
-
             args += $" \"{filePath}\"";
             return args;
         }
@@ -1151,7 +1367,6 @@ namespace ExpressPackingMonitoring.ViewModels
                 double trimStartSec = Math.Abs(offsetMs) / 1000.0;
                 return $"atrim=start={trimStartSec:0.###},asetpts=PTS-STARTPTS,aresample=async=1:first_pts=0";
             }
-
             return "aresample=async=1:first_pts=0";
         }
 
@@ -1419,117 +1634,6 @@ namespace ExpressPackingMonitoring.ViewModels
             catch { }
         }
 
-        private void StopRecording()
-        {
-            if (!IsRecording) return;
-
-            // 1. 立即设置状态，停止数据流入
-            IsRecording = false;
-            _isScanning = false;
-            _delayBeforeZooming = false;
-            _isZooming = false;
-            _autoStopWarned = false;
-            _maxDurationWarned = false;
-
-            // 2. 将当前的录制资源抓取到局部变量，然后立即清空全局引用
-            // 这一步是关键：防止新录制启动时还在用旧的 CTS 或 Queue
-            CancellationTokenSource oldCts;
-            BlockingCollection<Mat> oldQueue;
-            Task oldWriteTask;
-
-            lock (_videoLock)
-            {
-                oldCts = _writeCts;
-                oldQueue = _videoWriteQueue;
-                oldWriteTask = _writeTask;
-
-                _writeCts = null;
-                _videoWriteQueue = null;
-                _writeTask = null;
-            }
-
-            // 3. 通知旧队列停止接收数据
-            try { oldQueue?.CompleteAdding(); } catch { }
-            oldCts?.Cancel();
-
-            // 4. 获取必要的元数据用于保存数据库
-            var filePath = _currentVideoFilePath;
-            var videoCodec = _currentVideoCodec;
-            var videoEncoder = _currentVideoEncoder;
-            var recordStart = _recordStartTime;
-            var orderId = _recordingOrderId;
-            var mode = _recordingMode;
-            var stopReason = _stopReason;
-            var scanRecord = _currentScanRecord;
-
-            _recordStartTime = DateTime.MinValue;
-            _currentScanRecord = null;
-            _currentVideoFilePath = null;
-            _currentVideoCodec = null;
-            _currentVideoEncoder = null;
-
-            // 5. 后台执行收尾，但不再阻塞主线程
-            _lastFinalizeTask = Task.Run(() =>
-            {
-                try
-                {
-                    // 给旧进程最多 5 秒收尾时间，如果收不掉就强制杀掉
-                    oldWriteTask?.Wait(5000);
-                }
-                catch { }
-
-                FinalizeRecording(oldWriteTask, oldCts, oldQueue,
-                    filePath, videoCodec, videoEncoder, recordStart, orderId, mode, stopReason, scanRecord);
-            });
-
-            // 录制中修改过摄像头配置，延迟到现在生效
-            if (_pendingCameraRestart)
-            {
-                _pendingCameraRestart = false;
-                RestartCamera();
-                ShowToast("摄像头配置已生效");
-            }
-        }
-
-        /// <summary>后台完成录制收尾：等待 FFmpeg 退出、清理资源、写入数据库</summary>
-        private void FinalizeRecording(Task writeTask, CancellationTokenSource cts, BlockingCollection<Mat> queue,
-            string filePath, string videoCodec, string videoEncoder, DateTime recordStart, string orderId, string mode, string stopReason, ScanRecord scanRecord)
-        {
-            try { writeTask?.Wait(15000); } catch { }
-            cts?.Dispose();
-            if (queue != null)
-            {
-                while (queue.TryTake(out var leftover)) leftover?.Dispose();
-                queue.Dispose();
-            }
-
-            var duration = recordStart.Year > 2000 ? (DateTime.Now - recordStart) : TimeSpan.Zero;
-            if (duration.TotalSeconds > 0)
-            {
-                if (scanRecord != null)
-                {
-                    _ = Application.Current?.Dispatcher?.InvokeAsync(() =>
-                    {
-                        scanRecord.Duration = $"{(int)duration.TotalSeconds}s";
-                        scanRecord.IsActive = false;
-                    });
-                }
-
-                try
-                {
-                    if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
-                    {
-                        long fileSize = new FileInfo(filePath).Length;
-                        long id = _db?.InsertVideoRecord(orderId, mode, videoCodec, videoEncoder, filePath, recordStart) ?? 0;
-                        _db?.UpdateVideoRecordOnStop(id, DateTime.Now, duration.TotalSeconds, fileSize, stopReason, videoCodec, videoEncoder);
-                    }
-                }
-                catch { }
-
-                _ = Application.Current?.Dispatcher?.InvokeAsync(() => RefreshTodayStats());
-            }
-        }
-
         private void ForceCheckDiskAndCleanup()
         {
             Task.Run(() =>
@@ -1662,12 +1766,29 @@ namespace ExpressPackingMonitoring.ViewModels
         private async Task CheckDiskAndCleanup() { while (!_cts.Token.IsCancellationRequested) { ForceCheckDiskAndCleanup(); int interval = IsRecording ? 10000 : 60000; await Task.Delay(interval, _cts.Token); } }
         public void Dispose()
         {
+            _isDisposed = true; // 标记正在销毁，拦截所有异步 UI 回调
             _cts?.Cancel();
             _stopReason = "程序退出";
-            StopRecording();
+
+            // 强制同步等待停止
+            try
+            {
+                if (IsRecording)
+                {
+                    // 暴力停止：直接切断管道并尝试给 2 秒退出时间
+                    _videoWriteQueue?.CompleteAdding();
+                    _writeCts?.Cancel();
+                    _writeTask?.Wait(2000);
+                    if (_currentFfmpegProcess != null && !_currentFfmpegProcess.HasExited)
+                    {
+                        try { _currentFfmpegProcess.Kill(); } catch { }
+                    }
+                }
+            }
+            catch { }
+
             StopCamera();
-            try { _videoTask?.Wait(3000); } catch { }
-            try { _lastFinalizeTask?.Wait(15000); } catch { }
+            try { _videoTask?.Wait(1000); } catch { }
             _cts?.Dispose();
             lock (_videoLock) { _previousCheckFrame?.Dispose(); }
             lock (_speechLock) { _speechSynth?.Dispose(); _speechSynth = null; }
