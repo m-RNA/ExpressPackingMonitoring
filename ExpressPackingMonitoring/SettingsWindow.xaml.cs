@@ -316,16 +316,15 @@ namespace ExpressPackingMonitoring
         {
             var dialog = new Microsoft.Win32.OpenFolderDialog
             {
-                Title = "请选择视频保存的文件夹",
-                // 指向我的电脑，避免网络驱动器引发卡顿
-                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyComputer)
+                Title = "选择视频存储位置",
+                InitialDirectory = Config.VideoStoragePath,
+                Multiselect = false
             };
 
-            // 加上 this，强行把弹窗绑定在设置界面正上方，绝对不会跑到后台导致假死！
             if (dialog.ShowDialog(this) == true)
             {
                 Config.VideoStoragePath = dialog.FolderName;
-                PathTextBox.Text = dialog.FolderName;
+                PathTextBox.Text = dialog.FolderName; // 同步 UI
             }
         }
 
