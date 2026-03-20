@@ -376,6 +376,7 @@ namespace ExpressPackingMonitoring.ViewModels
             // 正则验证
             try { if (!System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex)) { ShowToast("非法单号，已拦截"); Speak("非法单号"); return; } } catch { }
 
+            _lastScanTime = DateTime.Now;
             StartInputCooldown();
             CurrentOrderId = upperResult;
             if (IsRecording) _stopReason = "扫码切换";
