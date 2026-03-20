@@ -151,6 +151,67 @@ namespace ExpressPackingMonitoring.ViewModels
             }
         }
 
+        private string ResolveBestStoragePath()
+        {
+            if (Config.StorageLocations == null || Config.StorageLocations.Count == 0)
+            {
+                return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Videos");
+            }
+
+            var orderedLocations = Config.StorageLocations
+                .Where(x => !string.IsNullOrWhiteSpace(x.Path))
+                .OrderBy(x => x.Priority)
+                .ToList();
+
+            if (orderedLocations.Count == 0)
+            {
+                return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Videos");
+            }
+
+            foreach (var loc in orderedLocations)
+            {
+                try
+                {
+                    string normalizedPath = Path.IsPathRooted(loc.Path)
+                        ? loc.Path
+                        : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, loc.Path);
+
+                    if (!Directory.Exists(normalizedPath))
+                        Directory.CreateDirectory(normalizedPath);
+
+                    long usedBytesInPath = 0;
+                    var dirInfo = new DirectoryInfo(normalizedPath);
+                    foreach (var file in dirInfo.EnumerateFiles("*.mkv", SearchOption.AllDirectories))
+                    {
+                        usedBytesInPath += file.Length;
+                    }
+
+                    double usedGB = usedBytesInPath / 1073741824.0;
+
+                    string root = Path.GetPathRoot(Path.GetFullPath(normalizedPath));
+                    if (string.IsNullOrEmpty(root)) continue;
+
+                    var drive = new DriveInfo(root);
+                    if (!drive.IsReady) continue;
+
+                    long safeBuffer = (long)Math.Max(2147483648, drive.TotalSize * 0.05);
+
+                    if (usedGB < loc.QuotaGB && drive.AvailableFreeSpace > safeBuffer)
+                    {
+                        return normalizedPath;
+                    }
+                }
+                catch
+                {
+                    continue;
+                }
+            }
+
+            var fallback = orderedLocations[0].Path;
+            if (Path.IsPathRooted(fallback)) return fallback;
+            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, fallback);
+        }
+
         private async Task InternalStartRecordingAsync()
         {
             IsBusy = true;
@@ -169,7 +230,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 });
 
                 // 2. 初始化路径和文件名
-                string baseFolder = Path.IsPathRooted(Config.VideoStoragePath) ? Config.VideoStoragePath : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Config.VideoStoragePath);
+                string baseFolder = ResolveBestStoragePath();
                 string dateFolder = Path.Combine(baseFolder, DateTime.Now.ToString("yyyy-MM-dd"));
                 if (!Directory.Exists(dateFolder)) Directory.CreateDirectory(dateFolder);
 

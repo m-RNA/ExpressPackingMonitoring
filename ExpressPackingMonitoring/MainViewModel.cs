@@ -530,7 +530,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private void OpenPlaybackWindow()
         {
-            string folderPath = Path.IsPathRooted(Config.VideoStoragePath) ? Config.VideoStoragePath : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Config.VideoStoragePath);
+            string folderPath = ResolveBestStoragePath();
             if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
             try
             {

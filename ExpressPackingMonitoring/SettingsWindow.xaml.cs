@@ -48,11 +48,27 @@ namespace ExpressPackingMonitoring
             ZoomScaleComboBox.ItemsSource = new List<double> { 1.2, 1.5, 2.0, 2.5, 3.0, 4.0 };
             if (!ZoomScaleComboBox.Items.Contains(Config.ZoomScale)) Config.ZoomScale = 1.5;
 
+            EnsurePrimaryStorageLocationExists();
+            // 如果没有数据项，构造1个默认项，UI DataGrid 绑定后自动显示
+            if (Config.StorageLocations.Count == 0)
+            {
+                Config.StorageLocations.Add(new StorageLocation());
+            }
+
             // 从注册表读取实际的开机自启动状态
             Config.AutoStartOnBoot = IsAutoStartEnabled();
 
             // 窗口加载后异步枚举设备，避免阻塞UI线程
             this.Loaded += SettingsWindow_Loaded;
+        }
+
+        private void EnsurePrimaryStorageLocationExists()
+        {
+            if (Config.StorageLocations == null) Config.StorageLocations = new List<StorageLocation>();
+            if (Config.StorageLocations.Count == 0)
+            {
+                Config.StorageLocations.Add(new StorageLocation());
+            }
         }
 
         private async void SettingsWindow_Loaded(object sender, RoutedEventArgs e)
@@ -314,32 +330,111 @@ namespace ExpressPackingMonitoring
 
         private void BtnBrowsePath_Click(object sender, RoutedEventArgs e)
         {
+            EnsurePrimaryStorageLocationExists();
+            var primary = Config.StorageLocations[0];
+            var initialDir = !string.IsNullOrWhiteSpace(primary.Path) ? primary.Path : AppDomain.CurrentDomain.BaseDirectory;
+
             var dialog = new Microsoft.Win32.OpenFolderDialog
             {
                 Title = "选择视频存储位置",
-                InitialDirectory = Config.VideoStoragePath,
+                InitialDirectory = initialDir,
                 Multiselect = false
             };
 
             if (dialog.ShowDialog(this) == true)
             {
-                Config.VideoStoragePath = dialog.FolderName;
-                PathTextBox.Text = dialog.FolderName; // 同步 UI
+                primary.Path = dialog.FolderName;
+            }
+        }
+
+        private void BtnAddStorage_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.OpenFolderDialog
+            {
+                Title = "选择新的视频存储位置",
+                Multiselect = false
+            };
+
+            if (dialog.ShowDialog(this) == true)
+            {
+                string selectedPath = dialog.FolderName;
+                if (Config.StorageLocations.Any(x => x.Path.Equals(selectedPath, StringComparison.OrdinalIgnoreCase)))
+                {
+                    MessageBox.Show("该路径已在列表中。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                int nextPriority = Config.StorageLocations.Count > 0 ? Config.StorageLocations.Max(x => x.Priority) + 1 : 0;
+                Config.StorageLocations.Add(new StorageLocation
+                {
+                    Path = selectedPath,
+                    QuotaGB = 500.0,
+                    Priority = nextPriority
+                });
+
+                StorageDataGrid.Items.Refresh();
+            }
+        }
+
+        private void BtnRemoveStorage_Click(object sender, RoutedEventArgs e)
+        {
+            if (StorageDataGrid.SelectedItem is StorageLocation selected)
+            {
+                if (Config.StorageLocations.Count <= 1)
+                {
+                    MessageBox.Show("至少需要保留一个存储路径。", "警告", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                var result = MessageBox.Show($"确定要移除路径: {selected.Path} 吗？\n注意：此操作不会删除物理文件，但系统将不再管理该目录。",
+                                             "确认移除", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (result == MessageBoxResult.Yes)
+                {
+                    Config.StorageLocations.Remove(selected);
+                    StorageDataGrid.Items.Refresh();
+                }
+            }
+            else
+            {
+                MessageBox.Show("请先在列表中选中要移除的行。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
 
         private void BtnSave_Click(object sender, RoutedEventArgs e)
         {
-            if (ResComboBox.SelectedItem is ResOption selectedRes) { Config.FrameWidth = selectedRes.Width; Config.FrameHeight = selectedRes.Height; }
-            if (FpsComboBox.SelectedItem is ComboBoxItem fpsItem && fpsItem.Tag is int fps) { Config.Fps = fps; }
-            if (GpuEncoderComboBox.SelectedItem is GpuEncoderOption gpuOpt) { Config.GpuEncoder = gpuOpt.Value; }
-            if (VideoCodecComboBox.SelectedItem is GpuEncoderOption codecOpt) { Config.VideoCodec = codecOpt.Value; }
+            // 1. 强制提交 DataGrid 中的未完成编辑
+            StorageDataGrid.CommitEdit(DataGridEditingUnit.Row, true);
+            StorageDataGrid.CommitEdit(DataGridEditingUnit.Cell, true);
 
+            // 2. 手动同步部分控件（防止可焦点未切换时绑定未更新）
+            if (ResComboBox.SelectedItem is ResOption selectedRes)
+            {
+                Config.FrameWidth = selectedRes.Width;
+                Config.FrameHeight = selectedRes.Height;
+            }
+
+            if (FpsComboBox.SelectedItem is ComboBoxItem fpsItem && fpsItem.Tag is int fps)
+            {
+                Config.Fps = fps;
+            }
+
+            if (GpuEncoderComboBox.SelectedItem is GpuEncoderOption gpuOpt)
+            {
+                Config.GpuEncoder = gpuOpt.Value;
+            }
+
+            if (VideoCodecComboBox.SelectedItem is GpuEncoderOption codecOpt)
+            {
+                Config.VideoCodec = codecOpt.Value;
+            }
+
+            // 3. 校验并保存
             if (!ValidateEncoderSelectionBeforeSave())
                 return;
 
             ApplyAutoStart(Config.AutoStartOnBoot);
-            this.DialogResult = true; this.Close();
+            this.DialogResult = true;
+            this.Close();
         }
 
         private bool ValidateEncoderSelectionBeforeSave()

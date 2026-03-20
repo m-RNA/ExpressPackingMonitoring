@@ -8,6 +8,29 @@
         Background="{DynamicResource WindowBackground}" FontFamily="Microsoft YaHei UI, Segoe UI">
 
     <Window.Resources>
+        <!-- 【必需】1. GroupTitle: 用于每个页签顶部的巨大标题 -->
+        <Style x:Key="GroupTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="24"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Margin" Value="0,0,0,25"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+        </Style>
+
+        <!-- 【必需】2. SectionHeader: 用于小组标题（如“磁盘矩阵”、“识别规则”） -->
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Margin" Value="0,15,0,10"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+        </Style>
+
+        <!-- 【必需】3. SettingRow: 用于每一行设置项的容器边框 -->
+        <Style x:Key="SettingRow" TargetType="Border">
+            <Setter Property="Padding" Value="0,15"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderLight}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        </Style>
+
         <Style TargetType="ComboBoxItem">
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -63,27 +86,6 @@
             <Setter Property="Background" Value="{DynamicResource PanelBackground}"/>
         </Style>
 
-        <Style x:Key="PrimaryActionButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="32"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Background" Value="{DynamicResource AccentBlueDark}"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Padding" Value="16,0"/>
-        </Style>
-
-        <Style x:Key="SecondaryActionButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="32"/>
-            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}"/>
-            <Setter Property="Background" Value="{DynamicResource PanelBackground}"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Padding" Value="16,0"/>
-        </Style>
-
         <Style x:Key="SectionCardStyle" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource PanelBackground}"/>
             <Setter Property="CornerRadius" Value="8"/>
@@ -128,6 +130,42 @@
                     <Setter Property="Opacity" Value="0.58"/>
                 </Trigger>
             </Style.Triggers>
+        </Style>
+
+        <!-- 5. 按钮基础样式 -->
+        <Style x:Key="PrimaryActionButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Background" Value="{DynamicResource AccentBlue}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SecondaryActionButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style x:Key="ToggleSwitchStyle" TargetType="CheckBox">
@@ -712,93 +750,107 @@
                     </ScrollViewer>
                 </Border>
             </TabItem>
+        <!-- TAB 4: 存储管理 -->
+        <TabItem Header="存储管理">
+            <ScrollViewer Padding="40,35">
+                <StackPanel>
+                    <!-- 第一部分：磁盘矩阵 -->
+                    <TextBlock Text="磁盘阵列配置" Style="{StaticResource SectionHeader}"/>
+                    <TextBlock Text="* 系统按优先级(Priority)从小到大写入。若全部满，自动清理全局最旧录像。" 
+                            FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,12"/>
 
-            <TabItem Header="存储空间">
-                <Border Background="Transparent" Padding="0,4,0,0">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel>
-                            <Border Style="{StaticResource SectionCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Text="存储与检索" Style="{StaticResource SectionTitleStyle}"/>
-                                    <TextBlock Text="建议将路径设置到本地磁盘，并结合磁盘配额控制历史视频总量。"
-                                               Style="{StaticResource SectionHintStyle}"/>
-                                    <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,12,0,12"/>
+                    <Border BorderBrush="{DynamicResource BorderDefault}" BorderThickness="1" CornerRadius="8" Background="{DynamicResource ControlBackground}">
+                        <DataGrid x:Name="StorageDataGrid"
+                                ItemsSource="{Binding Config.StorageLocations}"
+                                AutoGenerateColumns="False" 
+                                CanUserAddRows="False"
+                                HeadersVisibility="Column"
+                                GridLinesVisibility="Horizontal"
+                                HorizontalGridLinesBrush="{DynamicResource BorderLight}"
+                                BorderThickness="0"
+                                Background="Transparent"
+                                RowHeight="50"
+                                FontSize="13"
+                                SelectionMode="Single"
+                                CanUserSortColumns="False">
+                            <!-- 表头样式：统一风格 -->
+                            <DataGrid.ColumnHeaderStyle>
+                                <Style TargetType="DataGridColumnHeader">
+                                    <Setter Property="Background" Value="{DynamicResource BorderLight}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                                    <Setter Property="Padding" Value="12,10"/>
+                                    <Setter Property="FontWeight" Value="Bold"/>
+                                    <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource BorderDefault}"/>
+                                </Style>
+                            </DataGrid.ColumnHeaderStyle>
+                            <!-- 行样式：去掉选中时的深蓝色，改为浅色高亮 -->
+                            <DataGrid.RowStyle>
+                                <Style TargetType="DataGridRow">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource ControlBackgroundHover}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.RowStyle>
+                            
+                            <DataGrid.Columns>
+                                <!-- 路径展示 -->
+                                <DataGridTemplateColumn Header="存储路径" Width="*">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Path}" VerticalAlignment="Center" Margin="12,0" 
+                                                    TextTrimming="CharacterEllipsis" ToolTip="{Binding Path}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
 
-                                    <Grid Style="{StaticResource SettingRowStyle}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="230"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Margin="0,0,16,0">
-                                            <TextBlock Text="视频存储路径" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="录像文件保存位置，优先选择稳定的本地目录。"
-                                                       Style="{StaticResource FieldHintStyle}"/>
-                                        </StackPanel>
-                                        <Grid Grid.Column="1">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <TextBox x:Name="PathTextBox"
-                                                     Text="{Binding Config.VideoStoragePath}"
-                                                     IsReadOnly="True"
-                                                     Background="{DynamicResource BorderLight}"
-                                                     Foreground="{DynamicResource TextSecondary}"/>
-                                            <Button Grid.Column="1"
-                                                    Content="浏览"
-                                                    Width="68"
-                                                    Margin="8,0,0,0"
-                                                    Click="BtnBrowsePath_Click"
-                                                    Style="{StaticResource SecondaryActionButtonStyle}">
-                                                <Button.Resources>
-                                                    <Style TargetType="Border">
-                                                        <Setter Property="CornerRadius" Value="6"/>
-                                                    </Style>
-                                                </Button.Resources>
-                                            </Button>
-                                        </Grid>
-                                    </Grid>
+                                <!-- 配额调节 -->
+                                <DataGridTemplateColumn Header="配额 (GB)" Width="120">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <xctk:DoubleUpDown Value="{Binding QuotaGB, UpdateSourceTrigger=PropertyChanged}" 
+                                                            Minimum="1" Maximum="10000" Margin="5"
+                                                            VerticalAlignment="Center" Height="28"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
 
-                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,8">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="230"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Margin="0,0,16,0">
-                                            <TextBlock Text="磁盘配额 / GB" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="达到上限后，系统可按策略回收旧视频，避免磁盘写满。"
-                                                       Style="{StaticResource FieldHintStyle}"/>
-                                        </StackPanel>
-                                        <xctk:DoubleUpDown Grid.Column="1"
-                                                           Height="32"
-                                                           Value="{Binding Config.MaxDiskSpaceGB}"
-                                                           Minimum="0.5"
-                                                           Maximum="5000.0"
-                                                           Increment="0.5"/>
-                                    </Grid>
+                                <!-- 优先级调节 -->
+                                <DataGridTemplateColumn Header="优先级" Width="100">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <xctk:IntegerUpDown Value="{Binding Priority, UpdateSourceTrigger=PropertyChanged}" 
+                                                                Minimum="0" Maximum="99" Margin="5"
+                                                                VerticalAlignment="Center" Height="28"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
 
-                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="230"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Margin="0,0,16,0">
-                                            <TextBlock Text="显示已删除视频" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="在列表中保留已删除记录，便于对账和追溯。"
-                                                       Style="{StaticResource FieldHintStyle}"/>
-                                        </StackPanel>
-                                        <CheckBox Grid.Column="1"
-                                                  IsChecked="{Binding Config.ShowDeletedVideos}"
-                                                  VerticalAlignment="Center"
-                                                  HorizontalAlignment="Left"
-                                                  Style="{StaticResource ToggleSwitchStyle}"/>
-                                    </Grid>
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
-                    </ScrollViewer>
-                </Border>
-            </TabItem>
+                    <!-- 操作按钮：与设置界面其他按钮对齐 -->
+                    <StackPanel Orientation="Horizontal" Margin="0,15,0,30">
+                        <Button Content="➕ 添加磁盘" Click="BtnAddStorage_Click" 
+                                Style="{StaticResource SecondaryActionButtonStyle}" Width="120" Margin="0,0,12,0"/>
+                        <Button Content="➖ 移除选中" Click="BtnRemoveStorage_Click" 
+                                Style="{StaticResource SecondaryActionButtonStyle}" Width="120"/>
+                    </StackPanel>
+
+                    <Border Style="{StaticResource SettingRow}">
+                        <Grid>
+                            <TextBlock Text="回放列表显示已覆盖记录" VerticalAlignment="Center"/>
+                            <CheckBox IsChecked="{Binding Config.ShowDeletedVideos}" 
+                                    Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Right"/>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </TabItem>
 
             <TabItem Header="高级设置">
                 <Border Background="Transparent" Padding="0,4,0,0">

@@ -29,8 +29,19 @@ namespace ExpressPackingMonitoring.ViewModels
         public string DisplayName { get; set; }
     }
 
+    // 存储节点模型
+    public class StorageLocation
+    {
+        public string Path { get; set; } = "D:\\快递打包视频";
+        public double QuotaGB { get; set; } = 500.0;
+        public int Priority { get; set; } = 1; // 越大越优先
+    }
+
     public class AppConfig
     {
+        // 核心：多磁盘配置列表
+        public List<StorageLocation> StorageLocations { get; set; } = new() { new StorageLocation() };
+
         public int CameraIndex { get; set; } = 0;
         public int FrameWidth { get; set; } = 1280;
         public int FrameHeight { get; set; } = 720;
@@ -39,14 +50,12 @@ namespace ExpressPackingMonitoring.ViewModels
         public double ZoomScale { get; set; } = 1.5;
         public double ZoomDelaySeconds { get; set; } = 1.0;
         public double ZoomDurationSeconds { get; set; } = 3.0;
-        public double MaxDiskSpaceGB { get; set; } = 950.0;
         public bool EnableAutoStop { get; set; } = true;
         public double AutoStopMinutes { get; set; } = 1.0;
         public bool EnableMaxDuration { get; set; } = false;
         public double MaxDurationMinutes { get; set; } = 5.0;
 
         public double MotionDetectThreshold { get; set; } = 15.0;
-        public string VideoStoragePath { get; set; } = "D:\\快递打包视频";
         public string OrderIdRegex { get; set; } = "^[a-zA-Z0-9-]{12,25}$";
         public bool EnableSoundPrompt { get; set; } = true;
         public double TimeoutWarningSeconds { get; set; } = 10.0;
