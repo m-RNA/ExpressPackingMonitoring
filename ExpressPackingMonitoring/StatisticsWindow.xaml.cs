@@ -140,6 +140,9 @@ namespace ExpressPackingMonitoring
 
         private void ApplyPreset(string tag)
         {
+            if (string.IsNullOrWhiteSpace(tag))
+                return;
+
             _isInternalUpdating = true;
             DateTime now = DateTime.Now;
             switch (tag)
@@ -173,7 +176,8 @@ namespace ExpressPackingMonitoring
         {
             if (PresetCombo.SelectedItem is ComboBoxItem item)
             {
-                ApplyPreset(item.Tag.ToString());
+                string tag = item.Tag?.ToString() ?? string.Empty;
+                ApplyPreset(tag);
                 RefreshData();
             }
         }
