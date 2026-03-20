@@ -36,6 +36,7 @@ namespace ExpressPackingMonitoring
         public string Date { get; set; } = "";
         public int TotalPieces { get; set; }
         public double TotalDurationSec { get; set; }
+        public long TotalBytes { get; set; } // 新增
     }
 
     /// <summary>
@@ -286,6 +287,14 @@ namespace ExpressPackingMonitoring
         /// </summary>
         public List<DailyStat> GetDailyStats(int days = 7)
         {
+            return GetRangeStats(DateTime.Now.AddDays(-days + 1), DateTime.Now);
+        }
+
+        /// <summary>
+        /// 增加对时间段范围聚合统计（支持文件大小）
+        /// </summary>
+        public List<DailyStat> GetRangeStats(DateTime start, DateTime end)
+        {
             lock (_lock)
             {
                 var results = new List<DailyStat>();
@@ -294,15 +303,16 @@ namespace ExpressPackingMonitoring
                     SELECT 
                         substr(StartTime, 1, 10) AS Date,
                         COUNT(*) AS TotalPieces,
-                        SUM(DurationSeconds) AS TotalDurationSec
+                        SUM(DurationSeconds) AS TotalDurationSec,
+                        SUM(FileSizeBytes) AS TotalBytes
                     FROM VideoRecords 
-                    WHERE IsDeleted = 0 
-                      AND DurationSeconds > 0
+                    WHERE StartTime >= @start AND StartTime <= @end
+                      AND IsDeleted = 0 
                       AND EndTime IS NOT NULL
-                      AND StartTime >= @startDate
                     GROUP BY substr(StartTime, 1, 10)
-                    ORDER BY Date;";
-                cmd.Parameters.AddWithValue("@startDate", DateTime.Now.AddDays(-days + 1).ToString("yyyy-MM-dd 00:00:00"));
+                    ORDER BY Date ASC;";
+                cmd.Parameters.AddWithValue("@start", start.ToString("yyyy-MM-dd 00:00:00"));
+                cmd.Parameters.AddWithValue("@end", end.ToString("yyyy-MM-dd 23:59:59"));
 
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read())
@@ -311,7 +321,52 @@ namespace ExpressPackingMonitoring
                     {
                         Date = reader.GetString(0),
                         TotalPieces = reader.GetInt32(1),
-                        TotalDurationSec = reader.GetDouble(2)
+                        TotalDurationSec = reader.GetDouble(2),
+                        TotalBytes = reader.IsDBNull(3) ? 0 : reader.GetInt64(3)
+                    });
+                }
+                return results;
+            }
+        }
+
+        public List<DailyStat> GetAggregatedStats(DateTime start, DateTime end, string groupBy = "day")
+        {
+            lock (_lock)
+            {
+                var results = new List<DailyStat>();
+                using var cmd = _connection.CreateCommand();
+
+                string dateSelector = groupBy switch
+                {
+                    "week" => "strftime('%Y-W%W', StartTime)",
+                    "month" => "strftime('%Y-%m', StartTime)",
+                    _ => "substr(StartTime, 1, 10)"
+                };
+
+                cmd.CommandText = $@"
+                    SELECT 
+                        {dateSelector} AS GroupDate,
+                        COUNT(*) AS TotalPieces,
+                        SUM(DurationSeconds) AS TotalDurationSec,
+                        SUM(FileSizeBytes) AS TotalBytes
+                    FROM VideoRecords 
+                    WHERE StartTime >= @start AND StartTime <= @end
+                      AND IsDeleted = 0 AND EndTime IS NOT NULL
+                    GROUP BY GroupDate
+                    ORDER BY GroupDate ASC;";
+
+                cmd.Parameters.AddWithValue("@start", start.ToString("yyyy-MM-dd 00:00:00"));
+                cmd.Parameters.AddWithValue("@end", end.ToString("yyyy-MM-dd 23:59:59"));
+
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    results.Add(new DailyStat
+                    {
+                        Date = reader.GetString(0),
+                        TotalPieces = reader.GetInt32(1),
+                        TotalDurationSec = reader.GetDouble(2),
+                        TotalBytes = reader.IsDBNull(3) ? 0 : reader.GetInt64(3)
                     });
                 }
                 return results;
