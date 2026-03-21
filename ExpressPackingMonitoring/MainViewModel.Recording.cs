@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using OpenCvSharp;
+using AForge.Video.DirectShow;
 
 namespace ExpressPackingMonitoring.ViewModels
 {
@@ -153,9 +154,12 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private string ResolveBestStoragePath()
         {
+            string defaultPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Videos");
+
             if (Config.StorageLocations == null || Config.StorageLocations.Count == 0)
             {
-                return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Videos");
+                EnsureDirectoryWritable(defaultPath);
+                return defaultPath;
             }
 
             var orderedLocations = Config.StorageLocations
@@ -165,7 +169,8 @@ namespace ExpressPackingMonitoring.ViewModels
 
             if (orderedLocations.Count == 0)
             {
-                return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Videos");
+                EnsureDirectoryWritable(defaultPath);
+                return defaultPath;
             }
 
             foreach (var loc in orderedLocations)
@@ -178,6 +183,9 @@ namespace ExpressPackingMonitoring.ViewModels
 
                     if (!Directory.Exists(normalizedPath))
                         Directory.CreateDirectory(normalizedPath);
+
+                    // 检查写入权限
+                    if (!IsDirectoryWritable(normalizedPath)) continue;
 
                     long usedBytesInPath = 0;
                     var dirInfo = new DirectoryInfo(normalizedPath);
@@ -194,6 +202,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     var drive = new DriveInfo(root);
                     if (!drive.IsReady) continue;
 
+                    // 5% 预留或 2GB
                     long safeBuffer = (long)Math.Max(2147483648, drive.TotalSize * 0.05);
 
                     if (usedGB < loc.QuotaGB && drive.AvailableFreeSpace > safeBuffer)
@@ -207,9 +216,40 @@ namespace ExpressPackingMonitoring.ViewModels
                 }
             }
 
-            var fallback = orderedLocations[0].Path;
-            if (Path.IsPathRooted(fallback)) return fallback;
-            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, fallback);
+            // 如果都没有找到合适的（配额已满或剩余空间不足），尝试第一个能写的路径
+            foreach (var loc in orderedLocations)
+            {
+                string path = Path.IsPathRooted(loc.Path) ? loc.Path : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, loc.Path);
+                if (IsDirectoryWritable(path)) return path;
+            }
+
+            EnsureDirectoryWritable(defaultPath);
+            return defaultPath;
+        }
+
+        private bool IsDirectoryWritable(string dirPath)
+        {
+            try
+            {
+                if (!Directory.Exists(dirPath)) Directory.CreateDirectory(dirPath);
+                string testFile = Path.Combine(dirPath, ".write_test_" + Guid.NewGuid().ToString("N"));
+                File.WriteAllText(testFile, "test");
+                File.Delete(testFile);
+                return true;
+            }
+            catch { return false; }
+        }
+
+        private void EnsureDirectoryWritable(string dirPath)
+        {
+            try
+            {
+                if (!Directory.Exists(dirPath)) Directory.CreateDirectory(dirPath);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Storage] 无法创建默认目录: {ex.Message}");
+            }
         }
 
         private async Task InternalStartRecordingAsync()
@@ -219,6 +259,40 @@ namespace ExpressPackingMonitoring.ViewModels
 
             try
             {
+                // 0. 环境预检查 (摄像头、麦克风)
+                if (_videoSource == null || !_videoSource.IsRunning)
+                {
+                    // 尝试重启一次摄像头，以防万一用户刚插上
+                    RestartCamera();
+                    await Task.Delay(1000); // 给一点点启动时间
+
+                    if (_videoSource == null || !_videoSource.IsRunning)
+                    {
+                        ShowToast("⚠ 摄像头未就绪，请检查连接");
+                        Speak("摄像头未就绪");
+                        return;
+                    }
+                }
+
+                if (Config.EnableAudioRecording && !string.IsNullOrEmpty(Config.AudioDeviceName))
+                {
+                    bool micFound = await Task.Run(() => {
+                        var audioDevices = new FilterInfoCollection(new Guid("33D9A762-90C8-11D0-BD43-00A0C911CE86"));
+                        for (int i = 0; i < audioDevices.Count; i++)
+                            if (audioDevices[i].Name == Config.AudioDeviceName) return true;
+                        return false;
+                    });
+                    if (!micFound)
+                    {
+                        ShowToast("⚠ 预设麦克风已断开");
+                        Speak("麦克风已断开");
+                        // 如果用户开了音频录制但麦克风丢了，建议停止或报错。
+                        // 此处选择提示后继续，但 FFmpeg 启动会失败，报错提示更详细。
+                        // 或者可以强制关闭本段录制的音频：
+                        // withAudioOverride = false; 
+                    }
+                }
+
                 // 1. 彻底清理环境：如果系统残留了任何挂死的 ffmpeg，全部清掉
                 await Task.Run(() => {
                     try {
@@ -230,9 +304,33 @@ namespace ExpressPackingMonitoring.ViewModels
                 });
 
                 // 2. 初始化路径和文件名
-                string baseFolder = ResolveBestStoragePath();
+                string baseFolder;
+                try
+                {
+                    baseFolder = ResolveBestStoragePath();
+                    if (!IsDirectoryWritable(baseFolder))
+                    {
+                        ShowToast("⚠ 存储路径不可写，请检查磁盘");
+                        Speak("存储路径不可写");
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    ShowToast($"⚠ 存储初始化失败: {ex.Message}");
+                    return;
+                }
+
                 string dateFolder = Path.Combine(baseFolder, DateTime.Now.ToString("yyyy-MM-dd"));
-                if (!Directory.Exists(dateFolder)) Directory.CreateDirectory(dateFolder);
+                try
+                {
+                    if (!Directory.Exists(dateFolder)) Directory.CreateDirectory(dateFolder);
+                }
+                catch (Exception ex)
+                {
+                    ShowToast($"⚠ 无法创建日期目录: {ex.Message}");
+                    return;
+                }
 
                 string fileName = $"{CurrentOrderId}_{DateTime.Now:yyyyMMdd_HHmmss}_{CurrentMode}.mkv";
                 string filePath = Path.Combine(dateFolder, fileName);

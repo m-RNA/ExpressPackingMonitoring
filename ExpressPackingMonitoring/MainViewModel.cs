@@ -296,7 +296,10 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 _db = new VideoDatabase(_dbFilePath);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"数据库初始化失败，部分功能将不可用：{ex.Message}", "启动警告", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         private void RefreshTodayStats()
@@ -530,8 +533,18 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private void OpenPlaybackWindow()
         {
-            string folderPath = ResolveBestStoragePath();
-            if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
+            string folderPath;
+            try
+            {
+                folderPath = ResolveBestStoragePath();
+                if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"无法访问存储路径：{ex.Message}", "存储错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
             try
             {
                 var playbackWin = new PlaybackWindow(folderPath, _db, Config.ShowDeletedVideos);
@@ -554,14 +567,35 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private void RestartCamera() { _ = SafeStopRecordingAsync(); StopCamera(); StartCamera(); }
 
+        private DateTime _lastFrameTime = DateTime.MinValue;
+
         private void StartCamera()
         {
             try
             {
                 var videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
-                if (videoDevices.Count == 0) { ShowToast("未检测到摄像头"); return; }
-                if (Config.CameraIndex >= videoDevices.Count) Config.CameraIndex = 0;
+                if (videoDevices.Count == 0) 
+                { 
+                    ShowToast("⚠ 未检测到任何摄像头"); 
+                    Speak("未检测到摄像头");
+                    return; 
+                }
+                
+                if (Config.CameraIndex >= videoDevices.Count) 
+                {
+                    Config.CameraIndex = 0;
+                }
+
                 _videoSource = new VideoCaptureDevice(videoDevices[Config.CameraIndex].MonikerString);
+                
+                // 设置错误处理器
+                _videoSource.VideoSourceError += (s, e) => {
+                    Debug.WriteLine($"[Camera] 视频源错误: {e.Description}");
+                    _ = Application.Current.Dispatcher.InvokeAsync(() => {
+                        ShowToast("⚠ 摄像头连接发生错误");
+                    });
+                };
+
                 // 从摄像头能力中选择最匹配用户配置（分辨率+帧率）的模式
                 if (_videoSource.VideoCapabilities.Length > 0)
                 {
@@ -627,6 +661,8 @@ namespace ExpressPackingMonitoring.ViewModels
         private async Task VideoProcessLoop(CancellationToken token)
         {
             int frameTickCounter = 0;
+            int cameraErrorCounter = 0;
+            int cameraMissingCounter = 0;
 
             try
             {
@@ -639,6 +675,9 @@ namespace ExpressPackingMonitoring.ViewModels
 
                     if (currentFrame != null && !currentFrame.Empty())
                     {
+                        cameraErrorCounter = 0; // 重置错误计数
+                        _lastFrameTime = DateTime.Now;
+
                         Mat processedFrame = currentFrame;
 
                         if (_isScanning && Config.EnableSmartZoom)
@@ -685,8 +724,42 @@ namespace ExpressPackingMonitoring.ViewModels
                             if (_isDisposed) return;
                             VideoFrame = bitmap; 
                         });
-                        if (frameTickCounter % 30 == 0) PerformMotionDetection(currentFrame);
+                    if (frameTickCounter % 30 == 0) PerformMotionDetection(currentFrame);
                         if (processedFrame != currentFrame) processedFrame.Dispose(); currentFrame.Dispose();
+                    }
+                    else
+                    {
+                        // 摄像头掉线检测：如果 3秒没帧，且 _videoSource 理论上在运行
+                        if (_videoSource != null && _videoSource.IsRunning)
+                        {
+                            cameraErrorCounter++;
+                            // 约 3秒 (假设 15fps，45帧)
+                            if (cameraErrorCounter > (_actualCameraFps * 3))
+                            {
+                                cameraErrorCounter = 0;
+                                _ = Application.Current.Dispatcher.InvokeAsync(() => {
+                                    ShowToast("⚠ 摄像头信号丢失，尝试重连...");
+                                    RestartCamera();
+                                });
+                            }
+                        }
+                        else
+                        {
+                            // 摄像头完全没启动或已停止：每 5秒尝试发现并启动一次
+                            cameraMissingCounter++;
+                            if (cameraMissingCounter > (_actualCameraFps * 5))
+                            {
+                                cameraMissingCounter = 0;
+                                var videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
+                                if (videoDevices.Count > 0)
+                                {
+                                    _ = Application.Current.Dispatcher.InvokeAsync(() => {
+                                        ShowToast("📷 检测到摄像头，尝试启动...");
+                                        RestartCamera();
+                                    });
+                                }
+                            }
+                        }
                     }
 
                     if (IsRecording)

@@ -8,6 +8,7 @@ using AForge.Video.DirectShow;
 using System.Linq;
 using System.Windows.Controls;
 using System.Threading;
+using System.IO;
 
 namespace ExpressPackingMonitoring
 {
@@ -343,8 +344,26 @@ namespace ExpressPackingMonitoring
 
             if (dialog.ShowDialog(this) == true)
             {
+                if (!IsPathWritable(dialog.FolderName))
+                {
+                    MessageBox.Show("所选路径不可写，请检查权限或磁盘状态。", "存储错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
                 primary.Path = dialog.FolderName;
             }
+        }
+
+        private bool IsPathWritable(string path)
+        {
+            try
+            {
+                if (!Directory.Exists(path)) Directory.CreateDirectory(path);
+                string testFile = Path.Combine(path, ".write_test_" + Guid.NewGuid().ToString("N"));
+                File.WriteAllText(testFile, "test");
+                File.Delete(testFile);
+                return true;
+            }
+            catch { return false; }
         }
 
         private void BtnAddStorage_Click(object sender, RoutedEventArgs e)
@@ -358,6 +377,11 @@ namespace ExpressPackingMonitoring
             if (dialog.ShowDialog(this) == true)
             {
                 string selectedPath = dialog.FolderName;
+                if (!IsPathWritable(selectedPath))
+                {
+                    MessageBox.Show("所选路径不可写，请检查权限或磁盘状态。", "存储错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
                 if (Config.StorageLocations.Any(x => x.Path.Equals(selectedPath, StringComparison.OrdinalIgnoreCase)))
                 {
                     MessageBox.Show("该路径已在列表中。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -551,6 +575,3 @@ namespace ExpressPackingMonitoring
         }
     }
 }
-
-
-
