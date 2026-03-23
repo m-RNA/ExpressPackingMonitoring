@@ -1,5 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
 using ExpressPackingMonitoring.ViewModels;
@@ -67,6 +68,22 @@ namespace ExpressPackingMonitoring
             };
             Loaded += (s, e) => {
                 ScanInputTextBox.Focus();
+                if (DataContext is MainViewModel vm)
+                {
+                    vm.PropertyChanged += (sender, args) =>
+                    {
+                        if (args.PropertyName == nameof(MainViewModel.LastZoomRect) ||
+                            args.PropertyName == nameof(MainViewModel.VideoFrame))
+                        {
+                            Dispatcher.BeginInvoke(new Action(() => UpdateZoomBorder(vm.LastZoomRect)));
+                        }
+                    };
+                    // 窗口/视频区域大小变化时重新计算边框位置
+                    VideoImage.SizeChanged += (_, __) =>
+                    {
+                        UpdateZoomBorder(vm.LastZoomRect);
+                    };
+                }
 
                 // 【单文件打包兼容修复】：改用 AppContext.BaseDirectory 或 Process.GetCurrentProcess().MainModule.FileName 取代 Assembly.GetExecutingAssembly().Location
                 try
@@ -80,6 +97,31 @@ namespace ExpressPackingMonitoring
                     this.Title = "打包监控";
                 }
             };
+        }
+
+        private void UpdateZoomBorder(Rect zoomRect)
+        {
+            var vm = DataContext as MainViewModel;
+            if (zoomRect == Rect.Empty || vm == null || vm.CameraFrameSize.Width <= 0 || vm.CameraFrameSize.Height <= 0)
+            {
+                ZoomPreviewBorder.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            double actualW = VideoImage.ActualWidth;
+            double actualH = VideoImage.ActualHeight;
+            // 始终基于摄像头原始帧尺寸计算，而非 VideoImage.Source（放大时 Source 会变）
+            double sourceW = vm.CameraFrameSize.Width;
+            double sourceH = vm.CameraFrameSize.Height;
+
+            if (actualW <= 0 || actualH <= 0) return;
+
+            // Uniform 缩放比例
+            double scale = Math.Min(actualW / sourceW, actualH / sourceH);
+
+            ZoomPreviewBorder.Width = zoomRect.Width * scale;
+            ZoomPreviewBorder.Height = zoomRect.Height * scale;
+            ZoomPreviewBorder.Visibility = Visibility.Visible;
         }
 
         private void BtnSettings_Click(object sender, RoutedEventArgs e)

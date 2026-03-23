@@ -117,6 +117,12 @@ namespace ExpressPackingMonitoring.ViewModels
         private ObservableCollection<ScanRecord> _allLogs = new ObservableCollection<ScanRecord>();
         public ObservableCollection<ScanRecord> FilteredLogs { get; } = new ObservableCollection<ScanRecord>();
 
+        private System.Windows.Rect _lastZoomRect;
+        public System.Windows.Rect LastZoomRect { get => _lastZoomRect; private set => SetProperty(ref _lastZoomRect, value); }
+
+        private System.Windows.Size _cameraFrameSize;
+        public System.Windows.Size CameraFrameSize { get => _cameraFrameSize; private set => SetProperty(ref _cameraFrameSize, value); }
+
         public BitmapSource VideoFrame { get => _videoFrame; set => SetProperty(ref _videoFrame, value); }
         public string CurrentMode { get => _currentMode; set { if (SetProperty(ref _currentMode, value)) ScheduleRefreshBarcodes(); } }
         public string CurrentOrderId { get => _currentOrderId; set => SetProperty(ref _currentOrderId, value); }
@@ -729,40 +735,58 @@ namespace ExpressPackingMonitoring.ViewModels
                         _lastFrameTime = DateTime.Now;
 
                         Mat processedFrame = currentFrame;
+                        CameraFrameSize = new System.Windows.Size(currentFrame.Width, currentFrame.Height);
 
-                        if (_isScanning && Config.EnableSmartZoom)
+                        if (Config.EnableSmartZoom)
                         {
-                            if (_delayBeforeZooming && (DateTime.Now - _lastScanTime).TotalMilliseconds >= Config.ZoomDelaySeconds * 1000.0) 
-                            { 
-                                _delayBeforeZooming = false; 
-                                _isZooming = true; 
-                                _zoomStartTime = DateTime.Now; 
-                                Debug.WriteLine($"[Zoom] 缩放触发: Delay={Config.ZoomDelaySeconds}s, Scale={Config.ZoomScale}");
-                            }
-                            if (_isZooming)
+                            int zoomW = (int)(currentFrame.Width / Config.ZoomScale);
+                            int zoomH = (int)(currentFrame.Height / Config.ZoomScale);
+                            if (zoomW <= 0 || zoomW > currentFrame.Width) zoomW = currentFrame.Width;
+                            if (zoomH <= 0 || zoomH > currentFrame.Height) zoomH = currentFrame.Height;
+
+                            var currentZoomRect = new OpenCvSharp.Rect((currentFrame.Width - zoomW) / 2, (currentFrame.Height - zoomH) / 2, zoomW, zoomH)
+                                .Intersect(new OpenCvSharp.Rect(0, 0, currentFrame.Width, currentFrame.Height));
+
+                            if (currentZoomRect.Width > 0 && currentZoomRect.Height > 0)
                             {
-                                int zoomW = (int)(currentFrame.Width / Config.ZoomScale), zoomH = (int)(currentFrame.Height / Config.ZoomScale);
-                                if (zoomW <= 0 || zoomW > currentFrame.Width) zoomW = currentFrame.Width; if (zoomH <= 0 || zoomH > currentFrame.Height) zoomH = currentFrame.Height;
-                                OpenCvSharp.Rect zoomRect = new OpenCvSharp.Rect((currentFrame.Width - zoomW) / 2, (currentFrame.Height - zoomH) / 2, zoomW, zoomH).Intersect(new OpenCvSharp.Rect(0, 0, currentFrame.Width, currentFrame.Height));
-                                if (zoomRect.Width > 0 && zoomRect.Height > 0)
+                                LastZoomRect = new System.Windows.Rect(currentZoomRect.X, currentZoomRect.Y, currentZoomRect.Width, currentZoomRect.Height);
+                            }
+
+                            if (_isScanning)
+                            {
+                                if (_delayBeforeZooming && (DateTime.Now - _lastScanTime).TotalMilliseconds >= Config.ZoomDelaySeconds * 1000.0)
                                 {
-                                    var zoomed = currentFrame.Clone(zoomRect);
-                                    processedFrame = new Mat();
-                                    Cv2.Resize(zoomed, processedFrame, new OpenCvSharp.Size(Config.FrameWidth, Config.FrameHeight));
-                                    zoomed.Dispose();
+                                    _delayBeforeZooming = false;
+                                    _isZooming = true;
+                                    _zoomStartTime = DateTime.Now;
+                                    Debug.WriteLine($"[Zoom] 缩放触发: Delay={Config.ZoomDelaySeconds}s, Scale={Config.ZoomScale}");
                                 }
-                                if ((DateTime.Now - _zoomStartTime).TotalMilliseconds >= Config.ZoomDurationSeconds * 1000.0) 
-                                { 
-                                    _isZooming = false; 
-                                    _isScanning = false; 
-                                    Debug.WriteLine("[Zoom] 缩放时长结束，恢复原样");
+                                if (_isZooming)
+                                {
+                                    if (currentZoomRect.Width > 0 && currentZoomRect.Height > 0)
+                                    {
+                                        var zoomed = currentFrame.Clone(currentZoomRect);
+                                        processedFrame = new Mat();
+                                        Cv2.Resize(zoomed, processedFrame, new OpenCvSharp.Size(Config.FrameWidth, Config.FrameHeight));
+                                        zoomed.Dispose();
+                                    }
+                                    if ((DateTime.Now - _zoomStartTime).TotalMilliseconds >= Config.ZoomDurationSeconds * 1000.0)
+                                    {
+                                        _isZooming = false;
+                                        _isScanning = false;
+                                        Debug.WriteLine("[Zoom] 缩放时长结束，恢复原样");
+                                    }
                                 }
                             }
                         }
-                        else if (_isScanning) 
-                        { 
-                            _isScanning = false; 
-                            Debug.WriteLine($"[Zoom] 扫码已触发但未执行缩放: EnableSmartZoom={Config.EnableSmartZoom}");
+                        else
+                        {
+                            if (LastZoomRect != System.Windows.Rect.Empty) LastZoomRect = System.Windows.Rect.Empty;
+                            if (_isScanning)
+                            {
+                                _isScanning = false;
+                                Debug.WriteLine($"[Zoom] 扫码已触发但未执行缩放: EnableSmartZoom={Config.EnableSmartZoom}");
+                            }
                         }
 
                         if (IsRecording && _videoWriteQueue != null && !_videoWriteQueue.IsAddingCompleted)
