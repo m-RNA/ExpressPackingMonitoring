@@ -324,6 +324,18 @@ namespace ExpressPackingMonitoring
                     w = settings.FrameWidth;
                     h = settings.FrameHeight;
                     fps = settings.Fps;
+                    Config.AudioDeviceName = settings.AudioDeviceName ?? "";
+                    Config.AudioSyncOffsetMs = settings.AudioSyncOffsetMs;
+
+                    // 切换麦克风 UI 选中项
+                    if (MicComboBox.ItemsSource is List<MicInfo> mics)
+                    {
+                        var micMatch = mics.FirstOrDefault(m => m.Name == Config.AudioDeviceName);
+                        if (micMatch != null)
+                        {
+                            MicComboBox.SelectedItem = micMatch;
+                        }
+                    }
                 }
 
                 await LoadCameraCapabilitiesAsync(cam.Index, w, h, fps);
@@ -492,7 +504,9 @@ namespace ExpressPackingMonitoring
                     {
                         FrameWidth = Config.FrameWidth,
                         FrameHeight = Config.FrameHeight,
-                        Fps = Config.Fps
+                        Fps = Config.Fps,
+                        AudioDeviceName = Config.AudioDeviceName,
+                        AudioSyncOffsetMs = Config.AudioSyncOffsetMs
                     };
                 }
             }

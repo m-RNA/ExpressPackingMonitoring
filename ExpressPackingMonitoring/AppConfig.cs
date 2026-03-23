@@ -43,6 +43,8 @@ namespace ExpressPackingMonitoring.ViewModels
         public int FrameWidth { get; set; } = 1280;
         public int FrameHeight { get; set; } = 720;
         public int Fps { get; set; } = 15;
+        public string AudioDeviceName { get; set; } = "";
+        public int AudioSyncOffsetMs { get; set; } = 400;
     }
 
     public class AppConfig

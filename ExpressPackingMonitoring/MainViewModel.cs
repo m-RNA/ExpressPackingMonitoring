@@ -634,6 +634,8 @@ namespace ExpressPackingMonitoring.ViewModels
                     Config.FrameWidth = settings.FrameWidth;
                     Config.FrameHeight = settings.FrameHeight;
                     Config.Fps = settings.Fps;
+                    Config.AudioDeviceName = settings.AudioDeviceName ?? "";
+                    Config.AudioSyncOffsetMs = settings.AudioSyncOffsetMs;
                 }
 
                 // 设置错误处理器
