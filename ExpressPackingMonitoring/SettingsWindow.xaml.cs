@@ -526,8 +526,23 @@ namespace ExpressPackingMonitoring
                 return;
 
             ApplyAutoStart(Config.AutoStartOnBoot);
+            MainVM.PreviewZoomScale = null;
             this.DialogResult = true;
             this.Close();
+        }
+
+        private void ZoomScaleComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (ZoomScaleComboBox.SelectedItem is double scale)
+            {
+                MainVM.PreviewZoomScale = scale;
+            }
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            MainVM.PreviewZoomScale = null;
+            base.OnClosed(e);
         }
 
         private bool ValidateEncoderSelectionBeforeSave()

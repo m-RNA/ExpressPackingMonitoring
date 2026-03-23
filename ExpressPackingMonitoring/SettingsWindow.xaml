@@ -580,6 +580,7 @@
                                         <ComboBox x:Name="ZoomScaleComboBox"
                                                   Grid.Column="1"
                                                   SelectedItem="{Binding Config.ZoomScale}"
+                                                  SelectionChanged="ZoomScaleComboBox_SelectionChanged"
                                                   Cursor="Hand"/>
                                     </Grid>
 

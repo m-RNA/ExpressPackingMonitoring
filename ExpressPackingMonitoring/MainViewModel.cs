@@ -123,6 +123,9 @@ namespace ExpressPackingMonitoring.ViewModels
         private System.Windows.Size _cameraFrameSize;
         public System.Windows.Size CameraFrameSize { get => _cameraFrameSize; private set => SetProperty(ref _cameraFrameSize, value); }
 
+        private double? _previewZoomScale;
+        public double? PreviewZoomScale { get => _previewZoomScale; set => SetProperty(ref _previewZoomScale, value); }
+
         public BitmapSource VideoFrame { get => _videoFrame; set => SetProperty(ref _videoFrame, value); }
         public string CurrentMode { get => _currentMode; set { if (SetProperty(ref _currentMode, value)) ScheduleRefreshBarcodes(); } }
         public string CurrentOrderId { get => _currentOrderId; set => SetProperty(ref _currentOrderId, value); }
@@ -737,10 +740,11 @@ namespace ExpressPackingMonitoring.ViewModels
                         Mat processedFrame = currentFrame;
                         CameraFrameSize = new System.Windows.Size(currentFrame.Width, currentFrame.Height);
 
-                        if (Config.EnableSmartZoom)
+                        if (Config.EnableSmartZoom || PreviewZoomScale.HasValue)
                         {
-                            int zoomW = (int)(currentFrame.Width / Config.ZoomScale);
-                            int zoomH = (int)(currentFrame.Height / Config.ZoomScale);
+                            double effectiveScale = PreviewZoomScale ?? Config.ZoomScale;
+                            int zoomW = (int)(currentFrame.Width / effectiveScale);
+                            int zoomH = (int)(currentFrame.Height / effectiveScale);
                             if (zoomW <= 0 || zoomW > currentFrame.Width) zoomW = currentFrame.Width;
                             if (zoomH <= 0 || zoomH > currentFrame.Height) zoomH = currentFrame.Height;
 
