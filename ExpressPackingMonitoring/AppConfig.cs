@@ -37,12 +37,25 @@ namespace ExpressPackingMonitoring.ViewModels
         public int Priority { get; set; } = 1; // 越大越优先
     }
 
+    // 摄像头独立配置模型
+    public class CameraSettings
+    {
+        public int FrameWidth { get; set; } = 1280;
+        public int FrameHeight { get; set; } = 720;
+        public int Fps { get; set; } = 15;
+    }
+
     public class AppConfig
     {
         // 核心：多磁盘配置列表
         public List<StorageLocation> StorageLocations { get; set; } = new() { new StorageLocation() };
 
-        public int CameraIndex { get; set; } = 0;
+        public string CameraMonikerString { get; set; } = "";
+        public int CameraIndex { get; set; } = 0; // 保留作为回退
+
+        // 存储不同摄像头的配置：Key 为 MonikerString
+        public Dictionary<string, CameraSettings> CameraConfigs { get; set; } = new();
+
         public int FrameWidth { get; set; } = 1280;
         public int FrameHeight { get; set; } = 720;
         public int Fps { get; set; } = 15;

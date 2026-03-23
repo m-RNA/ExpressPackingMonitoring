@@ -344,6 +344,14 @@ namespace ExpressPackingMonitoring.ViewModels
                         CurrentOrderId = input;
                     }
                     
+                    // 手动触发录制时也开启缩放逻辑
+                    _lastScanTime = DateTime.Now;
+                    _isScanning = true;
+                    _delayBeforeZooming = Config.ZoomDelaySeconds > 0;
+                    _isZooming = _delayBeforeZooming ? false : true;
+                    if (_isZooming) _zoomStartTime = DateTime.Now;
+                    Debug.WriteLine($"[Zoom] 手动开启录制触发缩放: ID={CurrentOrderId}, Delay={Config.ZoomDelaySeconds}");
+
                     await InternalStartRecordingAsync();
                     ScanInputText = ""; // 启动录制后清空
                 }
@@ -380,6 +388,12 @@ namespace ExpressPackingMonitoring.ViewModels
             try { if (!System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex)) { ShowToast("非法单号，已拦截"); Speak("非法单号"); return; } } catch { }
 
             _lastScanTime = DateTime.Now;
+            _isScanning = true;
+            _delayBeforeZooming = Config.ZoomDelaySeconds > 0;
+            _isZooming = _delayBeforeZooming ? false : true;
+            if (_isZooming) _zoomStartTime = DateTime.Now;
+            
+            Debug.WriteLine($"[Zoom] 扫码事件触发: ID={upperResult}, ZoomEnabled={Config.EnableSmartZoom}, Delay={Config.ZoomDelaySeconds}");
             StartInputCooldown();
             CurrentOrderId = upperResult;
             if (IsRecording) _stopReason = "扫码切换";
@@ -581,13 +595,47 @@ namespace ExpressPackingMonitoring.ViewModels
                     return; 
                 }
                 
-                if (Config.CameraIndex >= videoDevices.Count) 
+                string targetMoniker = Config.CameraMonikerString;
+                int targetIndex = -1;
+
+                // 1. 优先通过 MonikerString 查找
+                if (!string.IsNullOrEmpty(targetMoniker))
                 {
-                    Config.CameraIndex = 0;
+                    for (int i = 0; i < videoDevices.Count; i++)
+                    {
+                        if (videoDevices[i].MonikerString == targetMoniker)
+                        {
+                            targetIndex = i;
+                            break;
+                        }
+                    }
                 }
 
-                _videoSource = new VideoCaptureDevice(videoDevices[Config.CameraIndex].MonikerString);
+                // 2. 如果没找到，尝试通过索引 (回退逻辑)
+                if (targetIndex == -1)
+                {
+                    if (Config.CameraIndex >= 0 && Config.CameraIndex < videoDevices.Count)
+                    {
+                        targetIndex = Config.CameraIndex;
+                        Config.CameraMonikerString = videoDevices[targetIndex].MonikerString;
+                    }
+                    else
+                    {
+                        targetIndex = 0;
+                        Config.CameraMonikerString = videoDevices[0].MonikerString;
+                    }
+                }
+
+                _videoSource = new VideoCaptureDevice(videoDevices[targetIndex].MonikerString);
                 
+                // 加载该摄像头的独立配置
+                if (Config.CameraConfigs.TryGetValue(videoDevices[targetIndex].MonikerString, out var settings))
+                {
+                    Config.FrameWidth = settings.FrameWidth;
+                    Config.FrameHeight = settings.FrameHeight;
+                    Config.Fps = settings.Fps;
+                }
+
                 // 设置错误处理器
                 _videoSource.VideoSourceError += (s, e) => {
                     Debug.WriteLine($"[Camera] 视频源错误: {e.Description}");
@@ -682,17 +730,38 @@ namespace ExpressPackingMonitoring.ViewModels
 
                         if (_isScanning && Config.EnableSmartZoom)
                         {
-                            if (_delayBeforeZooming && (DateTime.Now - _lastScanTime).TotalMilliseconds >= Config.ZoomDelaySeconds * 1000.0) { _delayBeforeZooming = false; _isZooming = true; _zoomStartTime = DateTime.Now; }
+                            if (_delayBeforeZooming && (DateTime.Now - _lastScanTime).TotalMilliseconds >= Config.ZoomDelaySeconds * 1000.0) 
+                            { 
+                                _delayBeforeZooming = false; 
+                                _isZooming = true; 
+                                _zoomStartTime = DateTime.Now; 
+                                Debug.WriteLine($"[Zoom] 缩放触发: Delay={Config.ZoomDelaySeconds}s, Scale={Config.ZoomScale}");
+                            }
                             if (_isZooming)
                             {
                                 int zoomW = (int)(currentFrame.Width / Config.ZoomScale), zoomH = (int)(currentFrame.Height / Config.ZoomScale);
                                 if (zoomW <= 0 || zoomW > currentFrame.Width) zoomW = currentFrame.Width; if (zoomH <= 0 || zoomH > currentFrame.Height) zoomH = currentFrame.Height;
                                 OpenCvSharp.Rect zoomRect = new OpenCvSharp.Rect((currentFrame.Width - zoomW) / 2, (currentFrame.Height - zoomH) / 2, zoomW, zoomH).Intersect(new OpenCvSharp.Rect(0, 0, currentFrame.Width, currentFrame.Height));
-                                if (zoomRect.Width > 0 && zoomRect.Height > 0) { processedFrame = currentFrame.Clone(zoomRect); Cv2.Resize(processedFrame, processedFrame, new OpenCvSharp.Size(Config.FrameWidth, Config.FrameHeight)); }
-                                if ((DateTime.Now - _zoomStartTime).TotalMilliseconds >= Config.ZoomDurationSeconds * 1000.0) { _isZooming = false; _isScanning = false; processedFrame = currentFrame; }
+                                if (zoomRect.Width > 0 && zoomRect.Height > 0)
+                                {
+                                    var zoomed = currentFrame.Clone(zoomRect);
+                                    processedFrame = new Mat();
+                                    Cv2.Resize(zoomed, processedFrame, new OpenCvSharp.Size(Config.FrameWidth, Config.FrameHeight));
+                                    zoomed.Dispose();
+                                }
+                                if ((DateTime.Now - _zoomStartTime).TotalMilliseconds >= Config.ZoomDurationSeconds * 1000.0) 
+                                { 
+                                    _isZooming = false; 
+                                    _isScanning = false; 
+                                    Debug.WriteLine("[Zoom] 缩放时长结束，恢复原样");
+                                }
                             }
                         }
-                        else if (_isScanning) { _isScanning = false; }
+                        else if (_isScanning) 
+                        { 
+                            _isScanning = false; 
+                            Debug.WriteLine($"[Zoom] 扫码已触发但未执行缩放: EnableSmartZoom={Config.EnableSmartZoom}");
+                        }
 
                         if (IsRecording && _videoWriteQueue != null && !_videoWriteQueue.IsAddingCompleted)
                         {
@@ -720,10 +789,10 @@ namespace ExpressPackingMonitoring.ViewModels
 
                         var bitmap = processedFrame.ToWriteableBitmap();
                         bitmap.Freeze();
-                        _ = Application.Current.Dispatcher.BeginInvoke(() => { 
+                        _ = Application.Current.Dispatcher.BeginInvoke(new Action(() => { 
                             if (_isDisposed) return;
                             VideoFrame = bitmap; 
-                        });
+                        }));
                     if (frameTickCounter % 30 == 0) PerformMotionDetection(currentFrame);
                         if (processedFrame != currentFrame) processedFrame.Dispose(); currentFrame.Dispose();
                     }

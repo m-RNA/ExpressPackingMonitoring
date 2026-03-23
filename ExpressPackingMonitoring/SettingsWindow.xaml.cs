@@ -12,10 +12,10 @@ using System.IO;
 
 namespace ExpressPackingMonitoring
 {
-    public class CameraInfo { public int Index { get; set; } public string Name { get; set; } }
-    public class ResOption { public string Name { get; set; } public int Width { get; set; } public int Height { get; set; } }
-    public class MicInfo { public string Name { get; set; } }
-    public class FpsOption { public int Fps { get; set; } public string Label { get; set; } }
+    public class CameraInfo { public int Index { get; set; } public string Name { get; set; } public string Moniker { get; set; } public override string ToString() => Name; }
+    public class ResOption { public string Name { get; set; } public int Width { get; set; } public int Height { get; set; } public override string ToString() => Name; }
+    public class MicInfo { public string Name { get; set; } public override string ToString() => Name; }
+    public class FpsOption { public int Fps { get; set; } public string Label { get; set; } public override string ToString() => Label; }
 
     public partial class SettingsWindow : Window
     {
@@ -138,11 +138,30 @@ namespace ExpressPackingMonitoring
                 {
                     var videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
                     for (int i = 0; i < videoDevices.Count; i++)
-                        cams.Add(new CameraInfo { Index = i, Name = $"[{i}] {videoDevices[i].Name}" });
+                        cams.Add(new CameraInfo { Index = i, Name = $"[{i}] {videoDevices[i].Name}", Moniker = videoDevices[i].MonikerString });
 
-                    if (config.CameraIndex >= 0 && config.CameraIndex < videoDevices.Count)
+                    string targetMoniker = config.CameraMonikerString;
+                    int targetIndex = -1;
+                    if (!string.IsNullOrEmpty(targetMoniker))
                     {
-                        var device = new VideoCaptureDevice(videoDevices[config.CameraIndex].MonikerString);
+                        for (int i = 0; i < videoDevices.Count; i++)
+                        {
+                            if (videoDevices[i].MonikerString == targetMoniker)
+                            {
+                                targetIndex = i;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (targetIndex == -1 && config.CameraIndex >= 0 && config.CameraIndex < videoDevices.Count)
+                    {
+                        targetIndex = config.CameraIndex;
+                    }
+
+                    if (targetIndex != -1)
+                    {
+                        var device = new VideoCaptureDevice(videoDevices[targetIndex].MonikerString);
                         resList = device.VideoCapabilities
                             .Select(c => new { c.FrameSize.Width, c.FrameSize.Height })
                             .Distinct()
@@ -293,9 +312,21 @@ namespace ExpressPackingMonitoring
         private async void CameraComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (_isLoadingDevices) return;
-            if (CameraComboBox.SelectedValue is int idx)
+            if (CameraComboBox.SelectedItem is CameraInfo cam)
             {
-                await LoadCameraCapabilitiesAsync(idx, Config.FrameWidth, Config.FrameHeight, Config.Fps);
+                // 加载该摄像头的独立配置（如果存在）
+                int w = Config.FrameWidth;
+                int h = Config.FrameHeight;
+                int fps = Config.Fps;
+
+                if (!string.IsNullOrEmpty(cam.Moniker) && Config.CameraConfigs.TryGetValue(cam.Moniker, out var settings))
+                {
+                    w = settings.FrameWidth;
+                    h = settings.FrameHeight;
+                    fps = settings.Fps;
+                }
+
+                await LoadCameraCapabilitiesAsync(cam.Index, w, h, fps);
             }
         }
 
@@ -426,20 +457,44 @@ namespace ExpressPackingMonitoring
 
         private void BtnSave_Click(object sender, RoutedEventArgs e)
         {
+            // 0. 验证音频
+            if (Config.EnableAudioRecording && string.IsNullOrEmpty(Config.AudioDeviceName))
+            {
+                var mbr = MessageBox.Show("已开启录制声音，但未选择麦克风。录制可能会失败或没有声音。\n\n是否继续保存？", "音频提醒", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (mbr == MessageBoxResult.No) return;
+            }
+
             // 1. 强制提交 DataGrid 中的未完成编辑
             StorageDataGrid.CommitEdit(DataGridEditingUnit.Row, true);
             StorageDataGrid.CommitEdit(DataGridEditingUnit.Cell, true);
 
             // 2. 手动同步部分控件（防止可焦点未切换时绑定未更新）
-            if (ResComboBox.SelectedItem is ResOption selectedRes)
+            if (CameraComboBox.SelectedItem is CameraInfo cam)
             {
-                Config.FrameWidth = selectedRes.Width;
-                Config.FrameHeight = selectedRes.Height;
-            }
+                Config.CameraMonikerString = cam.Moniker;
+                Config.CameraIndex = cam.Index;
 
-            if (FpsComboBox.SelectedItem is ComboBoxItem fpsItem && fpsItem.Tag is int fps)
-            {
-                Config.Fps = fps;
+                if (ResComboBox.SelectedItem is ResOption selectedRes)
+                {
+                    Config.FrameWidth = selectedRes.Width;
+                    Config.FrameHeight = selectedRes.Height;
+                }
+
+                if (FpsComboBox.SelectedItem is ComboBoxItem fpsItem && fpsItem.Tag is int fps)
+                {
+                    Config.Fps = fps;
+                }
+
+                // 更新此摄像头的独立配置
+                if (!string.IsNullOrEmpty(cam.Moniker))
+                {
+                    Config.CameraConfigs[cam.Moniker] = new CameraSettings
+                    {
+                        FrameWidth = Config.FrameWidth,
+                        FrameHeight = Config.FrameHeight,
+                        Fps = Config.Fps
+                    };
+                }
             }
 
             if (GpuEncoderComboBox.SelectedItem is GpuEncoderOption gpuOpt)
