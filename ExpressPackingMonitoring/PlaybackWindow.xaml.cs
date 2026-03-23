@@ -91,7 +91,7 @@ namespace ExpressPackingMonitoring
             _timer.Tick += Timer_Tick;
 
             DpEndDate.SelectedDate = DateTime.Now;
-            DpStartDate.SelectedDate = DateTime.Now.AddDays(-7);
+            DpStartDate.SelectedDate = DateTime.Now.AddYears(-10); // 默认范围为全部（近10年）
             BtnTogglePlay.IsEnabled = false;
             TimelineSlider.IsEnabled = false;
             TimeLabel.Text = "正在加载列表...";
@@ -124,7 +124,7 @@ namespace ExpressPackingMonitoring
             if (_isLoadingVideos)
                 return;
 
-            DateTime start = DpStartDate.SelectedDate ?? DateTime.Now.AddDays(-7);
+            DateTime start = DpStartDate.SelectedDate ?? DateTime.Now.AddYears(-10);
             DateTime end = DpEndDate.SelectedDate ?? DateTime.Now;
             if (start > end)
                 (start, end) = (end, start);
