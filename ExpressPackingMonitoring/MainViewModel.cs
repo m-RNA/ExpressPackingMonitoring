@@ -83,9 +83,11 @@ namespace ExpressPackingMonitoring.ViewModels
         private DateTime _lastScanTime;
         private DateTime _lastMotionTime;
         private DateTime _recordStartTime;
-        private DateTime _zoomStartTime;
-        private bool _isZooming = false;
+        private enum ZoomPhase { None, ZoomingIn, Holding, ZoomingOut }
+        private ZoomPhase _zoomPhase = ZoomPhase.None;
+        private DateTime _zoomPhaseStartTime;
         private bool _delayBeforeZooming = false;
+        private const double ZoomAnimDurationMs = 350.0;
 
         private ScanRecord _currentScanRecord;
         private long _currentRecordId; 
@@ -125,6 +127,9 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private double? _previewZoomScale;
         public double? PreviewZoomScale { get => _previewZoomScale; set => SetProperty(ref _previewZoomScale, value); }
+
+        private bool _isZoomingActive;
+        public bool IsZoomingActive { get => _isZoomingActive; private set => SetProperty(ref _isZoomingActive, value); }
 
         public BitmapSource VideoFrame { get => _videoFrame; set => SetProperty(ref _videoFrame, value); }
         public string CurrentMode { get => _currentMode; set { if (SetProperty(ref _currentMode, value)) ScheduleRefreshBarcodes(); } }
@@ -357,8 +362,13 @@ namespace ExpressPackingMonitoring.ViewModels
                     _lastScanTime = DateTime.Now;
                     _isScanning = true;
                     _delayBeforeZooming = Config.ZoomDelaySeconds > 0;
-                    _isZooming = _delayBeforeZooming ? false : true;
-                    if (_isZooming) _zoomStartTime = DateTime.Now;
+                    if (!_delayBeforeZooming)
+                    {
+                        _zoomPhase = ZoomPhase.ZoomingIn;
+                        _zoomPhaseStartTime = DateTime.Now;
+                        LastZoomRect = System.Windows.Rect.Empty;
+                        IsZoomingActive = true;
+                    }
                     Debug.WriteLine($"[Zoom] 手动开启录制触发缩放: ID={CurrentOrderId}, Delay={Config.ZoomDelaySeconds}");
 
                     await InternalStartRecordingAsync();
@@ -399,8 +409,13 @@ namespace ExpressPackingMonitoring.ViewModels
             _lastScanTime = DateTime.Now;
             _isScanning = true;
             _delayBeforeZooming = Config.ZoomDelaySeconds > 0;
-            _isZooming = _delayBeforeZooming ? false : true;
-            if (_isZooming) _zoomStartTime = DateTime.Now;
+            if (!_delayBeforeZooming)
+            {
+                _zoomPhase = ZoomPhase.ZoomingIn;
+                _zoomPhaseStartTime = DateTime.Now;
+                LastZoomRect = System.Windows.Rect.Empty;
+                IsZoomingActive = true;
+            }
             
             Debug.WriteLine($"[Zoom] 扫码事件触发: ID={upperResult}, ZoomEnabled={Config.EnableSmartZoom}, Delay={Config.ZoomDelaySeconds}");
             StartInputCooldown();
@@ -751,7 +766,7 @@ namespace ExpressPackingMonitoring.ViewModels
                             var currentZoomRect = new OpenCvSharp.Rect((currentFrame.Width - zoomW) / 2, (currentFrame.Height - zoomH) / 2, zoomW, zoomH)
                                 .Intersect(new OpenCvSharp.Rect(0, 0, currentFrame.Width, currentFrame.Height));
 
-                            if (currentZoomRect.Width > 0 && currentZoomRect.Height > 0 && !_isZooming)
+                            if (currentZoomRect.Width > 0 && currentZoomRect.Height > 0 && _zoomPhase == ZoomPhase.None)
                             {
                                 LastZoomRect = new System.Windows.Rect(currentZoomRect.X, currentZoomRect.Y, currentZoomRect.Width, currentZoomRect.Height);
                             }
@@ -761,25 +776,70 @@ namespace ExpressPackingMonitoring.ViewModels
                                 if (_delayBeforeZooming && (DateTime.Now - _lastScanTime).TotalMilliseconds >= Config.ZoomDelaySeconds * 1000.0)
                                 {
                                     _delayBeforeZooming = false;
-                                    _isZooming = true;
-                                    _zoomStartTime = DateTime.Now;
+                                    _zoomPhase = ZoomPhase.ZoomingIn;
+                                    _zoomPhaseStartTime = DateTime.Now;
                                     LastZoomRect = System.Windows.Rect.Empty;
+                                    IsZoomingActive = true;
                                     Debug.WriteLine($"[Zoom] 缩放触发: Delay={Config.ZoomDelaySeconds}s, Scale={Config.ZoomScale}");
                                 }
-                                if (_isZooming)
+
+                                // 根据缩放阶段计算动画倍率
+                                double animatedScale = 1.0;
+                                bool applyZoom = false;
+
+                                if (_zoomPhase == ZoomPhase.ZoomingIn)
                                 {
-                                    if (currentZoomRect.Width > 0 && currentZoomRect.Height > 0)
+                                    double elapsed = (DateTime.Now - _zoomPhaseStartTime).TotalMilliseconds;
+                                    double t = Math.Min(elapsed / ZoomAnimDurationMs, 1.0);
+                                    animatedScale = 1.0 + (effectiveScale - 1.0) * SmoothStep(t);
+                                    applyZoom = true;
+                                    if (t >= 1.0)
                                     {
-                                        var zoomed = currentFrame.Clone(currentZoomRect);
-                                        processedFrame = new Mat();
-                                        Cv2.Resize(zoomed, processedFrame, new OpenCvSharp.Size(Config.FrameWidth, Config.FrameHeight));
-                                        zoomed.Dispose();
+                                        _zoomPhase = ZoomPhase.Holding;
+                                        _zoomPhaseStartTime = DateTime.Now;
                                     }
-                                    if ((DateTime.Now - _zoomStartTime).TotalMilliseconds >= Config.ZoomDurationSeconds * 1000.0)
+                                }
+                                else if (_zoomPhase == ZoomPhase.Holding)
+                                {
+                                    animatedScale = effectiveScale;
+                                    applyZoom = true;
+                                    if ((DateTime.Now - _zoomPhaseStartTime).TotalMilliseconds >= Config.ZoomDurationSeconds * 1000.0)
                                     {
-                                        _isZooming = false;
+                                        _zoomPhase = ZoomPhase.ZoomingOut;
+                                        _zoomPhaseStartTime = DateTime.Now;
+                                    }
+                                }
+                                else if (_zoomPhase == ZoomPhase.ZoomingOut)
+                                {
+                                    double elapsed = (DateTime.Now - _zoomPhaseStartTime).TotalMilliseconds;
+                                    double t = Math.Min(elapsed / ZoomAnimDurationMs, 1.0);
+                                    animatedScale = effectiveScale - (effectiveScale - 1.0) * SmoothStep(t);
+                                    applyZoom = true;
+                                    if (t >= 1.0)
+                                    {
+                                        _zoomPhase = ZoomPhase.None;
                                         _isScanning = false;
-                                        Debug.WriteLine("[Zoom] 缩放时长结束，恢复原样");
+                                        IsZoomingActive = false;
+                                        Debug.WriteLine("[Zoom] 缩放动画结束，恢复原样");
+                                    }
+                                }
+
+                                if (applyZoom && animatedScale > 1.001)
+                                {
+                                    int animW = (int)(currentFrame.Width / animatedScale);
+                                    int animH = (int)(currentFrame.Height / animatedScale);
+                                    if (animW > 0 && animH > 0 && animW <= currentFrame.Width && animH <= currentFrame.Height)
+                                    {
+                                        var animRect = new OpenCvSharp.Rect(
+                                            (currentFrame.Width - animW) / 2, (currentFrame.Height - animH) / 2, animW, animH)
+                                            .Intersect(new OpenCvSharp.Rect(0, 0, currentFrame.Width, currentFrame.Height));
+                                        if (animRect.Width > 0 && animRect.Height > 0)
+                                        {
+                                            var zoomed = currentFrame.Clone(animRect);
+                                            processedFrame = new Mat();
+                                            Cv2.Resize(zoomed, processedFrame, new OpenCvSharp.Size(Config.FrameWidth, Config.FrameHeight));
+                                            zoomed.Dispose();
+                                        }
                                     }
                                 }
                             }
@@ -945,6 +1005,12 @@ namespace ExpressPackingMonitoring.ViewModels
                 }
             }
             catch (OperationCanceledException) { }
+        }
+
+        private static double SmoothStep(double t)
+        {
+            t = Math.Max(0, Math.Min(1, t));
+            return t * t * (3 - 2 * t);
         }
 
         private void PerformMotionDetection(Mat currentFrame)

@@ -212,6 +212,7 @@
                                    StrokeDashArray="4 2"
                                    Fill="Transparent"
                                    Visibility="Collapsed"
+                                   Opacity="1"
                                    RadiusX="2" RadiusY="2"/>
                     </Grid>
                 </Border>

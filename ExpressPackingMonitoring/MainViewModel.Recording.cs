@@ -22,7 +22,7 @@ namespace ExpressPackingMonitoring.ViewModels
             IsRecording = false; // 1. 立即改变 UI 状态
             _isScanning = false;
             _delayBeforeZooming = false;
-            _isZooming = false;
+            _zoomPhase = ZoomPhase.None;
             _autoStopWarned = false;
             _maxDurationWarned = false;
 
