@@ -747,7 +747,7 @@ namespace ExpressPackingMonitoring.ViewModels
                             var currentZoomRect = new OpenCvSharp.Rect((currentFrame.Width - zoomW) / 2, (currentFrame.Height - zoomH) / 2, zoomW, zoomH)
                                 .Intersect(new OpenCvSharp.Rect(0, 0, currentFrame.Width, currentFrame.Height));
 
-                            if (currentZoomRect.Width > 0 && currentZoomRect.Height > 0)
+                            if (currentZoomRect.Width > 0 && currentZoomRect.Height > 0 && !_isZooming)
                             {
                                 LastZoomRect = new System.Windows.Rect(currentZoomRect.X, currentZoomRect.Y, currentZoomRect.Width, currentZoomRect.Height);
                             }
@@ -759,6 +759,7 @@ namespace ExpressPackingMonitoring.ViewModels
                                     _delayBeforeZooming = false;
                                     _isZooming = true;
                                     _zoomStartTime = DateTime.Now;
+                                    LastZoomRect = System.Windows.Rect.Empty;
                                     Debug.WriteLine($"[Zoom] 缩放触发: Delay={Config.ZoomDelaySeconds}s, Scale={Config.ZoomScale}");
                                 }
                                 if (_isZooming)
