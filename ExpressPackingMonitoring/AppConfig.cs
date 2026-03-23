@@ -65,6 +65,8 @@ namespace ExpressPackingMonitoring.ViewModels
         public double ZoomScale { get; set; } = 1.5;
         public double ZoomDelaySeconds { get; set; } = 1.0;
         public double ZoomDurationSeconds { get; set; } = 3.0;
+        public bool EnableZoomAnimation { get; set; } = true;
+        public double ZoomAnimationDurationMs { get; set; } = 250.0;
         public bool EnableAutoStop { get; set; } = true;
         public double AutoStopMinutes { get; set; } = 1.0;
         public bool EnableMaxDuration { get; set; } = false;

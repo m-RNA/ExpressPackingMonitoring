@@ -87,7 +87,6 @@ namespace ExpressPackingMonitoring.ViewModels
         private ZoomPhase _zoomPhase = ZoomPhase.None;
         private DateTime _zoomPhaseStartTime;
         private bool _delayBeforeZooming = false;
-        private const double ZoomAnimDurationMs = 350.0;
 
         private ScanRecord _currentScanRecord;
         private long _currentRecordId; 
@@ -406,17 +405,6 @@ namespace ExpressPackingMonitoring.ViewModels
             // 正则验证
             try { if (!System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex)) { ShowToast("非法单号，已拦截"); Speak("非法单号"); return; } } catch { }
 
-            _lastScanTime = DateTime.Now;
-            _isScanning = true;
-            _delayBeforeZooming = Config.ZoomDelaySeconds > 0;
-            if (!_delayBeforeZooming)
-            {
-                _zoomPhase = ZoomPhase.ZoomingIn;
-                _zoomPhaseStartTime = DateTime.Now;
-                LastZoomRect = System.Windows.Rect.Empty;
-                IsZoomingActive = true;
-            }
-            
             Debug.WriteLine($"[Zoom] 扫码事件触发: ID={upperResult}, ZoomEnabled={Config.EnableSmartZoom}, Delay={Config.ZoomDelaySeconds}");
             StartInputCooldown();
             CurrentOrderId = upperResult;
@@ -427,6 +415,18 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 if (IsRecording) await InternalStopRecordingAsync();
                 await InternalStartRecordingAsync();
+
+                // 在录制停止/启动之后设置缩放状态（InternalStopRecordingAsync 会重置缩放状态）
+                _lastScanTime = DateTime.Now;
+                _isScanning = true;
+                _delayBeforeZooming = Config.ZoomDelaySeconds > 0;
+                if (!_delayBeforeZooming)
+                {
+                    _zoomPhase = ZoomPhase.ZoomingIn;
+                    _zoomPhaseStartTime = DateTime.Now;
+                    LastZoomRect = System.Windows.Rect.Empty;
+                    IsZoomingActive = true;
+                }
             }
             catch (Exception ex)
             {
@@ -784,13 +784,14 @@ namespace ExpressPackingMonitoring.ViewModels
                                 }
 
                                 // 根据缩放阶段计算动画倍率
+                                double animDuration = Config.EnableZoomAnimation ? Config.ZoomAnimationDurationMs : 0;
                                 double animatedScale = 1.0;
                                 bool applyZoom = false;
 
                                 if (_zoomPhase == ZoomPhase.ZoomingIn)
                                 {
                                     double elapsed = (DateTime.Now - _zoomPhaseStartTime).TotalMilliseconds;
-                                    double t = Math.Min(elapsed / ZoomAnimDurationMs, 1.0);
+                                    double t = animDuration > 0 ? Math.Min(elapsed / animDuration, 1.0) : 1.0;
                                     animatedScale = 1.0 + (effectiveScale - 1.0) * SmoothStep(t);
                                     applyZoom = true;
                                     if (t >= 1.0)
@@ -812,7 +813,7 @@ namespace ExpressPackingMonitoring.ViewModels
                                 else if (_zoomPhase == ZoomPhase.ZoomingOut)
                                 {
                                     double elapsed = (DateTime.Now - _zoomPhaseStartTime).TotalMilliseconds;
-                                    double t = Math.Min(elapsed / ZoomAnimDurationMs, 1.0);
+                                    double t = animDuration > 0 ? Math.Min(elapsed / animDuration, 1.0) : 1.0;
                                     animatedScale = effectiveScale - (effectiveScale - 1.0) * SmoothStep(t);
                                     applyZoom = true;
                                     if (t >= 1.0)

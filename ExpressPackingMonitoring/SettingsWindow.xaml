@@ -617,6 +617,45 @@
                                                            Minimum="0"
                                                            Increment="0.5"/>
                                     </Grid>
+
+                                    <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,12,0,12"/>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="缩放过渡动画" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="关闭后特写将瞬间切换，不带过渡效果。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <CheckBox x:Name="ZoomAnimationCheckBox"
+                                                  Grid.Column="1"
+                                                  IsChecked="{Binding Config.EnableZoomAnimation}"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left"
+                                                  Style="{StaticResource ToggleSwitchStyle}"/>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,0"
+                                          IsEnabled="{Binding IsChecked, ElementName=ZoomAnimationCheckBox, TargetNullValue=False}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="动画时长 / 毫秒" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="缩放过渡动画的持续时长，数值越大越柔和。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <xctk:DoubleUpDown Grid.Column="1"
+                                                           Height="32"
+                                                           Value="{Binding Config.ZoomAnimationDurationMs}"
+                                                           Minimum="50"
+                                                           Maximum="2000"
+                                                           Increment="50"/>
+                                    </Grid>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
