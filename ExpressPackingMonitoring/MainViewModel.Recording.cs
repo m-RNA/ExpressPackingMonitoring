@@ -351,19 +351,21 @@ namespace ExpressPackingMonitoring.ViewModels
                 // 3. 开启新的生产者-消费者通道
                 lock (_videoLock)
                 {
-                    _videoWriteQueue = new BlockingCollection<Mat>(60);
+                    _videoWriteQueue = new BlockingCollection<Mat>(300); // 增大缓冲区
                     _writeCts = new CancellationTokenSource();
                 }
 
                 // 4. 启动录制任务
                 _writeTask = Task.Run(() => BackgroundFFmpegRecordingLoop(filePath, ffmpegPath, _writeCts.Token));
 
-                // 5. 等待 250ms 给 FFmpeg 初始化。如果闪退，Task 会立刻完成
-                await Task.Delay(250); 
+                // 5. 等待较长时间给 FFmpeg 初始化，特别是 NVENC。
+                // 如果闪退，Task 会立刻完成
+                await Task.Delay(1000); 
                 if (_writeTask.IsCompleted) 
                 {
-                    Debug.WriteLine("[MainVM] 启动检测：_writeTask 瞬间结束，说明 FFmpeg 启动失败");
-                    return; // 内部错误处理已经在 Loop 里面通过 Dispatcher 报错了，这里只需返回
+                    Debug.WriteLine("[MainVM] 启动检测：_writeTask 已结束，FFmpeg 启动失败");
+                    // 注意：此处不应手动 IsRecording = false，BackgroundFFmpegRecordingLoop 内部会处理 UI 状态重置。
+                    return; 
                 }
 
                 IsRecording = true;
@@ -500,7 +502,18 @@ namespace ExpressPackingMonitoring.ViewModels
 
                 foreach (var frame in _videoWriteQueue.GetConsumingEnumerable())
                 {
-                    if (token.IsCancellationRequested) { frame?.Dispose(); break; }
+                    // 检查 FFmpeg 进程是否已经崩溃。如果已经退出，直接退出循环
+                    if (ffmpeg.HasExited) 
+                    {
+                        frame?.Dispose();
+                        break;
+                    }
+
+                    if (token.IsCancellationRequested) 
+                    { 
+                        frame?.Dispose(); 
+                        break; 
+                    }
                     if (frame == null || frame.IsDisposed) continue;
 
                     bool pipeError = false;
@@ -517,9 +530,12 @@ namespace ExpressPackingMonitoring.ViewModels
 
                         try
                         {
+                            if (ffmpeg.HasExited) { pipeError = true; break; }
+
                             if (toWrite.IsContinuous() && toWrite.Type() == MatType.CV_8UC3)
                             {
                                 Marshal.Copy(toWrite.Data, buffer, 0, expectedBytes);
+                                // 此处可能会抛出 IOException/InvalidOperationException，标志着管道断开
                                 stdin.Write(buffer, 0, expectedBytes);
                                 anyFrameWritten = true;
                             }
@@ -529,7 +545,11 @@ namespace ExpressPackingMonitoring.ViewModels
                             if (needResize) toWrite.Dispose();
                         }
                     }
-                    catch (IOException) { pipeError = true; }
+                    catch (Exception ex) 
+                    { 
+                        Debug.WriteLine($"[FFmpeg] 管道写入异常: {ex.Message}");
+                        pipeError = true; 
+                    }
                     finally
                     {
                         frame.Dispose();
@@ -617,15 +637,15 @@ namespace ExpressPackingMonitoring.ViewModels
                 args += $" -thread_queue_size 256 -use_wallclock_as_timestamps 1 -f dshow -audio_buffer_size 50 -i audio=\"{Config.AudioDeviceName}\"";
             }
 
-            if (encoder == "h264_nvenc") args += $" -c:v h264_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -cq {cqp} -b:v 0 -g {gop}";
+            if (encoder == "h264_nvenc") args += $" -c:v h264_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -cq {cqp} -b:v 0 -g {gop} -max_muxing_queue_size 1024";
             else if (encoder == "h264_amf") args += $" -c:v h264_amf -pix_fmt yuv420p -quality balanced -rc cqp -qp_i {cqp} -qp_p {cqp} -g {gop}";
             else if (encoder == "h264_qsv") args += $" -c:v h264_qsv -pix_fmt nv12 -preset medium -global_quality {cqp} -g {gop}";
             else if (encoder == "libx264") args += $" -c:v libx264 -pix_fmt yuv420p -preset fast -crf {cqp} -g {gop}";
-            else if (encoder == "hevc_nvenc") args += $" -c:v hevc_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -cq {cqp} -b:v 0 -g {gop}";
+            else if (encoder == "hevc_nvenc") args += $" -c:v hevc_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -cq {cqp} -b:v 0 -g {gop} -max_muxing_queue_size 1024";
             else if (encoder == "hevc_amf") args += $" -c:v hevc_amf -pix_fmt yuv420p -quality balanced -rc cqp -qp_i {cqp} -qp_p {cqp} -g {gop}";
             else if (encoder == "hevc_qsv") args += $" -c:v hevc_qsv -pix_fmt nv12 -preset medium -global_quality {cqp} -g {gop}";
             else if (encoder == "libx265") args += $" -c:v libx265 -pix_fmt yuv420p -preset fast -crf {cqp} -g {gop}";
-            else if (encoder == "av1_nvenc") args += $" -c:v av1_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -cq {cqp} -b:v 0 -g {gop}";
+            else if (encoder == "av1_nvenc") args += $" -c:v av1_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -cq {cqp} -b:v 0 -g {gop} -max_muxing_queue_size 1024";
             else if (encoder == "av1_amf") args += $" -c:v av1_amf -pix_fmt yuv420p -quality balanced -rc cqp -qp_i {cqp} -qp_p {cqp} -g {gop}";
             else if (encoder == "av1_qsv") args += $" -c:v av1_qsv -pix_fmt nv12 -preset medium -global_quality {cqp} -g {gop}";
             else if (encoder == "libsvtav1") args += $" -c:v libsvtav1 -pix_fmt yuv420p -preset {GetCpuAv1Preset(w, h, fps)} -crf {cqp} -svtav1-params tune=0 -g {gop}";
@@ -636,7 +656,8 @@ namespace ExpressPackingMonitoring.ViewModels
             if (hasAudio)
             {
                 string audioFilter = BuildAudioSyncFilter();
-                args += $" -af {audioFilter} -c:a aac -b:a 64k -shortest";
+                // 增大实时流缓冲以防管道压力大时音频不同步或丢包
+                args += $" -af {audioFilter} -c:a aac -b:a 128k -shortest -max_muxing_queue_size 1024";
             }
 
             args += " -muxdelay 0 -muxpreload 0";
