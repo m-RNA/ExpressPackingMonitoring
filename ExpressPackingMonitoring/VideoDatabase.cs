@@ -228,6 +228,27 @@ namespace ExpressPackingMonitoring
         }
 
         /// <summary>
+        /// 检查今日是否已存在指定单号的未删除录像记录
+        /// </summary>
+        public bool OrderIdExistsToday(string orderId)
+        {
+            if (string.IsNullOrWhiteSpace(orderId)) return false;
+            lock (_lock)
+            {
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = @"
+                    SELECT COUNT(1) FROM VideoRecords
+                    WHERE OrderId = @orderId
+                      AND StartTime >= @today
+                      AND IsDeleted = 0
+                      AND DurationSeconds > 0;";
+                cmd.Parameters.AddWithValue("@orderId", orderId);
+                cmd.Parameters.AddWithValue("@today", DateTime.Now.ToString("yyyy-MM-dd 00:00:00"));
+                return Convert.ToInt64(cmd.ExecuteScalar()) > 0;
+            }
+        }
+
+        /// <summary>
         /// 查询视频列表（支持日期范围 + 关键词过滤，包含已删除记录）
         /// </summary>
         public List<VideoRecord> QueryVideos(DateTime startDate, DateTime endDate, string keyword = null)

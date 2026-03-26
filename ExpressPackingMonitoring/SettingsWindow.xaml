@@ -784,6 +784,26 @@
                                                            Maximum="60.0"
                                                            Increment="0.5"/>
                                     </Grid>
+
+                                    <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,12,0,12"/>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="最短录制时长 / 秒" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="录制时长不足此值时自动丢弃不保存，设为 0 则全部保留。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <xctk:DoubleUpDown Grid.Column="1"
+                                                           Height="32"
+                                                           Value="{Binding Config.MinRecordingSeconds}"
+                                                           Minimum="0"
+                                                           Maximum="30"
+                                                           Increment="1"/>
+                                    </Grid>
                                 </StackPanel>
                             </Border>
                         </StackPanel>

@@ -104,15 +104,22 @@ namespace ExpressPackingMonitoring.ViewModels
                 try
                 {
                     long fileSize = File.Exists(filePath) ? new FileInfo(filePath).Length : 0;
+                    double recordDuration = (DateTime.Now - recordStart).TotalSeconds;
 
-                    // 如果文件小于 50KB (比如启动报错或没数据)，作为异常数据丢弃
-                    if (fileSize < 1024 * 50)
+                    // 如果文件小于 50KB (比如启动报错或没数据)，或录制时长不足最低时长要求，作为无效数据丢弃
+                    bool tooShort = Config.MinRecordingSeconds > 0 && recordDuration < Config.MinRecordingSeconds;
+                    if (fileSize < 1024 * 50 || tooShort)
                     {
                         try { if (File.Exists(filePath)) File.Delete(filePath); } catch { }
                         _ = Application.Current.Dispatcher.InvokeAsync(() => {
                             if (!_isDisposed) {
                                 _allLogs.Remove(scanRecord);
                                 FilteredLogs.Remove(scanRecord);
+                                if (tooShort && fileSize >= 1024 * 50)
+                                {
+                                    ShowToast($"⚠ 录像过短({recordDuration:F1}s)，已丢弃");
+                                    Speak("录像过短，已丢弃");
+                                }
                             }
                         });
                     }

@@ -368,6 +368,13 @@ namespace ExpressPackingMonitoring.ViewModels
                         LastZoomRect = System.Windows.Rect.Empty;
                         IsZoomingActive = true;
                     }
+
+                    // 没有输入单号时语音提示
+                    if (CurrentOrderId.StartsWith("MAN_"))
+                    {
+                        Speak("没有单号");
+                    }
+
                     Debug.WriteLine($"[Zoom] 手动开启录制触发缩放: ID={CurrentOrderId}, Delay={Config.ZoomDelaySeconds}");
 
                     await InternalStartRecordingAsync();
@@ -404,6 +411,13 @@ namespace ExpressPackingMonitoring.ViewModels
 
             // 正则验证
             try { if (!System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex)) { ShowToast("非法单号，已拦截"); Speak("非法单号"); return; } } catch { }
+
+            // 重复单号检测（查数据库今日记录）
+            if (_db != null && _db.OrderIdExistsToday(upperResult))
+            {
+                ShowToast("⚠ 重复单号，请确认");
+                Speak("重复单号");
+            }
 
             Debug.WriteLine($"[Zoom] 扫码事件触发: ID={upperResult}, ZoomEnabled={Config.EnableSmartZoom}, Delay={Config.ZoomDelaySeconds}");
             StartInputCooldown();
