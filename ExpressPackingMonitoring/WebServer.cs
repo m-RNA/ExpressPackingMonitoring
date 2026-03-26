@@ -240,9 +240,10 @@ namespace ExpressPackingMonitoring
             Directory.CreateDirectory(_transCacheDir);
             string tmpPath = cachePath + ".tmp";
 
-            // fragmented MP4 输出到 stdout，可边转边播
-            string hwArgs = $"-loglevel warning -hwaccel auto -i \"{filePath}\" -c:v h264_nvenc -preset p1 -cq 28 -c:a aac -movflags frag_keyframe+empty_moov+default_base_moof -f mp4 pipe:1";
-            string swArgs = $"-loglevel warning -i \"{filePath}\" -c:v libx264 -preset ultrafast -crf 23 -c:a aac -movflags frag_keyframe+empty_moov+default_base_moof -f mp4 pipe:1";
+            // 流式转码：缩到 480p + 极速设置，确保转码速度 > 实时播放速度
+            string scaleFilter = "-vf scale=-2:480";
+            string hwArgs = $"-loglevel warning -hwaccel auto -i \"{filePath}\" {scaleFilter} -c:v h264_nvenc -preset p1 -cq 30 -c:a aac -b:a 96k -movflags frag_keyframe+empty_moov+default_base_moof -f mp4 pipe:1";
+            string swArgs = $"-loglevel warning -i \"{filePath}\" {scaleFilter} -c:v libx264 -preset ultrafast -tune zerolatency -crf 28 -c:a aac -b:a 96k -movflags frag_keyframe+empty_moov+default_base_moof -f mp4 pipe:1";
 
             if (!StreamTranscodeToClient(ctx, ffmpegPath, hwArgs, tmpPath))
             {
