@@ -26,10 +26,28 @@ namespace ExpressPackingMonitoring.ViewModels
                         string normalizedPath = Path.IsPathRooted(loc.Path) ? loc.Path : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, loc.Path);
                         if (!Directory.Exists(normalizedPath)) continue;
 
-                        totalConfigQuotaBytes += (long)(loc.QuotaGB * 1073741824.0);
-
+                        long locVideoBytes = 0;
                         foreach (var fi in EnumerateVideoFiles(normalizedPath))
-                            totalCurrentBytes += fi.Length;
+                            locVideoBytes += fi.Length;
+                        totalCurrentBytes += locVideoBytes;
+
+                        long configQuota = (long)(loc.QuotaGB * 1073741824.0);
+                        try
+                        {
+                            var driveRoot = Path.GetPathRoot(Path.GetFullPath(normalizedPath));
+                            if (!string.IsNullOrEmpty(driveRoot))
+                            {
+                                var driveInfo = new DriveInfo(driveRoot);
+                                if (driveInfo.IsReady)
+                                {
+                                    // 磁盘实际可供本目录使用的上限 = 当前剩余空间 + 该目录已用视频空间
+                                    long realCapacity = driveInfo.AvailableFreeSpace + locVideoBytes;
+                                    configQuota = Math.Min(configQuota, realCapacity);
+                                }
+                            }
+                        }
+                        catch { }
+                        totalConfigQuotaBytes += configQuota;
                     }
 
                     if (IsRecording && !string.IsNullOrEmpty(_currentVideoFilePath))
