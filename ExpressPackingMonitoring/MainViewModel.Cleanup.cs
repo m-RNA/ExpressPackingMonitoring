@@ -105,12 +105,17 @@ namespace ExpressPackingMonitoring.ViewModels
             } 
         }
 
+        private static readonly string[] _videoExtensions = [".mkv", ".mp4"];
+
         private static IEnumerable<FileInfo> EnumerateVideoFiles(string folderPath)
         {
             var dir = new DirectoryInfo(folderPath);
             if (!dir.Exists) yield break;
-            foreach (var file in dir.EnumerateFiles("*.mkv", SearchOption.AllDirectories))
-                yield return file;
+            foreach (var file in dir.EnumerateFiles("*.*", SearchOption.AllDirectories))
+            {
+                if (_videoExtensions.Contains(file.Extension, StringComparer.OrdinalIgnoreCase))
+                    yield return file;
+            }
         }
     }
 }
