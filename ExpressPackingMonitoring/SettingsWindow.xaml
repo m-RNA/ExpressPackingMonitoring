@@ -947,6 +947,29 @@
                                     Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Right"/>
                         </Grid>
                     </Border>
+
+                    <!-- MKV 批量迁移 -->
+                    <TextBlock Text="历史数据迁移" Style="{StaticResource SectionHeader}" Margin="0,20,0,0"/>
+                    <Border Style="{StaticResource SettingRow}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid Grid.Row="0">
+                                <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+                                    <TextBlock Text="一键将旧版 MKV 录像转换为 MP4" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="MigrationStatusText" Text="点击按钮开始迁移" FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <Button x:Name="BtnMigrateMkv" Content="开始迁移" HorizontalAlignment="Right"
+                                        Style="{StaticResource SecondaryActionButtonStyle}" Width="100"
+                                        Click="BtnMigrateMkv_Click"/>
+                            </Grid>
+                            <ProgressBar x:Name="MigrationProgress" Grid.Row="1" Height="4" Margin="0,8,0,0" 
+                                         Visibility="Collapsed" IsIndeterminate="True"
+                                         Foreground="{DynamicResource AccentBlue}"/>
+                        </Grid>
+                    </Border>
                 </StackPanel>
             </ScrollViewer>
         </TabItem>

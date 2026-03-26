@@ -200,6 +200,25 @@ namespace ExpressPackingMonitoring
         }
 
         /// <summary>
+        /// 查询所有未删除且文件路径以 .mkv 结尾的记录
+        /// </summary>
+        public List<string> QueryMkvFilePaths()
+        {
+            lock (_lock)
+            {
+                var paths = new List<string>();
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = "SELECT FilePath FROM VideoRecords WHERE IsDeleted = 0 AND FilePath LIKE '%.mkv';";
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    paths.Add(reader.GetString(0));
+                }
+                return paths;
+            }
+        }
+
+        /// <summary>
         /// 标记视频为已删除并写入删除日志
         /// </summary>
         public void MarkVideoDeleted(string filePath, string reason)

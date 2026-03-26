@@ -616,6 +616,102 @@ namespace ExpressPackingMonitoring.ViewModels
             }
         }
 
+        /// <summary>
+        /// 批量将数据库中的旧 MKV 文件转换为 MP4（无损容器转换）
+        /// </summary>
+        public async Task<(int success, int fail, int skip)> BatchConvertMkvToMp4Async(IProgress<string> progress, CancellationToken token)
+        {
+            if (_db == null) return (0, 0, 0);
+
+            string ffmpegPath = FindFFmpeg();
+            if (string.IsNullOrEmpty(ffmpegPath))
+            {
+                progress?.Report("未找到 FFmpeg，无法执行转换");
+                return (0, 0, 0);
+            }
+
+            var mkvPaths = _db.QueryMkvFilePaths();
+            int success = 0, fail = 0, skip = 0;
+            int total = mkvPaths.Count;
+
+            for (int i = 0; i < total; i++)
+            {
+                if (token.IsCancellationRequested) break;
+
+                string mkvPath = mkvPaths[i];
+                string mp4Path = Path.ChangeExtension(mkvPath, ".mp4");
+                string fileName = Path.GetFileName(mkvPath);
+
+                // 如果 MKV 已不存在但 MP4 存在，只更新数据库
+                if (!File.Exists(mkvPath))
+                {
+                    if (File.Exists(mp4Path))
+                    {
+                        _db.UpdateVideoFilePath(mkvPath, mp4Path);
+                        success++;
+                        progress?.Report($"[{i + 1}/{total}] 已更新数据库: {fileName}");
+                    }
+                    else
+                    {
+                        skip++;
+                        progress?.Report($"[{i + 1}/{total}] 文件不存在，跳过: {fileName}");
+                    }
+                    continue;
+                }
+
+                // 如果 MP4 已存在，直接删 MKV 并更新数据库
+                if (File.Exists(mp4Path) && new FileInfo(mp4Path).Length > 0)
+                {
+                    try { File.Delete(mkvPath); } catch { }
+                    _db.UpdateVideoFilePath(mkvPath, mp4Path);
+                    success++;
+                    progress?.Report($"[{i + 1}/{total}] MP4 已存在，已清理 MKV: {fileName}");
+                    continue;
+                }
+
+                progress?.Report($"[{i + 1}/{total}] 正在转换: {fileName}");
+
+                bool ok = await Task.Run(() =>
+                {
+                    try
+                    {
+                        var psi = new ProcessStartInfo
+                        {
+                            FileName = ffmpegPath,
+                            Arguments = $"-y -i \"{mkvPath}\" -vcodec copy -acodec copy \"{mp4Path}\"",
+                            UseShellExecute = false,
+                            CreateNoWindow = true,
+                            RedirectStandardError = true,
+                            RedirectStandardOutput = true
+                        };
+
+                        using var process = Process.Start(psi);
+                        if (process == null) return false;
+                        process.StandardError.ReadToEnd();
+                        process.WaitForExit();
+                        return process.ExitCode == 0 && File.Exists(mp4Path) && new FileInfo(mp4Path).Length > 0;
+                    }
+                    catch { return false; }
+                }, token);
+
+                if (ok)
+                {
+                    try { File.Delete(mkvPath); } catch { }
+                    _db.UpdateVideoFilePath(mkvPath, mp4Path);
+                    success++;
+                    progress?.Report($"[{i + 1}/{total}] 转换成功: {fileName}");
+                }
+                else
+                {
+                    try { if (File.Exists(mp4Path)) File.Delete(mp4Path); } catch { }
+                    fail++;
+                    progress?.Report($"[{i + 1}/{total}] 转换失败: {fileName}");
+                }
+            }
+
+            return (success, fail, skip);
+        }
+
         private void InitializeSystem()
         {
             _cts = new CancellationTokenSource();

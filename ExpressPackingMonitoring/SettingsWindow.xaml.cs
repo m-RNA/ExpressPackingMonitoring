@@ -657,5 +657,47 @@ namespace ExpressPackingMonitoring
             this.DialogResult = false;
             this.Close();
         }
+
+        private CancellationTokenSource _migrationCts;
+
+        private async void BtnMigrateMkv_Click(object sender, RoutedEventArgs e)
+        {
+            if (_migrationCts != null)
+            {
+                // 正在迁移中，点击取消
+                _migrationCts.Cancel();
+                return;
+            }
+
+            BtnMigrateMkv.Content = "取消迁移";
+            MigrationProgress.Visibility = Visibility.Visible;
+            MigrationStatusText.Text = "正在扫描 MKV 记录...";
+            _migrationCts = new CancellationTokenSource();
+
+            var progress = new Progress<string>(msg =>
+            {
+                MigrationStatusText.Text = msg;
+            });
+
+            try
+            {
+                var (success, fail, skip) = await MainVM.BatchConvertMkvToMp4Async(progress, _migrationCts.Token);
+                MigrationStatusText.Text = $"迁移完成：成功 {success}，失败 {fail}，跳过 {skip}";
+            }
+            catch (OperationCanceledException)
+            {
+                MigrationStatusText.Text = "迁移已取消";
+            }
+            catch (Exception ex)
+            {
+                MigrationStatusText.Text = $"迁移出错：{ex.Message}";
+            }
+            finally
+            {
+                _migrationCts = null;
+                BtnMigrateMkv.Content = "开始迁移";
+                MigrationProgress.Visibility = Visibility.Collapsed;
+            }
+        }
     }
 }
