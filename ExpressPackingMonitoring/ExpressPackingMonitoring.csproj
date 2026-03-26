@@ -54,6 +54,7 @@
     <Compile Include="StatisticsWindow.xaml.cs" />
     <Compile Include="Themes\ThemeManager.cs" />
     <Compile Include="VideoDatabase.cs" />
+    <Compile Include="WebServer.cs" />
   </ItemGroup>
 
   <!-- 排除不需要的 OpenCV 内置 ffmpeg（已使用独立 ffmpeg.exe 管道录制） -->

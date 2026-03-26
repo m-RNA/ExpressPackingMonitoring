@@ -90,6 +90,10 @@ namespace ExpressPackingMonitoring.ViewModels
         public string VideoCodec { get; set; } = "h265"; // "h264" or "h265"
         public int VideoCqp { get; set; } = 30;
 
+        // 局域网 Web 服务
+        public bool EnableWebServer { get; set; } = true;
+        public int WebServerPort { get; set; } = 5280;
+
         // 缓存的检测结果
         public List<GpuEncoderOption> EncoderOptionsCache { get; set; }
         public List<string> ValidatedEncodersCache { get; set; }

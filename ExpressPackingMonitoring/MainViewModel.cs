@@ -65,6 +65,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private bool _isInputOnCooldown = false;
         private Process _currentFfmpegProcess;
         private bool _isDisposed = false; // 新增：防止销毁后操作 UI
+        private WebServer _webServer;
 
         private bool _isBusy;
         public bool IsBusy { get => _isBusy; set => SetProperty(ref _isBusy, value); }
@@ -720,6 +721,23 @@ namespace ExpressPackingMonitoring.ViewModels
             _videoTask = Task.Run(() => VideoProcessLoop(_cts.Token), _cts.Token);
             Task.Run(CheckDiskAndCleanup);
             Task.Run(CameraIdleWatchdog);
+            StartWebServer();
+        }
+
+        private void StartWebServer()
+        {
+            if (!Config.EnableWebServer || _db == null) return;
+            try
+            {
+                _webServer = new WebServer(_db, Config.WebServerPort);
+                _webServer.Start();
+                Debug.WriteLine($"[Web] 局域网服务已启动 http://0.0.0.0:{Config.WebServerPort}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Web] 启动失败: {ex.Message}");
+                ShowToast($"⚠ 局域网服务启动失败: {ex.Message}");
+            }
         }
 
         private void RestartCamera() { _ = SafeStopRecordingAsync(); StopCamera(); StartCamera(); }
@@ -1263,6 +1281,7 @@ namespace ExpressPackingMonitoring.ViewModels
             _cts?.Dispose();
             lock (_videoLock) { _previousCheckFrame?.Dispose(); }
             lock (_speechLock) { _speechSynth?.Dispose(); _speechSynth = null; }
+            try { _webServer?.Dispose(); } catch { }
             try { _db?.Dispose(); } catch { }
         }
     }
