@@ -53,6 +53,11 @@ namespace ExpressPackingMonitoring.ViewModels
         private Mat _previousCheckFrame = new Mat();
         private BitmapSource _videoFrame;
         private CancellationTokenSource _cts;
+
+        // 摄像头空闲休眠
+        private bool _isCameraSleeping = false;
+        private DateTime _lastActivityTime = DateTime.Now;
+        public bool IsCameraSleeping { get => _isCameraSleeping; private set => SetProperty(ref _isCameraSleeping, value); }
         private Task _videoTask;
         private object _videoLock = new object();
 
@@ -335,6 +340,7 @@ namespace ExpressPackingMonitoring.ViewModels
         // ========================== 核心逻辑：恢复 MAN_ 前缀 ==========================
         private async void ToggleRecording() 
         {
+            NotifyUserActivity();
             if (IsBusy || _isDisposed) return;
             if (!await _recorderLock.WaitAsync(0)) return; 
 
@@ -393,6 +399,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private async void HandleScan(string scanResult)
         {
+            NotifyUserActivity();
             if (IsBusy || _isDisposed) { ScanInputText = ""; return; }
             if (_isInputOnCooldown) { ScanInputText = ""; return; }
 
@@ -612,12 +619,55 @@ namespace ExpressPackingMonitoring.ViewModels
         private void InitializeSystem()
         {
             _cts = new CancellationTokenSource();
+            _lastActivityTime = DateTime.Now;
             StartCamera();
             _videoTask = Task.Run(() => VideoProcessLoop(_cts.Token), _cts.Token);
             Task.Run(CheckDiskAndCleanup);
+            Task.Run(CameraIdleWatchdog);
         }
 
         private void RestartCamera() { _ = SafeStopRecordingAsync(); StopCamera(); StartCamera(); }
+
+        /// <summary>
+        /// 注册用户活跃信号（扫码/鼠标/键盘/按钮等），如果摄像头休眠中则唤醒
+        /// </summary>
+        public void NotifyUserActivity()
+        {
+            _lastActivityTime = DateTime.Now;
+            if (_isCameraSleeping)
+            {
+                IsCameraSleeping = false; // SetProperty 会同时更新字段并触发 PropertyChanged
+                StartCamera();
+                ShowToast("摄像头已唤醒");
+                Speak("摄像头已唤醒");
+                Debug.WriteLine("[Idle] 用户活跃，摄像头唤醒");
+            }
+        }
+
+        private async void CameraIdleWatchdog()
+        {
+            while (!_isDisposed)
+            {
+                await Task.Delay(10_000); // 每10秒检查一次
+                if (_isDisposed) break;
+                if (!Config.EnableCameraIdle || Config.CameraIdleMinutes <= 0) continue;
+                if (IsRecording || _isCameraSleeping) continue;
+
+                double idleMinutes = (DateTime.Now - _lastActivityTime).TotalMinutes;
+                if (idleMinutes >= Config.CameraIdleMinutes)
+                {
+                    await Application.Current.Dispatcher.InvokeAsync(() => {
+                        if (_isCameraSleeping || IsRecording) return; // 再次检查防止竞态
+                        IsCameraSleeping = true; // SetProperty 会同时更新字段并触发 PropertyChanged
+                        StopCamera();
+                        VideoFrame = null;
+                        ShowToast($"💤 摄像头已休眠（空闲{Config.CameraIdleMinutes}分钟）");
+                        Speak("摄像头已休眠");
+                        Debug.WriteLine($"[Idle] 摄像头休眠: 空闲{idleMinutes:F1}分钟");
+                    });
+                }
+            }
+        }
 
         private DateTime _lastFrameTime = DateTime.MinValue;
 
@@ -904,8 +954,14 @@ namespace ExpressPackingMonitoring.ViewModels
                     }
                     else
                     {
+                        // 休眠期间不做任何自动重连操作
+                        if (_isCameraSleeping)
+                        {
+                            cameraErrorCounter = 0;
+                            cameraMissingCounter = 0;
+                        }
                         // 摄像头掉线检测：如果 3秒没帧，且 _videoSource 理论上在运行
-                        if (_videoSource != null && _videoSource.IsRunning)
+                        else if (_videoSource != null && _videoSource.IsRunning)
                         {
                             cameraErrorCounter++;
                             // 约 3秒 (假设 15fps，45帧)

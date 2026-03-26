@@ -804,6 +804,45 @@
                                                            Maximum="30"
                                                            Increment="1"/>
                                     </Grid>
+
+                                    <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,12,0,12"/>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="摄像头空闲休眠" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="长时间无操作时自动断开摄像头，活跃时自动恢复。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <CheckBox x:Name="CameraIdleCheckBox"
+                                                  Grid.Column="1"
+                                                  IsChecked="{Binding Config.EnableCameraIdle}"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left"
+                                                  Style="{StaticResource ToggleSwitchStyle}"/>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,0"
+                                          IsEnabled="{Binding IsChecked, ElementName=CameraIdleCheckBox, TargetNullValue=False}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="空闲超时 / 分钟" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="超过该时长无任何操作则断开摄像头进入休眠。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <xctk:DoubleUpDown Grid.Column="1"
+                                                           Height="32"
+                                                           Value="{Binding Config.CameraIdleMinutes}"
+                                                           Minimum="1"
+                                                           Maximum="480"
+                                                           Increment="5"/>
+                                    </Grid>
                                 </StackPanel>
                             </Border>
                         </StackPanel>

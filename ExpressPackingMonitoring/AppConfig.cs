@@ -72,6 +72,8 @@ namespace ExpressPackingMonitoring.ViewModels
         public bool EnableMaxDuration { get; set; } = false;
         public double MaxDurationMinutes { get; set; } = 5.0;
         public double MinRecordingSeconds { get; set; } = 3.0;
+        public bool EnableCameraIdle { get; set; } = true;
+        public double CameraIdleMinutes { get; set; } = 30.0;
 
         public double MotionDetectThreshold { get; set; } = 15.0;
         public string OrderIdRegex { get; set; } = "^[a-zA-Z0-9-]{12,25}$";

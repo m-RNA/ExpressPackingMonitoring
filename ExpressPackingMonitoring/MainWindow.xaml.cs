@@ -60,12 +60,16 @@ namespace ExpressPackingMonitoring
                     EnsureCapsLockOn();
                     if (string.IsNullOrEmpty(ScanInputTextBox.Text)) _capsCheckTimer.Start();
                 }
+                (DataContext as MainViewModel)?.NotifyUserActivity();
             };
             Deactivated += (s, e) =>
             {
                 _capsCheckTimer.Stop();
                 RestoreCapsLockState();
             };
+            // 全局鼠标/键盘活跃检测，用于摄像头空闲休眠唤醒
+            PreviewMouseMove += (s, e) => (DataContext as MainViewModel)?.NotifyUserActivity();
+            PreviewKeyDown += (s, e) => (DataContext as MainViewModel)?.NotifyUserActivity();
             Loaded += (s, e) => {
                 ScanInputTextBox.Focus();
                 if (DataContext is MainViewModel vm)

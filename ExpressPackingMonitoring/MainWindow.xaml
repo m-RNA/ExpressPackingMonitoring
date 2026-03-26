@@ -214,6 +214,25 @@
                                    Visibility="Collapsed"
                                    Opacity="1"
                                    RadiusX="2" RadiusY="2"/>
+                        <!-- 摄像头休眠提示 -->
+                        <Grid IsHitTestVisible="False">
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsCameraSleeping}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                            <Border Background="#DD1a1a2e" CornerRadius="10"/>
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBlock Text="💤" FontSize="48" HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                                <TextBlock Text="摄像头已休眠" FontSize="22" FontWeight="Bold" Foreground="#AAFFFFFF" HorizontalAlignment="Center"/>
+                                <TextBlock Text="点击任意位置或扫码唤醒" FontSize="14" Foreground="#66FFFFFF" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </Grid>
                     </Grid>
                 </Border>
 
