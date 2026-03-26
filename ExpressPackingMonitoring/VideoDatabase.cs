@@ -180,6 +180,26 @@ namespace ExpressPackingMonitoring
         }
 
         /// <summary>
+        /// 更新视频记录的文件路径（MKV 转 MP4 后调用）
+        /// </summary>
+        public void UpdateVideoFilePath(string oldPath, string newPath)
+        {
+            lock (_lock)
+            {
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = @"
+                    UPDATE VideoRecords SET 
+                        FilePath = @newPath,
+                        FileName = @newFileName
+                    WHERE FilePath = @oldPath;";
+                cmd.Parameters.AddWithValue("@oldPath", oldPath);
+                cmd.Parameters.AddWithValue("@newPath", newPath);
+                cmd.Parameters.AddWithValue("@newFileName", Path.GetFileName(newPath));
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        /// <summary>
         /// 标记视频为已删除并写入删除日志
         /// </summary>
         public void MarkVideoDeleted(string filePath, string reason)

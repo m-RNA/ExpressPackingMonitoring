@@ -132,6 +132,9 @@ namespace ExpressPackingMonitoring.ViewModels
 
                         _db?.UpdateVideoRecordOnStop(recordId, DateTime.Now, durSec, fileSize, stopReason, videoCodec, videoEncoder);
 
+                        // 自动将 MKV 转换为 MP4（无损容器转换）
+                        ConvertMkvToMp4(filePath);
+
                         _ = Application.Current.Dispatcher.InvokeAsync(() => {
                             if (!_isDisposed && scanRecord != null)
                             {
@@ -693,6 +696,66 @@ namespace ExpressPackingMonitoring.ViewModels
         }
 
         private int GetVideoCqp() => Config.VideoCqp > 0 ? Config.VideoCqp : 25;
+
+        /// <summary>
+        /// 录制完成后自动将 MKV 无损转换为 MP4（容器转换，不重新编码）
+        /// </summary>
+        private void ConvertMkvToMp4(string mkvPath)
+        {
+            try
+            {
+                if (!File.Exists(mkvPath) || !mkvPath.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase))
+                    return;
+
+                string ffmpegPath = FindFFmpeg();
+                if (string.IsNullOrEmpty(ffmpegPath))
+                {
+                    Debug.WriteLine("[MkvToMp4] FFmpeg 未找到，跳过自动转换");
+                    return;
+                }
+
+                string mp4Path = Path.ChangeExtension(mkvPath, ".mp4");
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = ffmpegPath,
+                    Arguments = $"-y -i \"{mkvPath}\" -vcodec copy -acodec copy \"{mp4Path}\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true
+                };
+
+                using var process = Process.Start(psi);
+                if (process == null)
+                {
+                    Debug.WriteLine("[MkvToMp4] FFmpeg 进程启动失败");
+                    return;
+                }
+
+                process.StandardError.ReadToEnd();
+                process.WaitForExit();
+
+                if (process.ExitCode == 0 && File.Exists(mp4Path) && new FileInfo(mp4Path).Length > 0)
+                {
+                    // 转换成功，删除原始 MKV
+                    try { File.Delete(mkvPath); } catch { }
+                    // 更新数据库中的文件路径
+                    _db?.UpdateVideoFilePath(mkvPath, mp4Path);
+                    Debug.WriteLine($"[MkvToMp4] 转换成功: {mp4Path}");
+                }
+                else
+                {
+                    // 转换失败，保留 MKV，清理可能的残留 MP4
+                    try { if (File.Exists(mp4Path)) File.Delete(mp4Path); } catch { }
+                    Debug.WriteLine($"[MkvToMp4] 转换失败，保留原始 MKV");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[MkvToMp4] 异常: {ex.Message}");
+            }
+        }
 
         private static string FindFFmpeg()
         {

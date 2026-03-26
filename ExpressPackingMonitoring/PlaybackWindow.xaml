@@ -203,7 +203,7 @@
 
                         <TextBlock x:Name="TimeLabel" Grid.Column="2" Text="00:00:00 / 00:00:00" Foreground="White" VerticalAlignment="Center" Margin="15,0,0,0" FontFamily="Consolas"/>
 
-                        <Button x:Name="BtnExportMp4" Grid.Column="3" Content="导出 MP4" Width="100" Height="30" Click="BtnExportMp4_Click" Background="{DynamicResource AccentBlue}" Foreground="White" FontWeight="Bold" Margin="15,0,0,0" Cursor="Hand"/>
+                        <Button x:Name="BtnLocateFile" Grid.Column="3" Content="📂 定位文件" Width="100" Height="30" Click="BtnLocateFile_Click" Background="{DynamicResource AccentBlue}" Foreground="White" FontWeight="Bold" Margin="15,0,0,0" Cursor="Hand"/>
                     </Grid>
                 </Border>
             </Grid>

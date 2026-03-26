@@ -67,17 +67,15 @@ namespace ExpressPackingMonitoring
         private readonly VideoDatabase? _db;
         private readonly bool _showDeletedVideos;
         private readonly DispatcherTimer _timer;
-        private readonly string[] _videoExtensions = [".mkv"];
+        private readonly string[] _videoExtensions = [".mp4", ".mkv"];
         private LibVLC? _libVLC;
         private LibVLCSharp.Shared.MediaPlayer? _mediaPlayer;
         private List<VideoItem> _allVideos = new();
         private bool _isDragging;
         private bool _isPlaying;
-        private bool _isTranscoding;
         private bool _isLoadingVideos;
         private bool _playerInitializationFailed;
         private long _currentMediaLengthMs;
-        private Process? _currentExportProcess;
         private readonly SemaphoreSlim _playerSemaphore = new SemaphoreSlim(1, 1);
 
         public PlaybackWindow(string folderPath, VideoDatabase? db = null, bool showDeletedVideos = true)
@@ -96,7 +94,7 @@ namespace ExpressPackingMonitoring
             TimelineSlider.IsEnabled = false;
             TimeLabel.Text = "正在加载列表...";
             Loaded += PlaybackWindow_Loaded;
-            UpdateExportButtonState();
+            UpdateLocateButtonState();
         }
 
         private async void PlaybackWindow_Loaded(object sender, RoutedEventArgs e)
@@ -250,7 +248,7 @@ namespace ExpressPackingMonitoring
             }
 
             VideoList.ItemsSource = filtered.ToList();
-            UpdateExportButtonState();
+            UpdateLocateButtonState();
         }
 
         private void Window_Closing(object sender, CancelEventArgs e)
@@ -258,29 +256,7 @@ namespace ExpressPackingMonitoring
             // 1. 停止计时器
             _timer?.Stop();
 
-            // 2. 如果正在转码，必须杀掉 FFmpeg 进程，否则会内存溢出
-            if (_isTranscoding)
-            {
-                try
-                {
-                    if (_currentExportProcess != null && !_currentExportProcess.HasExited)
-                    {
-                        _currentExportProcess.Kill();
-                    }
-                    else
-                    {
-                        // 兜底：找到当前正在运行的 ffmpeg 并强制结束
-                        var processes = Process.GetProcessesByName("ffmpeg");
-                        foreach (var p in processes)
-                        {
-                            p.Kill();
-                        }
-                    }
-                }
-                catch { }
-            }
-
-            // 3. 彻底释放 LibVLC 资源（注意顺序）
+            // 2. 彻底释放 LibVLC 资源（注意顺序）
             if (_mediaPlayer != null)
             {
                 try
@@ -320,7 +296,7 @@ namespace ExpressPackingMonitoring
         {
             if (VideoList.SelectedItem is not VideoItem video)
             {
-                UpdateExportButtonState();
+                UpdateLocateButtonState();
                 return;
             }
 
@@ -335,7 +311,7 @@ namespace ExpressPackingMonitoring
                 MessageBox.Show(
                     $"该视频已被覆盖删除，无法播放。\n\n单号: {video.OrderId}\n删除原因: {reason}\n删除时间: {time}\n原始大小: {video.FileSize}\n录制时长: {video.Duration}",
                     "视频已删除", MessageBoxButton.OK, MessageBoxImage.Information);
-                UpdateExportButtonState(video);
+                UpdateLocateButtonState(video);
                 return;
             }
 
@@ -344,12 +320,12 @@ namespace ExpressPackingMonitoring
                 MessageBox.Show(
                     $"视频文件已被外部删除或移动，无法播放。\n\n单号: {video.OrderId}\n路径: {video.FullPath}\n原始大小: {video.FileSize}\n录制时长: {video.Duration}",
                     "文件丢失", MessageBoxButton.OK, MessageBoxImage.Warning);
-                UpdateExportButtonState(video);
+                UpdateLocateButtonState(video);
                 return;
             }
 
             PlaySelectedVideo(video);
-            UpdateExportButtonState(video);
+            UpdateLocateButtonState(video);
         }
 
         private async void PlaySelectedVideo(VideoItem video)
@@ -419,123 +395,22 @@ namespace ExpressPackingMonitoring
             }
         }
 
-        private async void BtnExportMp4_Click(object sender, RoutedEventArgs e)
+        private void BtnLocateFile_Click(object sender, RoutedEventArgs e)
         {
-            if (_isTranscoding)
-                return;
-
             if (VideoList.SelectedItem is not VideoItem video || video.IsUnavailable || string.IsNullOrWhiteSpace(video.FullPath))
             {
-                MessageBox.Show("请先选择一个可用视频。", "导出 MP4", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("请先选择一个可用视频。", "定位文件", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
-            }
-
-            // 1. 生成目标路径
-            string outputDir = Path.GetDirectoryName(video.FullPath) ?? _folderPath;
-            string fileName = Path.GetFileNameWithoutExtension(video.FullPath) + ".mp4";
-            string outputPath = Path.Combine(outputDir, fileName);
-
-            // 2. 检查文件是否已存在
-            if (File.Exists(outputPath))
-            {
-                var result = MessageBox.Show(
-                    $"文件已存在：\n{fileName}\n\n是否覆盖原有视频？",
-                    "导出提示",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Question);
-
-                // 如果用户选择“否”，则取消导出
-                if (result != MessageBoxResult.Yes)
-                {
-                    return; 
-                }
-
-                // 如果用户选择“是”，尝试先删除旧文件（防止进程占用或其他异常）
-                try
-                {
-                    File.Delete(outputPath);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"无法覆盖现有文件，请检查文件是否被占用：\n{ex.Message}", "导出失败", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
-            }
-
-            // 3. 执行导出
-            bool ok = await ExportToMp4Async(video.FullPath, outputPath);
-            if (ok)
-            {
-                // 导出成功后，在资源管理器中选中该文件
-                try
-                {
-                    string argument = $"/select,\"{outputPath}\"";
-                    Process.Start("explorer.exe", argument);
-                }
-                catch { }
-
-                MessageBox.Show($"已导出 MP4：\n{outputPath}", "导出完成", MessageBoxButton.OK, MessageBoxImage.Information);
-                await LoadVideosAsync();
-            }
-        }
-
-        private async Task<bool> ExportToMp4Async(string sourcePath, string outputPath)
-        {
-            string ffmpegPath = FindFFmpeg();
-            if (string.IsNullOrEmpty(ffmpegPath))
-            {
-                MessageBox.Show("未找到 FFmpeg，无法执行转码。", "导出失败", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return false;
             }
 
             try
             {
-                _isTranscoding = true;
-                SetExportUiState(false, "正在转换容器...");
-                // 使用 -vcodec copy -acodec copy 实现无损快速转换容器
-                string args = $"-y -i \"{sourcePath}\" -vcodec copy -acodec copy \"{outputPath}\"";
-
-                var result = await Task.Run(() =>
-                {
-                    var psi = new ProcessStartInfo
-                    {
-                        FileName = ffmpegPath,
-                        Arguments = args,
-                        UseShellExecute = false,
-                        CreateNoWindow = true,
-                        RedirectStandardError = true,
-                        RedirectStandardOutput = true
-                    };
-
-                    _currentExportProcess = Process.Start(psi);
-                    if (_currentExportProcess == null)
-                        return (false, "FFmpeg 进程启动失败");
-
-                    string stderr = _currentExportProcess.StandardError.ReadToEnd();
-                    _currentExportProcess.WaitForExit();
-                    bool success = _currentExportProcess.ExitCode == 0 && File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
-                    return (success, stderr);
-                });
-
-                if (!result.Item1)
-                {
-                    MessageBox.Show($"导出失败：\n{result.Item2}", "导出失败", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return false;
-                }
-
-                return true;
+                string argument = $"/select,\"{video.FullPath}\"";
+                Process.Start("explorer.exe", argument);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"导出失败：{ex.Message}", "导出失败", MessageBoxButton.OK, MessageBoxImage.Error);
-                return false;
-            }
-            finally
-            {
-                _currentExportProcess = null;
-                _isTranscoding = false;
-                SetExportUiState(true, "00:00:00 / 00:00:00");
-                UpdateExportButtonState();
+                MessageBox.Show($"无法打开文件管理器：{ex.Message}", "定位失败", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 
@@ -630,35 +505,10 @@ namespace ExpressPackingMonitoring
             }
         }
 
-        private void SetExportUiState(bool enabled, string statusText)
-        {
-            BtnTogglePlay.IsEnabled = enabled && _mediaPlayer != null;
-            BtnExportMp4.IsEnabled = enabled && CanExportCurrentSelection();
-            TimelineSlider.IsEnabled = enabled && _mediaPlayer != null;
-            TimeLabel.Text = statusText;
-        }
-
-        private bool CanExportCurrentSelection()
-        {
-            if (VideoList.SelectedItem is not VideoItem video) return false;
-            if (video.IsUnavailable) return false;
-
-            // 即使是 h264，也允许导出（转码/复制容器），这样最保险
-            return true;
-        }
-
-        private void UpdateExportButtonState(VideoItem? video = null)
+        private void UpdateLocateButtonState(VideoItem? video = null)
         {
             var current = video ?? VideoList.SelectedItem as VideoItem;
-            BtnExportMp4.IsEnabled = !_isTranscoding
-                && current != null
-                && !current.IsUnavailable;
-        }
-
-        private string FindFFmpeg()
-        {
-            string appDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg.exe");
-            return File.Exists(appDir) ? appDir : string.Empty;
+            BtnLocateFile.IsEnabled = current != null && !current.IsUnavailable;
         }
 
         private bool EnsurePlayerReady()
