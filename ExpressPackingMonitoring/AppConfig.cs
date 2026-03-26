@@ -93,6 +93,7 @@ namespace ExpressPackingMonitoring.ViewModels
         // 局域网 Web 服务
         public bool EnableWebServer { get; set; } = true;
         public int WebServerPort { get; set; } = 5280;
+        public int TranscodeCacheMaxMB { get; set; } = 1024;  // 转码缓存上限(MB)，超出后按时间清理最旧的
 
         // 缓存的检测结果
         public List<GpuEncoderOption> EncoderOptionsCache { get; set; }

@@ -24,6 +24,8 @@ namespace ExpressPackingMonitoring
         private Task _listenTask;
         private bool _disposed;
         private static readonly string _logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "web_debug.log");
+        private static readonly string _transCacheDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "transcache");
+        private long _transCacheMaxBytes = 1024L * 1024 * 1024; // 默认 1GB，可config覆盖
 
         public int Port { get; }
 
@@ -38,10 +40,11 @@ namespace ExpressPackingMonitoring
             catch { }
         }
 
-        public WebServer(VideoDatabase db, int port = 5280)
+        public WebServer(VideoDatabase db, int port = 5280, int transCacheMaxMB = 1024)
         {
             _db = db ?? throw new ArgumentNullException(nameof(db));
             Port = port;
+            _transCacheMaxBytes = (long)transCacheMaxMB * 1024 * 1024;
             _listener = new HttpListener();
             _listener.Prefixes.Add($"http://+:{port}/");
         }
@@ -210,8 +213,8 @@ namespace ExpressPackingMonitoring
             }
         }
 
-        // ───── FFmpeg 实时转码为 H.264 推送给浏览器 ─────
-        private static void ServeTranscodedStream(HttpListenerContext ctx, string filePath)
+        // ───── FFmpeg 转码：命中缓存直接 Range 传输，否则边转码边推流 + 同时写缓存 ─────
+        private void ServeTranscodedStream(HttpListenerContext ctx, string filePath)
         {
             string ffmpegPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg.exe");
             if (!File.Exists(ffmpegPath))
@@ -220,10 +223,49 @@ namespace ExpressPackingMonitoring
                 return;
             }
 
-            // fragmented MP4，可边转码边播；-loglevel warning 减少 stderr 输出
-            string args = $"-loglevel warning -i \"{filePath}\" -c:v libx264 -preset ultrafast -crf 23 -c:a aac -movflags frag_keyframe+empty_moov+default_base_moof -f mp4 pipe:1";
-            Log($"ServeTranscodedStream: ffmpeg={ffmpegPath}, args={args}");
+            // 用源文件路径的哈希作为缓存键
+            string cacheKey = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                Encoding.UTF8.GetBytes(filePath))).Substring(0, 16);
+            string cachePath = Path.Combine(_transCacheDir, $"{cacheKey}.mp4");
 
+            if (File.Exists(cachePath))
+            {
+                // 命中缓存 → 标准 Range 传输（支持进度条拖拽、总时长正确）
+                Log($"ServeTranscodedStream: 命中缓存 {cachePath}");
+                ServeFileWithRange(ctx, cachePath, inline: true);
+                return;
+            }
+
+            // 首次播放 → 边转码边推流，同时写入缓存文件
+            Directory.CreateDirectory(_transCacheDir);
+            string tmpPath = cachePath + ".tmp";
+
+            // fragmented MP4 输出到 stdout，可边转边播
+            string hwArgs = $"-loglevel warning -hwaccel auto -i \"{filePath}\" -c:v h264_nvenc -preset p1 -cq 28 -c:a aac -movflags frag_keyframe+empty_moov+default_base_moof -f mp4 pipe:1";
+            string swArgs = $"-loglevel warning -i \"{filePath}\" -c:v libx264 -preset ultrafast -crf 23 -c:a aac -movflags frag_keyframe+empty_moov+default_base_moof -f mp4 pipe:1";
+
+            if (!StreamTranscodeToClient(ctx, ffmpegPath, hwArgs, tmpPath))
+            {
+                Log("ServeTranscodedStream: NVENC 流式转码失败，回退 CPU");
+                if (!StreamTranscodeToClient(ctx, ffmpegPath, swArgs, tmpPath))
+                {
+                    try { File.Delete(tmpPath); } catch { }
+                    return; // 响应已在内部处理
+                }
+            }
+
+            // 转码成功，将临时文件提升为正式缓存
+            try { File.Move(tmpPath, cachePath, overwrite: true); } catch { }
+            Task.Run(() => CleanTranscodeCache());
+        }
+
+        /// <summary>
+        /// 启动 FFmpeg，将 stdout 同时推送给浏览器和写入缓存文件。
+        /// 返回 true 表示 FFmpeg 正常退出且数据已发送。
+        /// </summary>
+        private static bool StreamTranscodeToClient(HttpListenerContext ctx, string ffmpegPath, string args, string tmpPath)
+        {
+            Log($"StreamTranscodeToClient: {args}");
             var psi = new ProcessStartInfo
             {
                 FileName = ffmpegPath,
@@ -235,51 +277,129 @@ namespace ExpressPackingMonitoring
             };
 
             Process proc = null;
+            FileStream cacheFs = null;
             try
             {
                 proc = Process.Start(psi);
-                if (proc == null)
-                {
-                    SendJson(ctx, 500, new { error = "无法启动 ffmpeg 进程" });
-                    return;
-                }
+                if (proc == null) return false;
 
-                // 异步消费 stderr 防止缓冲区满导致 FFmpeg 阻塞（经典死锁）
-                var stderrBuilder = new StringBuilder();
-                proc.ErrorDataReceived += (_, e) => { if (e.Data != null) stderrBuilder.AppendLine(e.Data); };
+                // 异步消费 stderr
+                var stderrBuf = new StringBuilder();
+                proc.ErrorDataReceived += (_, e) => { if (e.Data != null) stderrBuf.AppendLine(e.Data); };
                 proc.BeginErrorReadLine();
 
                 ctx.Response.ContentType = "video/mp4";
                 ctx.Response.StatusCode = 200;
-                // 转码流无法预知大小，使用 chunked 传输
                 ctx.Response.SendChunked = true;
 
+                cacheFs = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None);
                 byte[] buffer = new byte[65536];
                 using var stdout = proc.StandardOutput.BaseStream;
                 int read;
+                bool clientOk = true;
                 while ((read = stdout.Read(buffer, 0, buffer.Length)) > 0)
                 {
-                    try { ctx.Response.OutputStream.Write(buffer, 0, read); }
-                    catch { break; } // 客户端断开
+                    // 写缓存
+                    try { cacheFs.Write(buffer, 0, read); } catch { }
+                    // 推给浏览器
+                    if (clientOk)
+                    {
+                        try { ctx.Response.OutputStream.Write(buffer, 0, read); }
+                        catch { clientOk = false; } // 客户端断开，继续写缓存
+                    }
                 }
 
+                cacheFs.Close();
+                cacheFs = null;
                 try { ctx.Response.OutputStream.Close(); } catch { }
                 proc.WaitForExit(5000);
-                string stderr = stderrBuilder.ToString();
-                Log($"ServeTranscodedStream: ffmpeg 退出码={proc.ExitCode}, stderr={stderr}");
+                string stderr = stderrBuf.ToString();
+                Log($"StreamTranscodeToClient: 退出码={proc.ExitCode}, stderr={stderr}");
+
+                if (proc.ExitCode != 0)
+                {
+                    try { File.Delete(tmpPath); } catch { }
+                    return false;
+                }
+                return true;
             }
             catch (Exception ex)
             {
-                Log($"ServeTranscodedStream 异常: {ex}");
+                Log($"StreamTranscodeToClient 异常: {ex.Message}");
                 try { ctx.Response.Abort(); } catch { }
+                try { File.Delete(tmpPath); } catch { }
+                return false;
             }
             finally
             {
-                if (proc != null && !proc.HasExited)
-                {
-                    try { proc.Kill(); } catch { }
-                }
+                cacheFs?.Dispose();
+                if (proc != null && !proc.HasExited) { try { proc.Kill(); } catch { } }
                 proc?.Dispose();
+            }
+        }
+
+        // ───── 转码缓存清理：超过上限时按最旧访问时间删除 ─────
+        private void CleanTranscodeCache()
+        {
+            try
+            {
+                if (!Directory.Exists(_transCacheDir)) return;
+
+                var files = new DirectoryInfo(_transCacheDir)
+                    .GetFiles("*.mp4")
+                    .OrderBy(f => f.LastAccessTimeUtc)
+                    .ToList();
+
+                long totalSize = files.Sum(f => f.Length);
+                if (totalSize <= _transCacheMaxBytes) return;
+
+                Log($"CleanTranscodeCache: 当前 {totalSize / 1048576}MB / 上限 {_transCacheMaxBytes / 1048576}MB，开始清理");
+                foreach (var f in files)
+                {
+                    if (totalSize <= _transCacheMaxBytes * 0.8) break; // 清到 80% 水位
+                    try
+                    {
+                        long size = f.Length;
+                        f.Delete();
+                        totalSize -= size;
+                        Log($"CleanTranscodeCache: 删除 {f.Name} ({size / 1048576}MB)");
+                    }
+                    catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"CleanTranscodeCache 异常: {ex.Message}");
+            }
+        }
+
+        // ───── 运行 FFmpeg 转码，返回是否成功 ─────
+        private static bool TryRunFFmpeg(string ffmpegPath, string args, string outputPath)
+        {
+            Log($"TryRunFFmpeg: {args}");
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = ffmpegPath,
+                    Arguments = args,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = false,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                using var proc = Process.Start(psi);
+                if (proc == null) return false;
+                string stderr = proc.StandardError.ReadToEnd();
+                proc.WaitForExit(120_000);
+                Log($"TryRunFFmpeg: 退出码={proc.ExitCode}, stderr={stderr}");
+                return proc.ExitCode == 0 && File.Exists(outputPath);
+            }
+            catch (Exception ex)
+            {
+                Log($"TryRunFFmpeg 异常: {ex.Message}");
+                try { File.Delete(outputPath); } catch { }
+                return false;
             }
         }
 

@@ -729,7 +729,7 @@ namespace ExpressPackingMonitoring.ViewModels
             if (!Config.EnableWebServer || _db == null) return;
             try
             {
-                _webServer = new WebServer(_db, Config.WebServerPort);
+                _webServer = new WebServer(_db, Config.WebServerPort, Config.TranscodeCacheMaxMB);
                 _webServer.Start();
                 Debug.WriteLine($"[Web] 局域网服务已启动 http://0.0.0.0:{Config.WebServerPort}");
             }
