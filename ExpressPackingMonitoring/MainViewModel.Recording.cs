@@ -206,7 +206,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
                     double usedGB = usedBytesInPath / 1073741824.0;
 
-                    string root = Path.GetPathRoot(Path.GetFullPath(normalizedPath));
+                    string? root = Path.GetPathRoot(Path.GetFullPath(normalizedPath));
                     if (string.IsNullOrEmpty(root)) continue;
 
                     var drive = new DriveInfo(root);
@@ -466,8 +466,8 @@ namespace ExpressPackingMonitoring.ViewModels
         private (bool ok, string error) RunFFmpegPipeline(string filePath, string ffmpegPath, CancellationToken token,
             int w, int h, int fps, string encoder, bool withAudio)
         {
-            Process ffmpeg = null;
-            Stream stdin = null;
+            Process? ffmpeg = null;
+            Stream? stdin = null;
             bool anyFrameWritten = false;
             string stderrText = "";
             bool stdinClosed = false;
@@ -760,7 +760,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private static string FindFFmpeg()
         {
             string appDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg.exe");
-            return File.Exists(appDir) ? appDir : null;
+            return File.Exists(appDir) ? appDir : null!;
         }
 
         private string ResolveEncoder()

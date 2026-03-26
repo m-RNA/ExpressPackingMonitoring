@@ -24,6 +24,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     CreateNoWindow = true
                 };
                 using var proc = Process.Start(psi);
+                if (proc == null) return "";
                 string output = proc.StandardOutput.ReadToEnd();
                 proc.WaitForExit(5000);
                 return output ?? "";

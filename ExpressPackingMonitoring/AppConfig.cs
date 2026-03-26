@@ -25,8 +25,8 @@ namespace ExpressPackingMonitoring.ViewModels
 
     public class GpuEncoderOption
     {
-        public string Value { get; set; }
-        public string DisplayName { get; set; }
+        public string Value { get; set; } = "";
+        public string DisplayName { get; set; } = "";
     }
 
     // 存储节点模型
@@ -96,8 +96,8 @@ namespace ExpressPackingMonitoring.ViewModels
         public int TranscodeCacheMaxMB { get; set; } = 1024;  // 转码缓存上限(MB)，超出后按时间清理最旧的
 
         // 缓存的检测结果
-        public List<GpuEncoderOption> EncoderOptionsCache { get; set; }
-        public List<string> ValidatedEncodersCache { get; set; }
+        public List<GpuEncoderOption> EncoderOptionsCache { get; set; } = new();
+        public List<string> ValidatedEncodersCache { get; set; } = new();
         public bool IsEncoderDetected { get; set; } = false;
     }
 }
