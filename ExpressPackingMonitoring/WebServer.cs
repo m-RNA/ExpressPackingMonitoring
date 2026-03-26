@@ -23,8 +23,20 @@ namespace ExpressPackingMonitoring
         private readonly CancellationTokenSource _cts = new();
         private Task _listenTask;
         private bool _disposed;
+        private static readonly string _logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "web_debug.log");
 
         public int Port { get; }
+
+        private static void Log(string msg)
+        {
+            try
+            {
+                string line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {msg}";
+                lock (_logPath)
+                    File.AppendAllText(_logPath, line + Environment.NewLine);
+            }
+            catch { }
+        }
 
         public WebServer(VideoDatabase db, int port = 5280)
         {
@@ -100,6 +112,7 @@ namespace ExpressPackingMonitoring
             {
                 string path = ctx.Request.Url?.AbsolutePath?.TrimEnd('/') ?? "";
                 string method = ctx.Request.HttpMethod;
+                Log($">>> {method} {path} from {ctx.Request.RemoteEndPoint}");
 
                 // CORS
                 ctx.Response.Headers.Add("Access-Control-Allow-Origin", "*");
@@ -113,7 +126,15 @@ namespace ExpressPackingMonitoring
                         HandleSearchVideos(ctx);
                         break;
                     default:
-                        if (path.StartsWith("/api/videos/") && path.EndsWith("/download"))
+                        if (method == "HEAD" && path.StartsWith("/api/videos/") && path.EndsWith("/play"))
+                        {
+                            // HEAD 请求只返回 headers，不启动转码/传输
+                            ctx.Response.ContentType = "video/mp4";
+                            ctx.Response.StatusCode = 200;
+                            ctx.Response.ContentLength64 = 0;
+                            ctx.Response.OutputStream.Close();
+                        }
+                        else if (path.StartsWith("/api/videos/") && path.EndsWith("/download"))
                             HandleDownload(ctx, path);
                         else if (path.StartsWith("/api/videos/") && path.EndsWith("/play"))
                             HandlePlay(ctx, path);
@@ -124,6 +145,7 @@ namespace ExpressPackingMonitoring
             }
             catch (Exception ex)
             {
+                Log($"!!! HandleRequest 异常: {ex}");
                 try { SendJson(ctx, 500, new { error = ex.Message }); } catch { }
             }
         }
@@ -153,6 +175,7 @@ namespace ExpressPackingMonitoring
                 r.OrderId,
                 r.Mode,
                 r.FileName,
+                videoCodec = r.VideoCodec ?? "",
                 sizeMB = Math.Round(r.FileSizeBytes / 1048576.0, 1),
                 startTime = r.StartTime.ToString("yyyy-MM-dd HH:mm:ss"),
                 durationSec = Math.Round(r.DurationSeconds, 0),
@@ -167,13 +190,97 @@ namespace ExpressPackingMonitoring
         private void HandlePlay(HttpListenerContext ctx, string path)
         {
             var record = FindRecordFromPath(path, "/play");
+            Log($"HandlePlay: path={path}, record={(record != null ? $"Id={record.Id}, OrderId={record.OrderId}, VideoCodec='{record.VideoCodec}', FilePath='{record.FilePath}'" : "null")}");
             if (record == null || !File.Exists(record.FilePath))
             {
+                Log($"HandlePlay: 文件不存在 filePath={record?.FilePath}");
                 SendJson(ctx, 404, new { error = "文件不存在" });
                 return;
             }
 
-            ServeFileWithRange(ctx, record.FilePath, inline: true);
+            string codec = (record.VideoCodec ?? "").Trim().ToLowerInvariant();
+            Log($"HandlePlay: codec='{codec}', 判定={(codec != "" && codec != "h264" ? "转码" : "直传")}");
+            if (codec != "" && codec != "h264")
+            {
+                ServeTranscodedStream(ctx, record.FilePath);
+            }
+            else
+            {
+                ServeFileWithRange(ctx, record.FilePath, inline: true);
+            }
+        }
+
+        // ───── FFmpeg 实时转码为 H.264 推送给浏览器 ─────
+        private static void ServeTranscodedStream(HttpListenerContext ctx, string filePath)
+        {
+            string ffmpegPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg.exe");
+            if (!File.Exists(ffmpegPath))
+            {
+                SendJson(ctx, 500, new { error = "服务器未找到 ffmpeg.exe，无法转码播放" });
+                return;
+            }
+
+            // fragmented MP4，可边转码边播；-loglevel warning 减少 stderr 输出
+            string args = $"-loglevel warning -i \"{filePath}\" -c:v libx264 -preset ultrafast -crf 23 -c:a aac -movflags frag_keyframe+empty_moov+default_base_moof -f mp4 pipe:1";
+            Log($"ServeTranscodedStream: ffmpeg={ffmpegPath}, args={args}");
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = ffmpegPath,
+                Arguments = args,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            Process proc = null;
+            try
+            {
+                proc = Process.Start(psi);
+                if (proc == null)
+                {
+                    SendJson(ctx, 500, new { error = "无法启动 ffmpeg 进程" });
+                    return;
+                }
+
+                // 异步消费 stderr 防止缓冲区满导致 FFmpeg 阻塞（经典死锁）
+                var stderrBuilder = new StringBuilder();
+                proc.ErrorDataReceived += (_, e) => { if (e.Data != null) stderrBuilder.AppendLine(e.Data); };
+                proc.BeginErrorReadLine();
+
+                ctx.Response.ContentType = "video/mp4";
+                ctx.Response.StatusCode = 200;
+                // 转码流无法预知大小，使用 chunked 传输
+                ctx.Response.SendChunked = true;
+
+                byte[] buffer = new byte[65536];
+                using var stdout = proc.StandardOutput.BaseStream;
+                int read;
+                while ((read = stdout.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    try { ctx.Response.OutputStream.Write(buffer, 0, read); }
+                    catch { break; } // 客户端断开
+                }
+
+                try { ctx.Response.OutputStream.Close(); } catch { }
+                proc.WaitForExit(5000);
+                string stderr = stderrBuilder.ToString();
+                Log($"ServeTranscodedStream: ffmpeg 退出码={proc.ExitCode}, stderr={stderr}");
+            }
+            catch (Exception ex)
+            {
+                Log($"ServeTranscodedStream 异常: {ex}");
+                try { ctx.Response.Abort(); } catch { }
+            }
+            finally
+            {
+                if (proc != null && !proc.HasExited)
+                {
+                    try { proc.Kill(); } catch { }
+                }
+                proc?.Dispose();
+            }
         }
 
         // ───── API: 下载 ─────
@@ -442,6 +549,7 @@ function render(res) {
           '<span>📅 ' + v.startTime + '</span>' +
           '<span>⏱ ' + v.duration + '</span>' +
           '<span>💾 ' + sizeStr + '</span>' +
+          (v.videoCodec && v.videoCodec !== 'h264' ? '<span title="该编码将实时转码为H.264播放">🔄 ' + v.videoCodec.toUpperCase() + '</span>' : '') +
           '<span>📄 ' + esc(v.fileName) + '</span>' +
         '</div>' +
       '</div>' +
