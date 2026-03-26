@@ -290,6 +290,46 @@ namespace ExpressPackingMonitoring
         /// <summary>
         /// 查询视频列表（支持日期范围 + 关键词过滤，包含已删除记录）
         /// </summary>
+        public VideoRecord GetVideoById(long id)
+        {
+            lock (_lock)
+            {
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = @"
+                    SELECT Id, OrderId, Mode, VideoCodec, VideoEncoder, FilePath, FileName, FileSizeBytes, 
+                           StartTime, EndTime, DurationSeconds, StopReason,
+                           IsDeleted, DeletedAt, DeleteReason
+                    FROM VideoRecords WHERE Id = @id AND IsDeleted = 0;";
+                cmd.Parameters.AddWithValue("@id", id);
+                using var reader = cmd.ExecuteReader();
+                if (reader.Read())
+                {
+                    return new VideoRecord
+                    {
+                        Id = reader.GetInt64(0),
+                        OrderId = reader.GetString(1),
+                        Mode = reader.GetString(2),
+                        VideoCodec = reader.IsDBNull(3) ? "" : reader.GetString(3),
+                        VideoEncoder = reader.IsDBNull(4) ? "" : reader.GetString(4),
+                        FilePath = reader.GetString(5),
+                        FileName = reader.GetString(6),
+                        FileSizeBytes = reader.GetInt64(7),
+                        StartTime = DateTime.Parse(reader.GetString(8)),
+                        EndTime = reader.IsDBNull(9) ? DateTime.MinValue : DateTime.Parse(reader.GetString(9)),
+                        DurationSeconds = reader.GetDouble(10),
+                        StopReason = reader.IsDBNull(11) ? "" : reader.GetString(11),
+                        IsDeleted = reader.GetInt64(12) == 1,
+                        DeletedAt = reader.IsDBNull(13) ? null : DateTime.Parse(reader.GetString(13)),
+                        DeleteReason = reader.IsDBNull(14) ? "" : reader.GetString(14)
+                    };
+                }
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 查询视频列表（支持日期范围 + 关键词过滤，包含已删除记录）
+        /// </summary>
         public List<VideoRecord> QueryVideos(DateTime startDate, DateTime endDate, string keyword = null)
         {
             lock (_lock)

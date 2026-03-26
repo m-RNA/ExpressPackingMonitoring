@@ -246,21 +246,19 @@ namespace ExpressPackingMonitoring
         // ───── 根据 URL 中的 ID 查找记录 ─────
         private VideoRecord FindRecordFromPath(string path, string suffix)
         {
-            // /api/videos/{id}/play 或 /api/videos/{id}/download
             string idStr = path.Replace("/api/videos/", "").Replace(suffix, "").Trim('/');
             if (!long.TryParse(idStr, out long id)) return null;
-
-            // 查最近 365 天的记录（足够覆盖）
-            var records = _db.QueryVideos(DateTime.Now.AddDays(-365), DateTime.Now);
-            return records.FirstOrDefault(r => r.Id == id && !r.IsDeleted);
+            return _db.GetVideoById(id);
         }
+
+        private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
         // ───── JSON 响应 ─────
         private static void SendJson(HttpListenerContext ctx, int statusCode, object data)
         {
             ctx.Response.StatusCode = statusCode;
             ctx.Response.ContentType = "application/json; charset=utf-8";
-            byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(data);
+            byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(data, _jsonOptions);
             ctx.Response.ContentLength64 = bytes.Length;
             ctx.Response.OutputStream.Write(bytes, 0, bytes.Length);
             ctx.Response.OutputStream.Close();
