@@ -102,11 +102,35 @@ namespace ExpressPackingMonitoring.ViewModels
                     double totalUsedGB = totalCurrentBytes / 1073741824.0;
                     double totalQuotaGB = totalConfigQuotaBytes / 1073741824.0;
 
+                    // 根据历史录制数据估算剩余可录制时长
+                    string estimateText = "";
+                    try
+                    {
+                        var (dbTotalBytes, dbTotalSec) = _db?.GetGlobalSizeAndDuration() ?? (0, 0);
+                        if (dbTotalBytes > 0 && dbTotalSec > 0)
+                        {
+                            double bytesPerSec = dbTotalBytes / dbTotalSec;
+                            long remainingBytes = totalConfigQuotaBytes - totalCurrentBytes;
+                            if (remainingBytes > 0)
+                            {
+                                double remainingHours = remainingBytes / bytesPerSec / 3600.0;
+                                estimateText = remainingHours >= 1
+                                    ? $"，预估可录 {remainingHours:F0} 小时"
+                                    : $"，预估可录 {remainingHours * 60:F0} 分钟";
+                            }
+                            else
+                            {
+                                estimateText = "，空间已满";
+                            }
+                        }
+                    }
+                    catch { }
+
                     _ = Application.Current.Dispatcher.InvokeAsync(() =>
                     {
                         if (_isDisposed) return;
                         DiskUsagePercent = totalQuotaGB > 0 ? Math.Min(100.0, (totalUsedGB / totalQuotaGB) * 100.0) : 0;
-                        DiskUsageText = $"{totalUsedGB:F1} / {totalQuotaGB:F1} GB (多盘汇总)";
+                        DiskUsageText = $"{totalUsedGB:F1} / {totalQuotaGB:F1} GB{estimateText}";
                     });
                 }
                 catch { }

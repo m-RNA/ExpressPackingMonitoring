@@ -478,6 +478,23 @@ namespace ExpressPackingMonitoring
         }
 
         /// <summary>
+        /// 获取所有未删除视频的总大小和总时长（用于估算可录制时长）
+        /// </summary>
+        public (long TotalBytes, double TotalDurationSec) GetGlobalSizeAndDuration()
+        {
+            lock (_lock)
+            {
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = @"SELECT COALESCE(SUM(FileSizeBytes), 0), COALESCE(SUM(DurationSeconds), 0) 
+                                    FROM VideoRecords WHERE IsDeleted = 0 AND DurationSeconds > 0 AND EndTime IS NOT NULL;";
+                using var reader = cmd.ExecuteReader();
+                if (reader.Read())
+                    return (reader.GetInt64(0), reader.GetDouble(1));
+                return (0, 0);
+            }
+        }
+
+        /// <summary>
         /// 按时间升序获取最旧的未删除视频（用于磁盘清理）
         /// </summary>
         public List<VideoRecord> GetOldestVideos(int limit = 100)
