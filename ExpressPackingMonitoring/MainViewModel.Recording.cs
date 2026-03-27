@@ -119,7 +119,7 @@ namespace ExpressPackingMonitoring.ViewModels
                                 if (tooShort && fileSize >= 1024 * 50)
                                 {
                                     ShowToast($"⚠ 录像过短({recordDuration:F1}s)，已丢弃");
-                                    Speak("录像过短，已丢弃");
+                                    SpeakWarning("录像过短，已丢弃");
                                 }
                             }
                         });
@@ -280,7 +280,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     if (_videoSource == null || !_videoSource.IsRunning)
                     {
                         ShowToast("⚠ 摄像头未就绪，请检查连接");
-                        Speak("摄像头未就绪");
+                        SpeakWarning("摄像头未就绪");
                         return;
                     }
                 }
@@ -296,7 +296,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     if (!micFound)
                     {
                         ShowToast("⚠ 预设麦克风已断开");
-                        Speak("麦克风已断开");
+                        SpeakWarning("麦克风已断开");
                         // 如果用户开了音频录制但麦克风丢了，建议停止或报错。
                         // 此处选择提示后继续，但 FFmpeg 启动会失败，报错提示更详细。
                         // 或者可以强制关闭本段录制的音频：
@@ -322,7 +322,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     if (!IsDirectoryWritable(baseFolder))
                     {
                         ShowToast("⚠ 存储路径不可写，请检查磁盘");
-                        Speak("存储路径不可写");
+                        SpeakWarning("存储路径不可写");
                         return;
                     }
                 }
@@ -446,7 +446,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     }
 
                     ShowToast($"⚠ 录制启动失败");
-                    Speak("录制失败");
+                    SpeakWarning("录制失败");
                     MessageBox.Show(
                         $"当前设置的编码器无法完成录制，视频未保存。\n\n请求编码器: {EncodingHelper.GetEncoderLabel(requestedEncoder)}\n错误详情: {err}\n\n建议在设置中更换编码器或尝试 CPU 软编码。",
                         "录制失败", MessageBoxButton.OK, MessageBoxImage.Warning);

@@ -384,7 +384,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     // 没有输入单号时语音提示
                     if (CurrentOrderId.StartsWith("MAN_"))
                     {
-                        Speak("没有单号");
+                        SpeakWarning("没有单号", 5);
                     }
 
                     Debug.WriteLine($"[Zoom] 手动开启录制触发缩放: ID={CurrentOrderId}, Delay={Config.ZoomDelaySeconds}");
@@ -423,13 +423,13 @@ namespace ExpressPackingMonitoring.ViewModels
             if (upperResult.Contains("STOP") || upperResult.Contains("停止录制")) { _ = SafeStopRecordingAsync(true); return; }
 
             // 正则验证
-            try { if (!System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex)) { ShowToast("非法单号，已拦截"); Speak("非法单号"); return; } } catch { }
+            try { if (!System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex)) { ShowToast("非法单号，已拦截"); SpeakWarning("非法单号"); return; } } catch { }
 
             // 重复单号检测（查数据库今日记录）
             if (_db != null && _db.OrderIdExistsToday(upperResult))
             {
                 ShowToast("⚠ 重复单号，请确认");
-                Speak("重复单号");
+                SpeakWarning("重复单号");
             }
 
             Debug.WriteLine($"[Zoom] 扫码事件触发: ID={upperResult}, ZoomEnabled={Config.EnableSmartZoom}, Delay={Config.ZoomDelaySeconds}");
@@ -798,7 +798,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 if (videoDevices.Count == 0) 
                 { 
                     ShowToast("⚠ 未检测到任何摄像头"); 
-                    Speak("未检测到摄像头");
+                    SpeakWarning("未检测到摄像头");
                     return; 
                 }
                 
@@ -1174,14 +1174,14 @@ namespace ExpressPackingMonitoring.ViewModels
                                 && motionIdleSec >= autoStopTotalSec - warnSec)
                             {
                                 _autoStopWarned = true;
-                                Speak("画面即将静止超时");
+                                SpeakWarning("画面即将静止超时");
                             }
                             if (!_maxDurationWarned && Config.EnableMaxDuration
                                 && maxDurTotalSec > warnSec * 2
                                 && elapsedSec >= maxDurTotalSec - warnSec)
                             {
                                 _maxDurationWarned = true;
-                                Speak("录制即将达到最大时长");
+                                SpeakWarning("录制即将达到最大时长");
                             }
                         }
 
@@ -1204,7 +1204,7 @@ namespace ExpressPackingMonitoring.ViewModels
                                 if (_isDisposed) return;
                                 await SafeStopRecordingAsync(); 
                                 ShowToast("画面静止超时，自动停录"); 
-                                Speak("静止超时，停止录制"); 
+                                SpeakWarning("静止超时，停止录制"); 
                                 CurrentOrderId = ""; 
                                 ScanInputText = ""; 
                             }); 
@@ -1217,7 +1217,7 @@ namespace ExpressPackingMonitoring.ViewModels
                                 if (_isDisposed) return;
                                 await SafeStopRecordingAsync(); 
                                 ShowToast("⏳ 已达最大录像限制时长"); 
-                                Speak("时长超时，停止录制"); 
+                                SpeakWarning("时长超时，停止录制"); 
                                 CurrentOrderId = ""; 
                                 ScanInputText = ""; 
                             }); 
@@ -1290,6 +1290,36 @@ namespace ExpressPackingMonitoring.ViewModels
                         _speechSynth?.SpeakAsync(text);
                     }
                     catch { }
+                }
+            });
+        }
+
+        /// <summary>
+        /// 警告/错误语音：慢速 + 同步阻塞播放，确保不会被后续普通语音打断。
+        /// </summary>
+        private void SpeakWarning(string text, int repeatCount = 1)
+        {
+            if (!Config.EnableSoundPrompt) return;
+            Task.Run(() =>
+            {
+                lock (_speechLock)
+                {
+                    try
+                    {
+                        _speechSynth?.SpeakAsyncCancelAll();
+                        // 切换为慢速严肃语调，与正常提示区分
+                        if (_speechSynth != null) _speechSynth.Rate = -2;
+                        string fullText = repeatCount > 1
+                            ? string.Join("，", Enumerable.Repeat(text, repeatCount))
+                            : text;
+                        _speechSynth?.Speak(fullText); // 同步阻塞直到播完
+                        // 恢复正常语速
+                        if (_speechSynth != null) _speechSynth.Rate = 2;
+                    }
+                    catch
+                    {
+                        try { if (_speechSynth != null) _speechSynth.Rate = 2; } catch { }
+                    }
                 }
             });
         }
