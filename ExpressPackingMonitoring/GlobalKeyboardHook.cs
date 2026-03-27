@@ -27,7 +27,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private readonly Dispatcher _dispatcher;
         private bool _isDisposed;
 
-        public event Action<string> BarcodeScanned;
+        public event Action<string>? BarcodeScanned;
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
