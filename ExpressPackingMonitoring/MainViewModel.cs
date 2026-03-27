@@ -18,10 +18,10 @@ using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
 using AForge.Video;
 using AForge.Video.DirectShow;
+using ExpressPackingMonitoring.Services;
 using System.Drawing;
 using System.Drawing.Imaging;
 using Windows.Media.SpeechSynthesis;
-using System.Media;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 
@@ -76,10 +76,7 @@ namespace ExpressPackingMonitoring.ViewModels
         public string BusyText { get => _busyText; set => SetProperty(ref _busyText, value); }
         // ====================================
 
-        private Windows.Media.SpeechSynthesis.SpeechSynthesizer _ttsNormal;
-        private Windows.Media.SpeechSynthesis.SpeechSynthesizer _ttsWarning;
-        private SoundPlayer _soundPlayer;
-        private readonly object _speechLock = new object();
+        private SpeechService _speechService;
 
         private string _currentMode = "发货";
         private string _currentOrderId = "";
@@ -299,7 +296,7 @@ namespace ExpressPackingMonitoring.ViewModels
             });
             InitDatabase();
             RefreshTodayStats();
-            InitSpeechSynthesizer();
+            _speechService = new SpeechService { EnableSoundPrompt = Config.EnableSoundPrompt };
             ScanCommand = new RelayCommand<string>(HandleScan);
             OpenSettingsCommand = new RelayCommand(OpenSettings);
             OpenPlaybackCommand = new RelayCommand(OpenPlaybackWindow);
@@ -465,6 +462,8 @@ namespace ExpressPackingMonitoring.ViewModels
             if (!await _recorderLock.WaitAsync(0)) return;
             try
             {
+                // 扫码切换：立即打断上一轮可能还在播放的语音（如"重复单号"×3）
+                _speechService?.Stop();
                 if (IsRecording) await InternalStopRecordingAsync();
                 await InternalStartRecordingAsync();
 
@@ -1294,88 +1293,8 @@ namespace ExpressPackingMonitoring.ViewModels
 
 
 
-                /// <summary>
-        /// 根据用户设置解析最终要使用的编码器。
-        /// GpuEncoder 存储 GPU 偏好（"auto"/"nvidia"/"amd"/"intel"/"cpu"），
-        /// 结合 VideoCodec（"h264"/"h265"）动态映射为具体编码器。
-        /// </summary>
-        private void InitSpeechSynthesizer()
-        {
-            try
-            {
-                var voices = Windows.Media.SpeechSynthesis.SpeechSynthesizer.AllVoices;
-                var femaleZh = voices.FirstOrDefault(v => v.Gender == VoiceGender.Female && v.Language == "zh-CN");
-                var maleZh = voices.FirstOrDefault(v => v.Gender == VoiceGender.Male && v.Language == "zh-CN");
-                var anyZh = femaleZh ?? maleZh ?? voices.FirstOrDefault(v => v.Language.StartsWith("zh"));
-
-                _ttsNormal = new Windows.Media.SpeechSynthesis.SpeechSynthesizer();
-                if (femaleZh != null) _ttsNormal.Voice = femaleZh;
-                else if (anyZh != null) _ttsNormal.Voice = anyZh;
-
-                _ttsWarning = new Windows.Media.SpeechSynthesis.SpeechSynthesizer();
-                if (maleZh != null) _ttsWarning.Voice = maleZh;
-                else if (anyZh != null) _ttsWarning.Voice = anyZh;
-
-                _soundPlayer = new SoundPlayer();
-            }
-            catch { _ttsNormal = null; _ttsWarning = null; }
-        }
-
-        private MemoryStream SynthesizeToMemoryStream(Windows.Media.SpeechSynthesis.SpeechSynthesizer synth, string text)
-        {
-            var result = synth.SynthesizeTextToStreamAsync(text).AsTask().GetAwaiter().GetResult();
-            var ms = new MemoryStream();
-            result.AsStreamForRead().CopyTo(ms);
-            ms.Position = 0;
-            return ms;
-        }
-
-        private void Speak(string text, bool cancelPrevious = true)
-        {
-            if (!Config.EnableSoundPrompt) return;
-            Task.Run(() =>
-            {
-                lock (_speechLock)
-                {
-                    try
-                    {
-                        if (cancelPrevious) _soundPlayer?.Stop();
-                        if (_ttsNormal == null) return;
-                        var ms = SynthesizeToMemoryStream(_ttsNormal, text);
-                        _soundPlayer.Stream = ms;
-                        _soundPlayer.PlaySync();
-                    }
-                    catch { }
-                }
-            });
-        }
-
-        /// <summary>
-        /// 警告/错误语音：使用男声 + 同步阻塞播放，确保不会被后续普通语音打断。
-        /// cancelPrevious=false 时等待当前语音播完再播放（排队），不会打断。
-        /// </summary>
-        private void SpeakWarning(string text, int repeatCount = 1, bool cancelPrevious = true)
-        {
-            if (!Config.EnableSoundPrompt) return;
-            Task.Run(() =>
-            {
-                lock (_speechLock)
-                {
-                    try
-                    {
-                        if (cancelPrevious) _soundPlayer?.Stop();
-                        if (_ttsWarning == null) return;
-                        string fullText = repeatCount > 1
-                            ? string.Join("，", Enumerable.Repeat(text, repeatCount))
-                            : text;
-                        var ms = SynthesizeToMemoryStream(_ttsWarning, fullText);
-                        _soundPlayer.Stream = ms;
-                        _soundPlayer.PlaySync(); // 同步阻塞直到播完
-                    }
-                    catch { }
-                }
-            });
-        }
+                private void Speak(string text, bool cancelPrevious = true) => _speechService?.Speak(text, cancelPrevious);
+        private void SpeakWarning(string text, int repeatCount = 1, bool cancelPrevious = true) => _speechService?.SpeakWarning(text, repeatCount, cancelPrevious);
 
         public void Dispose()
         {
@@ -1437,13 +1356,8 @@ namespace ExpressPackingMonitoring.ViewModels
             try { _videoTask?.Wait(1000); } catch { }
             _cts?.Dispose();
             lock (_videoLock) { _previousCheckFrame?.Dispose(); }
-            lock (_speechLock)
-            {
-                _soundPlayer?.Stop();
-                _soundPlayer?.Dispose(); _soundPlayer = null;
-                _ttsNormal?.Dispose(); _ttsNormal = null;
-                _ttsWarning?.Dispose(); _ttsWarning = null;
-            }
+            _speechService?.Dispose();
+            _speechService = null;
             try { _globalKeyHook?.Dispose(); } catch { }
             try { _webServer?.Dispose(); } catch { }
             try { _db?.Dispose(); } catch { }
