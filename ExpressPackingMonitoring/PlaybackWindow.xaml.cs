@@ -75,6 +75,7 @@ namespace ExpressPackingMonitoring
         private bool _isPlaying;
         private bool _isLoadingVideos;
         private bool _playerInitializationFailed;
+        private bool _playerInitializing;
         private long _currentMediaLengthMs;
         private readonly SemaphoreSlim _playerSemaphore = new SemaphoreSlim(1, 1);
 
@@ -335,7 +336,7 @@ namespace ExpressPackingMonitoring
 
             try
             {
-                if (!EnsurePlayerReady())
+                if (!await EnsurePlayerReadyAsync())
                     return;
 
                 // UI 状态立即重置
@@ -511,7 +512,7 @@ namespace ExpressPackingMonitoring
             BtnLocateFile.IsEnabled = current != null && !current.IsUnavailable;
         }
 
-        private bool EnsurePlayerReady()
+        private async Task<bool> EnsurePlayerReadyAsync()
         {
             if (_playerInitializationFailed)
                 return false;
@@ -519,11 +520,28 @@ namespace ExpressPackingMonitoring
             if (_mediaPlayer != null)
                 return true;
 
+            if (_playerInitializing)
+                return false;
+
+            _playerInitializing = true;
+            TimeLabel.Text = "正在加载播放器...";
+            BtnTogglePlay.IsEnabled = false;
+            TimelineSlider.IsEnabled = false;
+
             try
             {
-                Core.Initialize();
-                _libVLC = new LibVLC("--avcodec-hw=any");
-                _mediaPlayer = new LibVLCSharp.Shared.MediaPlayer(_libVLC);
+                LibVLC libVLC = null!;
+                LibVLCSharp.Shared.MediaPlayer mediaPlayer = null!;
+
+                await Task.Run(() =>
+                {
+                    Core.Initialize();
+                    libVLC = new LibVLC("--avcodec-hw=any");
+                    mediaPlayer = new LibVLCSharp.Shared.MediaPlayer(libVLC);
+                });
+
+                _libVLC = libVLC;
+                _mediaPlayer = mediaPlayer;
                 _mediaPlayer.LengthChanged += MediaPlayer_LengthChanged;
                 _mediaPlayer.TimeChanged += MediaPlayer_TimeChanged;
                 _mediaPlayer.EndReached += MediaPlayer_EndReached;
@@ -538,6 +556,10 @@ namespace ExpressPackingMonitoring
                 _playerInitializationFailed = true;
                 MessageBox.Show($"播放器初始化失败：{ex.Message}\n\n回放列表仍可查看，但当前机器暂时无法内置播放。", "回放错误", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
+            }
+            finally
+            {
+                _playerInitializing = false;
             }
         }
 
