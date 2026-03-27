@@ -349,7 +349,12 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 if (IsRecording) 
                 {
-                    await InternalStopRecordingAsync(); 
+                    await InternalStopRecordingAsync();
+                    CurrentOrderId = "";
+                    ScanInputText = "";
+                    ShowToast("已手动停止录制");
+                    Speak("停止录制");
+                    return;
                 }
                 else 
                 {
