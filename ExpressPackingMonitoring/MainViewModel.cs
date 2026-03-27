@@ -1091,20 +1091,29 @@ namespace ExpressPackingMonitoring.ViewModels
                                 double fontScale = Math.Max(0.5, processedFrame.Height / 720.0) * 0.6;
                                 int thickness = fontScale >= 0.8 ? 2 : 1;
                                 int lineHeight = (int)(30 * fontScale / 0.6);
+                                
                                 // 第一行：时间
-                                Cv2.PutText(processedFrame, line1, new OpenCvSharp.Point(10, lineHeight),
+                                var size1 = Cv2.GetTextSize(line1, HersheyFonts.HersheySimplex, fontScale, thickness, out _);
+                                int x1 = processedFrame.Width - size1.Width - 15;
+                                int y1 = lineHeight;
+                                
+                                Cv2.PutText(processedFrame, line1, new OpenCvSharp.Point(x1, y1),
                                     HersheyFonts.HersheySimplex, fontScale, new Scalar(0, 0, 0), thickness + 2, LineTypes.AntiAlias);
-                                Cv2.PutText(processedFrame, line1, new OpenCvSharp.Point(10, lineHeight),
+                                Cv2.PutText(processedFrame, line1, new OpenCvSharp.Point(x1, y1),
                                     HersheyFonts.HersheySimplex, fontScale, new Scalar(255, 255, 255), thickness, LineTypes.AntiAlias);
+                                
                                 // 第二行：单号（录制中或有当前单号时显示）
                                 string orderId = IsRecording ? _recordingOrderId : CurrentOrderId;
                                 if (!string.IsNullOrEmpty(orderId))
                                 {
                                     string line2 = $"Order:{orderId}";
-                                    int y2 = lineHeight + (int)(lineHeight * 1.1);
-                                    Cv2.PutText(processedFrame, line2, new OpenCvSharp.Point(10, y2),
+                                    var size2 = Cv2.GetTextSize(line2, HersheyFonts.HersheySimplex, fontScale, thickness, out _);
+                                    int x2 = processedFrame.Width - size2.Width - 15;
+                                    int y2 = y1 + (int)(lineHeight * 1.1);
+                                    
+                                    Cv2.PutText(processedFrame, line2, new OpenCvSharp.Point(x2, y2),
                                         HersheyFonts.HersheySimplex, fontScale, new Scalar(0, 0, 0), thickness + 2, LineTypes.AntiAlias);
-                                    Cv2.PutText(processedFrame, line2, new OpenCvSharp.Point(10, y2),
+                                    Cv2.PutText(processedFrame, line2, new OpenCvSharp.Point(x2, y2),
                                         HersheyFonts.HersheySimplex, fontScale, new Scalar(255, 255, 255), thickness, LineTypes.AntiAlias);
                                 }
                             }
