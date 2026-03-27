@@ -1033,6 +1033,40 @@ namespace ExpressPackingMonitoring.ViewModels
                             }
                         }
 
+                        // 水印叠加：始终在预览画面显示时间，录制时额外显示单号
+                        if (Config.EnableWatermark)
+                        {
+                            try
+                            {
+                                if (processedFrame == currentFrame)
+                                {
+                                    processedFrame = currentFrame.Clone();
+                                }
+                                var now = DateTimeOffset.Now.ToOffset(TimeSpan.FromHours(8));
+                                string line1 = $"UTC+8: {now:yyyy/MM/dd HH:mm:ss}";
+                                double fontScale = Math.Max(0.5, processedFrame.Height / 720.0) * 0.6;
+                                int thickness = fontScale >= 0.8 ? 2 : 1;
+                                int lineHeight = (int)(30 * fontScale / 0.6);
+                                // 第一行：时间
+                                Cv2.PutText(processedFrame, line1, new OpenCvSharp.Point(10, lineHeight),
+                                    HersheyFonts.HersheySimplex, fontScale, new Scalar(0, 0, 0), thickness + 2, LineTypes.AntiAlias);
+                                Cv2.PutText(processedFrame, line1, new OpenCvSharp.Point(10, lineHeight),
+                                    HersheyFonts.HersheySimplex, fontScale, new Scalar(255, 255, 255), thickness, LineTypes.AntiAlias);
+                                // 第二行：单号（录制中或有当前单号时显示）
+                                string orderId = IsRecording ? _recordingOrderId : CurrentOrderId;
+                                if (!string.IsNullOrEmpty(orderId))
+                                {
+                                    string line2 = $"Order:{orderId}";
+                                    int y2 = lineHeight + (int)(lineHeight * 1.1);
+                                    Cv2.PutText(processedFrame, line2, new OpenCvSharp.Point(10, y2),
+                                        HersheyFonts.HersheySimplex, fontScale, new Scalar(0, 0, 0), thickness + 2, LineTypes.AntiAlias);
+                                    Cv2.PutText(processedFrame, line2, new OpenCvSharp.Point(10, y2),
+                                        HersheyFonts.HersheySimplex, fontScale, new Scalar(255, 255, 255), thickness, LineTypes.AntiAlias);
+                                }
+                            }
+                            catch { }
+                        }
+
                         if (IsRecording && _videoWriteQueue != null && !_videoWriteQueue.IsAddingCompleted)
                         {
                             // === 防熔断检查机制 ===
@@ -1049,7 +1083,8 @@ namespace ExpressPackingMonitoring.ViewModels
                                 // === 防卡死核心机制 ===
                                 // 给队列的塞入设定 5ms 极限超时。如果 5ms 放不进去，证明后台卡住了。
                                 // 此时宁可抛弃这一帧，也绝对不能让当前的 UI/预览线程被挂起！
-                                if (!_videoWriteQueue.TryAdd(clone, 5))
+                                var queue = _videoWriteQueue;
+                                if (queue != null && !queue.IsAddingCompleted && !queue.TryAdd(clone, 5))
                                 {
                                     clone.Dispose();
                                 }

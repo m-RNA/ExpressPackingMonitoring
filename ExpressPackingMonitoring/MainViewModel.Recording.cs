@@ -97,6 +97,7 @@ namespace ExpressPackingMonitoring.ViewModels
             _currentVideoEncoder = null;
             _currentRecordId = 0;
             _currentFfmpegProcess = null;
+            _recordingOrderId = null;
 
             _lastFinalizeTask = Task.Run(() => 
             {
@@ -587,7 +588,11 @@ namespace ExpressPackingMonitoring.ViewModels
                     return (fileOk, fileOk ? "" : ExtractFFmpegError(stderrText));
 
                 if (anyFrameWritten && processOk && fileOk)
+                {
+                    if (!string.IsNullOrWhiteSpace(stderrText))
+                        Debug.WriteLine($"[FFmpeg] stderr (success): {stderrText[..Math.Min(stderrText.Length, 500)]}");
                     return (true, "");
+                }
 
                 string finalErr = ExtractFFmpegError(stderrText);
                 if (string.IsNullOrWhiteSpace(finalErr))

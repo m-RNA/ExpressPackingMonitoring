@@ -90,6 +90,9 @@ namespace ExpressPackingMonitoring.ViewModels
         public string VideoCodec { get; set; } = "h265"; // "h264" or "h265"
         public int VideoCqp { get; set; } = 30;
 
+        // 水印
+        public bool EnableWatermark { get; set; } = true;
+
         // 局域网 Web 服务
         public bool EnableWebServer { get; set; } = true;
         public int WebServerPort { get; set; } = 5280;
