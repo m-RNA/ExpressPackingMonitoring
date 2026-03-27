@@ -978,6 +978,69 @@
                 <Border Background="Transparent" Padding="0,4,0,0">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
+                            <!-- 局域网 Web 服务 -->
+                            <Border Style="{StaticResource SectionCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Text="局域网 Web 服务" Style="{StaticResource SectionTitleStyle}"/>
+                                    <TextBlock Text="在局域网内提供视频查看、回放和下载服务，可通过浏览器访问。"
+                                               Style="{StaticResource SectionHintStyle}"/>
+                                    <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,12,0,12"/>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="启用 Web 服务" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="启用后可从局域网内浏览器远程查看录像。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <CheckBox Grid.Column="1"
+                                                  IsChecked="{Binding Config.EnableWebServer}"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left"
+                                                  Style="{StaticResource ToggleSwitchStyle}"/>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="监听端口" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="Web 服务监听的 HTTP 端口号，修改后需重启生效。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <xctk:IntegerUpDown Grid.Column="1"
+                                                            Height="32"
+                                                            Value="{Binding Config.WebServerPort}"
+                                                            Minimum="1024"
+                                                            Maximum="65535"
+                                                            Increment="1"/>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="转码缓存上限 (MB)" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="H.265 转 H.264 的缓存占用上限，超出后自动清理最旧缓存。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <xctk:IntegerUpDown Grid.Column="1"
+                                                            Height="32"
+                                                            Value="{Binding Config.TranscodeCacheMaxMB}"
+                                                            Minimum="128"
+                                                            Maximum="10240"
+                                                            Increment="256"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
                             <Border Style="{StaticResource SectionCardStyle}">
                                 <StackPanel>
                                     <TextBlock Text="识别与启动" Style="{StaticResource SectionTitleStyle}"/>
