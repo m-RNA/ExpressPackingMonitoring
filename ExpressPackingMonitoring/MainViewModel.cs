@@ -442,8 +442,8 @@ namespace ExpressPackingMonitoring.ViewModels
 
             // 指令处理
             if (upperResult.Contains("CLEAR") || upperResult.Contains("清除")) { ShowToast("🧹 扫码框已清除"); return; }
-            if (upperResult.Contains("SHIP") || upperResult.Contains("发货")) { CurrentMode = "发货"; StartInputCooldown(); ShowToast("切换为发货模式"); Speak("切换发货"); return; }
-            if (upperResult.Contains("BACK") || upperResult.Contains("退货")) { CurrentMode = "退货"; StartInputCooldown(); ShowToast("切换为退货模式"); Speak("切换退货"); return; }
+            if (upperResult.Contains("SHIP") || upperResult.Contains("发货") || upperResult.Contains("FAHUO")) { CurrentMode = "发货"; StartInputCooldown(); ShowToast("切换为发货模式"); Speak("切换发货"); return; }
+            if (upperResult.Contains("BACK") || upperResult.Contains("退货") || upperResult.Contains("TUIHUO")) { CurrentMode = "退货"; StartInputCooldown(); ShowToast("切换为退货模式"); Speak("切换退货"); return; }
             if (upperResult.Contains("START") || upperResult.Contains("开始录制")) { ToggleRecording(); return; }
             if (upperResult.Contains("STOP") || upperResult.Contains("停止录制")) { _ = SafeStopRecordingAsync(true); return; }
 
