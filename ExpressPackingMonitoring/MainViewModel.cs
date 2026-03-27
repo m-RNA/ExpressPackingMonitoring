@@ -384,16 +384,16 @@ namespace ExpressPackingMonitoring.ViewModels
                         IsZoomingActive = true;
                     }
 
-                    // 没有输入单号时语音提示
-                    if (CurrentOrderId.StartsWith("MAN_"))
-                    {
-                        SpeakWarning("没有单号", 5);
-                    }
-
                     Debug.WriteLine($"[Zoom] 手动开启录制触发缩放: ID={CurrentOrderId}, Delay={Config.ZoomDelaySeconds}");
 
                     await InternalStartRecordingAsync();
                     ScanInputText = ""; // 启动录制后清空
+
+                    // 没有输入单号时语音提示（不打断"开始录制"，排队等播完后再警告）
+                    if (CurrentOrderId.StartsWith("MAN_"))
+                    {
+                        SpeakWarning("没有单号", 3, cancelPrevious: false);
+                    }
                 }
             }
             catch (Exception ex)
@@ -432,7 +432,7 @@ namespace ExpressPackingMonitoring.ViewModels
             if (_db != null && _db.OrderIdExistsToday(upperResult))
             {
                 ShowToast("⚠ 重复单号，请确认");
-                SpeakWarning("重复单号");
+                SpeakWarning("重复单号",3);
             }
 
             Debug.WriteLine($"[Zoom] 扫码事件触发: ID={upperResult}, ZoomEnabled={Config.EnableSmartZoom}, Delay={Config.ZoomDelaySeconds}");
@@ -1127,6 +1127,7 @@ namespace ExpressPackingMonitoring.ViewModels
                                 cameraErrorCounter = 0;
                                 _ = Application.Current.Dispatcher.InvokeAsync(() => {
                                     ShowToast("⚠ 摄像头信号丢失，尝试重连...");
+                                    SpeakWarning("摄像头重连中");
                                     RestartCamera();
                                 });
                             }
@@ -1143,6 +1144,7 @@ namespace ExpressPackingMonitoring.ViewModels
                                 {
                                     _ = Application.Current.Dispatcher.InvokeAsync(() => {
                                         ShowToast("📷 检测到摄像头，尝试启动...");
+                                        Speak("摄像头重启中");
                                         RestartCamera();
                                     });
                                 }
@@ -1291,7 +1293,7 @@ namespace ExpressPackingMonitoring.ViewModels
             return ms;
         }
 
-        private void Speak(string text)
+        private void Speak(string text, bool cancelPrevious = true)
         {
             if (!Config.EnableSoundPrompt) return;
             Task.Run(() =>
@@ -1300,11 +1302,11 @@ namespace ExpressPackingMonitoring.ViewModels
                 {
                     try
                     {
-                        _soundPlayer?.Stop();
+                        if (cancelPrevious) _soundPlayer?.Stop();
                         if (_ttsNormal == null) return;
                         var ms = SynthesizeToMemoryStream(_ttsNormal, text);
                         _soundPlayer.Stream = ms;
-                        _soundPlayer.Play();
+                        _soundPlayer.PlaySync();
                     }
                     catch { }
                 }
@@ -1313,8 +1315,9 @@ namespace ExpressPackingMonitoring.ViewModels
 
         /// <summary>
         /// 警告/错误语音：使用男声 + 同步阻塞播放，确保不会被后续普通语音打断。
+        /// cancelPrevious=false 时等待当前语音播完再播放（排队），不会打断。
         /// </summary>
-        private void SpeakWarning(string text, int repeatCount = 1)
+        private void SpeakWarning(string text, int repeatCount = 1, bool cancelPrevious = true)
         {
             if (!Config.EnableSoundPrompt) return;
             Task.Run(() =>
@@ -1323,7 +1326,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 {
                     try
                     {
-                        _soundPlayer?.Stop();
+                        if (cancelPrevious) _soundPlayer?.Stop();
                         if (_ttsWarning == null) return;
                         string fullText = repeatCount > 1
                             ? string.Join("，", Enumerable.Repeat(text, repeatCount))
