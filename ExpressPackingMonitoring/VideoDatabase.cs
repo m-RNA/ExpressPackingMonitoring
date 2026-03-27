@@ -474,37 +474,6 @@ namespace ExpressPackingMonitoring
         }
 
         /// <summary>
-        /// 获取今日统计（用于主界面显示）
-        /// </summary>
-        public DailyStat GetTodayStat()
-        {
-            lock (_lock)
-            {
-                using var cmd = _connection.CreateCommand();
-                cmd.CommandText = @"
-                    SELECT COUNT(*), COALESCE(SUM(DurationSeconds), 0)
-                    FROM VideoRecords 
-                    WHERE IsDeleted = 0 
-                      AND DurationSeconds > 0
-                      AND EndTime IS NOT NULL
-                      AND substr(StartTime, 1, 10) = @today;";
-                cmd.Parameters.AddWithValue("@today", DateTime.Now.ToString("yyyy-MM-dd"));
-
-                using var reader = cmd.ExecuteReader();
-                if (reader.Read())
-                {
-                    return new DailyStat
-                    {
-                        Date = DateTime.Now.ToString("yyyy-MM-dd"),
-                        TotalPieces = reader.GetInt32(0),
-                        TotalDurationSec = reader.GetDouble(1)
-                    };
-                }
-                return new DailyStat { Date = DateTime.Now.ToString("yyyy-MM-dd") };
-            }
-        }
-
-        /// <summary>
         /// 获取所有未删除视频的总磁盘占用
         /// </summary>
         public long GetTotalFileSizeBytes()

@@ -391,7 +391,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 _currentRecordId = _db?.InsertVideoRecord(_recordingOrderId, _recordingMode, _currentVideoCodec, _currentVideoEncoder, filePath, _recordStartTime) ?? 0;
 
                 ShowToast("▶ 开始录像");
-                Speak("开始录制");
+                Speak("开始录制", cancelPrevious: false);
                 _currentScanRecord = new ScanRecord(_recordingOrderId, "0s", DateTime.Now.ToString("HH:mm:ss"), _recordingMode, true);
                 AddRecord(_currentScanRecord);
             }

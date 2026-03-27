@@ -328,13 +328,19 @@ namespace ExpressPackingMonitoring.ViewModels
         {
             try
             {
-                var today = _db?.GetTodayStat();
-                if (today != null)
+                var todayList = _db?.GetAggregatedStats(DateTime.Today, DateTime.Today, "day");
+                if (todayList != null && todayList.Count > 0)
                 {
+                    var today = todayList[0];
                     TotalPieces = today.TotalPieces;
                     _totalPackTime = TimeSpan.FromSeconds(today.TotalDurationSec);
-                    OnPropertyChanged(nameof(TotalPackTimeStr)); OnPropertyChanged(nameof(AveragePackTime));
                 }
+                else
+                {
+                    TotalPieces = 0;
+                    _totalPackTime = TimeSpan.Zero;
+                }
+                OnPropertyChanged(nameof(TotalPackTimeStr)); OnPropertyChanged(nameof(AveragePackTime));
             }
             catch { }
         }
@@ -429,10 +435,10 @@ namespace ExpressPackingMonitoring.ViewModels
             try { if (!System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex)) { ShowToast("非法单号，已拦截"); SpeakWarning("非法单号"); return; } } catch { }
 
             // 重复单号检测（查数据库今日记录）
-            if (_db != null && _db.OrderIdExistsToday(upperResult))
+            bool isDuplicate = _db != null && _db.OrderIdExistsToday(upperResult);
+            if (isDuplicate)
             {
                 ShowToast("⚠ 重复单号，请确认");
-                SpeakWarning("重复单号",3);
             }
 
             Debug.WriteLine($"[Zoom] 扫码事件触发: ID={upperResult}, ZoomEnabled={Config.EnableSmartZoom}, Delay={Config.ZoomDelaySeconds}");
@@ -445,6 +451,12 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 if (IsRecording) await InternalStopRecordingAsync();
                 await InternalStartRecordingAsync();
+
+                // 先播"开始录制"，再播"重复单号"（排队不打断）
+                if (isDuplicate)
+                {
+                    SpeakWarning("重复单号", 3, cancelPrevious: false);
+                }
 
                 // 在录制停止/启动之后设置缩放状态（InternalStopRecordingAsync 会重置缩放状态）
                 _lastScanTime = DateTime.Now;
@@ -1347,20 +1359,54 @@ namespace ExpressPackingMonitoring.ViewModels
             _cts?.Cancel();
             _stopReason = "程序退出";
 
+            string videoFileToConvert = null;
+            long recordId = 0;
+            DateTime recordStart = DateTime.MinValue;
+
             try
             {
                 if (IsRecording)
                 {
+                    videoFileToConvert = _currentVideoFilePath;
+                    recordId = _currentRecordId;
+                    recordStart = _recordStartTime;
+
                     _videoWriteQueue?.CompleteAdding();
                     _writeCts?.Cancel();
-                    _writeTask?.Wait(2000);
+                    _writeTask?.Wait(5000); // 等待写入线程关闭 stdin，让 FFmpeg 正常结束
+
+                    // 如果 FFmpeg 还没退出，再等一会儿让它写完尾部
                     if (_currentFfmpegProcess != null && !_currentFfmpegProcess.HasExited)
                     {
-                        try { _currentFfmpegProcess.Kill(); } catch { }
+                        if (!_currentFfmpegProcess.WaitForExit(3000))
+                        {
+                            try { _currentFfmpegProcess.Kill(); } catch { }
+                        }
                     }
+
+                    IsRecording = false;
                 }
             }
             catch { }
+
+            // 等待上一次的 finalize 任务完成
+            try { _lastFinalizeTask?.Wait(5000); } catch { }
+
+            // 录制中退出：更新数据库并转换 MP4
+            if (!string.IsNullOrEmpty(videoFileToConvert) && File.Exists(videoFileToConvert))
+            {
+                try
+                {
+                    long fileSize = new FileInfo(videoFileToConvert).Length;
+                    if (fileSize >= 1024 * 50 && recordId > 0)
+                    {
+                        int durSec = Math.Max(1, (int)(DateTime.Now - recordStart).TotalSeconds);
+                        _db?.UpdateVideoRecordOnStop(recordId, DateTime.Now, durSec, fileSize, _stopReason, _currentVideoCodec, _currentVideoEncoder);
+                        ConvertMkvToMp4(videoFileToConvert);
+                    }
+                }
+                catch { }
+            }
 
             StopCamera();
             try { _videoTask?.Wait(1000); } catch { }
