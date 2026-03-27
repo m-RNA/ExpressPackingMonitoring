@@ -20,7 +20,8 @@ using AForge.Video;
 using AForge.Video.DirectShow;
 using System.Drawing;
 using System.Drawing.Imaging;
-using System.Speech.Synthesis;
+using Windows.Media.SpeechSynthesis;
+using System.Media;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 
@@ -74,7 +75,9 @@ namespace ExpressPackingMonitoring.ViewModels
         public string BusyText { get => _busyText; set => SetProperty(ref _busyText, value); }
         // ====================================
 
-        private SpeechSynthesizer _speechSynth;
+        private Windows.Media.SpeechSynthesis.SpeechSynthesizer _ttsNormal;
+        private Windows.Media.SpeechSynthesis.SpeechSynthesizer _ttsWarning;
+        private SoundPlayer _soundPlayer;
         private readonly object _speechLock = new object();
 
         private string _currentMode = "发货";
@@ -1261,20 +1264,31 @@ namespace ExpressPackingMonitoring.ViewModels
         {
             try
             {
-                _speechSynth = new SpeechSynthesizer();
-                _speechSynth.SetOutputToDefaultAudioDevice();
-                foreach (var voice in _speechSynth.GetInstalledVoices())
-                {
-                    if (voice.VoiceInfo.Culture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
-                    {
-                        _speechSynth.SelectVoice(voice.VoiceInfo.Name);
-                        break;
-                    }
-                }
-                _speechSynth.Rate = 2;
-                _speechSynth.Volume = 100;
+                var voices = Windows.Media.SpeechSynthesis.SpeechSynthesizer.AllVoices;
+                var femaleZh = voices.FirstOrDefault(v => v.Gender == VoiceGender.Female && v.Language == "zh-CN");
+                var maleZh = voices.FirstOrDefault(v => v.Gender == VoiceGender.Male && v.Language == "zh-CN");
+                var anyZh = femaleZh ?? maleZh ?? voices.FirstOrDefault(v => v.Language.StartsWith("zh"));
+
+                _ttsNormal = new Windows.Media.SpeechSynthesis.SpeechSynthesizer();
+                if (femaleZh != null) _ttsNormal.Voice = femaleZh;
+                else if (anyZh != null) _ttsNormal.Voice = anyZh;
+
+                _ttsWarning = new Windows.Media.SpeechSynthesis.SpeechSynthesizer();
+                if (maleZh != null) _ttsWarning.Voice = maleZh;
+                else if (anyZh != null) _ttsWarning.Voice = anyZh;
+
+                _soundPlayer = new SoundPlayer();
             }
-            catch { _speechSynth = null; }
+            catch { _ttsNormal = null; _ttsWarning = null; }
+        }
+
+        private MemoryStream SynthesizeToMemoryStream(Windows.Media.SpeechSynthesis.SpeechSynthesizer synth, string text)
+        {
+            var result = synth.SynthesizeTextToStreamAsync(text).AsTask().GetAwaiter().GetResult();
+            var ms = new MemoryStream();
+            result.AsStreamForRead().CopyTo(ms);
+            ms.Position = 0;
+            return ms;
         }
 
         private void Speak(string text)
@@ -1286,8 +1300,11 @@ namespace ExpressPackingMonitoring.ViewModels
                 {
                     try
                     {
-                        _speechSynth?.SpeakAsyncCancelAll();
-                        _speechSynth?.SpeakAsync(text);
+                        _soundPlayer?.Stop();
+                        if (_ttsNormal == null) return;
+                        var ms = SynthesizeToMemoryStream(_ttsNormal, text);
+                        _soundPlayer.Stream = ms;
+                        _soundPlayer.Play();
                     }
                     catch { }
                 }
@@ -1295,7 +1312,7 @@ namespace ExpressPackingMonitoring.ViewModels
         }
 
         /// <summary>
-        /// 警告/错误语音：慢速 + 同步阻塞播放，确保不会被后续普通语音打断。
+        /// 警告/错误语音：使用男声 + 同步阻塞播放，确保不会被后续普通语音打断。
         /// </summary>
         private void SpeakWarning(string text, int repeatCount = 1)
         {
@@ -1306,20 +1323,16 @@ namespace ExpressPackingMonitoring.ViewModels
                 {
                     try
                     {
-                        _speechSynth?.SpeakAsyncCancelAll();
-                        // 切换为慢速严肃语调，与正常提示区分
-                        if (_speechSynth != null) _speechSynth.Rate = -2;
+                        _soundPlayer?.Stop();
+                        if (_ttsWarning == null) return;
                         string fullText = repeatCount > 1
                             ? string.Join("，", Enumerable.Repeat(text, repeatCount))
                             : text;
-                        _speechSynth?.Speak(fullText); // 同步阻塞直到播完
-                        // 恢复正常语速
-                        if (_speechSynth != null) _speechSynth.Rate = 2;
+                        var ms = SynthesizeToMemoryStream(_ttsWarning, fullText);
+                        _soundPlayer.Stream = ms;
+                        _soundPlayer.PlaySync(); // 同步阻塞直到播完
                     }
-                    catch
-                    {
-                        try { if (_speechSynth != null) _speechSynth.Rate = 2; } catch { }
-                    }
+                    catch { }
                 }
             });
         }
@@ -1350,7 +1363,13 @@ namespace ExpressPackingMonitoring.ViewModels
             try { _videoTask?.Wait(1000); } catch { }
             _cts?.Dispose();
             lock (_videoLock) { _previousCheckFrame?.Dispose(); }
-            lock (_speechLock) { _speechSynth?.Dispose(); _speechSynth = null; }
+            lock (_speechLock)
+            {
+                _soundPlayer?.Stop();
+                _soundPlayer?.Dispose(); _soundPlayer = null;
+                _ttsNormal?.Dispose(); _ttsNormal = null;
+                _ttsWarning?.Dispose(); _ttsWarning = null;
+            }
             try { _webServer?.Dispose(); } catch { }
             try { _db?.Dispose(); } catch { }
         }
