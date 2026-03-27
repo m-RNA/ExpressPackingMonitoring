@@ -67,6 +67,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private Process _currentFfmpegProcess;
         private bool _isDisposed = false; // 新增：防止销毁后操作 UI
         private WebServer _webServer;
+        private GlobalKeyboardHook _globalKeyHook;
 
         private bool _isBusy;
         public bool IsBusy { get => _isBusy; set => SetProperty(ref _isBusy, value); }
@@ -310,6 +311,21 @@ namespace ExpressPackingMonitoring.ViewModels
             ClearSearchCommand = new RelayCommand(() => LogSearchText = "");
             InitializeSystem();
             RefreshBarcodes();
+            InitGlobalKeyboardHook();
+        }
+
+        private void InitGlobalKeyboardHook()
+        {
+            _globalKeyHook = new GlobalKeyboardHook();
+            _globalKeyHook.BarcodeScanned += OnGlobalBarcodeScanned;
+            if (Config.EnableGlobalKeyboard)
+                _globalKeyHook.Start();
+        }
+
+        private void OnGlobalBarcodeScanned(string barcode)
+        {
+            if (_isDisposed) return;
+            HandleScan(barcode);
         }
 
         private void InitDatabase()
@@ -569,6 +585,7 @@ namespace ExpressPackingMonitoring.ViewModels
                         || Config.FrameHeight != clonedConfig.FrameHeight
                         || Config.Fps != clonedConfig.Fps;
                     bool themeChanged = Config.Theme != clonedConfig.Theme;
+                    bool globalKeyChanged = Config.EnableGlobalKeyboard != clonedConfig.EnableGlobalKeyboard;
 
                     Config = clonedConfig; 
                     SaveConfig(); 
@@ -581,6 +598,14 @@ namespace ExpressPackingMonitoring.ViewModels
                         }
                     }
                     ForceCheckDiskAndCleanup();
+
+                    if (globalKeyChanged && _globalKeyHook != null)
+                    {
+                        if (Config.EnableGlobalKeyboard)
+                            _globalKeyHook.Start();
+                        else
+                            _globalKeyHook.Stop();
+                    }
 
                     if (cameraChanged)
                     {
@@ -1419,6 +1444,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 _ttsNormal?.Dispose(); _ttsNormal = null;
                 _ttsWarning?.Dispose(); _ttsWarning = null;
             }
+            try { _globalKeyHook?.Dispose(); } catch { }
             try { _webServer?.Dispose(); } catch { }
             try { _db?.Dispose(); } catch { }
         }

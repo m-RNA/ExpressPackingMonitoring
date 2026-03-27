@@ -47,6 +47,7 @@
     <Compile Include="BarcodeHelper.cs" />
     <Compile Include="ConfirmDialog.xaml.cs" />
     <Compile Include="EncodingHelper.cs" />
+    <Compile Include="GlobalKeyboardHook.cs" />
     <Compile Include="MainViewModel.Cleanup.cs" />
     <Compile Include="MainViewModel.cs" />
     <Compile Include="MainViewModel.Encoder.cs" />

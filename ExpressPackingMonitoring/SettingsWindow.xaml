@@ -1075,6 +1075,23 @@
                                                Style="{StaticResource SectionHintStyle}"/>
                                     <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,12,0,12"/>
 
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="全局键盘监听" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="开启后即使程序不在前台，也能接收扫码枪输入执行指令。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <CheckBox Grid.Column="1"
+                                                  IsChecked="{Binding Config.EnableGlobalKeyboard}"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left"
+                                                  Style="{StaticResource ToggleSwitchStyle}"/>
+                                    </Grid>
+
                                     <Grid Style="{StaticResource SettingRowStyle}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="230"/>

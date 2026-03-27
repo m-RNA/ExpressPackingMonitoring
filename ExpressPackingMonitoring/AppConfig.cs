@@ -90,6 +90,9 @@ namespace ExpressPackingMonitoring.ViewModels
         public string VideoCodec { get; set; } = "h265"; // "h264" or "h265"
         public int VideoCqp { get; set; } = 30;
 
+        // 全局键盘监听（后台接收扫码枪）
+        public bool EnableGlobalKeyboard { get; set; } = false;
+
         // 水印
         public bool EnableWatermark { get; set; } = true;
 
