@@ -16,6 +16,17 @@ namespace ExpressPackingMonitoring
     /// 内嵌轻量 HTTP 服务器，供局域网客户端搜索、播放和下载视频。
     /// 基于 HttpListener，无需额外 NuGet 依赖。
     /// </summary>
+    /// <summary>订单附加信息（从快递助手页面推送）</summary>
+    public class OrderInfo
+    {
+        public string TrackingNumber { get; set; } = "";
+        public string OrderId { get; set; } = "";
+        public string BuyerMessage { get; set; } = "";
+        public string SellerMemo { get; set; } = "";
+        public string ProductInfo { get; set; } = "";
+        public DateTime PushTime { get; set; } = DateTime.Now;
+    }
+
     public sealed class WebServer : IDisposable
     {
         private readonly HttpListener _listener;
@@ -26,6 +37,11 @@ namespace ExpressPackingMonitoring
         private static readonly string _logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "web_debug.log");
         private static readonly string _transCacheDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "transcache");
         private long _transCacheMaxBytes = 1024L * 1024 * 1024; // 默认 1GB，可config覆盖
+
+        // 订单信息缓存：Key 为快递单号(大写)，保留最近24小时的数据
+        private readonly Dictionary<string, OrderInfo> _orderInfoCache = new();
+        private readonly object _orderInfoLock = new();
+        private const int MaxOrderInfoEntries = 5000;
 
         public int Port { get; }
 
@@ -119,6 +135,15 @@ namespace ExpressPackingMonitoring
 
                 // CORS
                 ctx.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+                ctx.Response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                ctx.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+
+                if (method == "OPTIONS")
+                {
+                    ctx.Response.StatusCode = 204;
+                    ctx.Response.OutputStream.Close();
+                    return;
+                }
 
                 switch (path)
                 {
@@ -127,6 +152,12 @@ namespace ExpressPackingMonitoring
                         break;
                     case "/api/videos":
                         HandleSearchVideos(ctx);
+                        break;
+                    case "/api/orderinfo":
+                        if (method == "POST")
+                            HandlePushOrderInfo(ctx);
+                        else
+                            HandleQueryOrderInfo(ctx);
                         break;
                     default:
                         if (method == "HEAD" && path.StartsWith("/api/videos/") && path.EndsWith("/play"))
@@ -150,6 +181,104 @@ namespace ExpressPackingMonitoring
             {
                 Log($"!!! HandleRequest 异常: {ex}");
                 try { SendJson(ctx, 500, new { error = ex.Message }); } catch { }
+            }
+        }
+
+        // ───── API: 推送订单信息 (来自油猴脚本) ─────
+        private void HandlePushOrderInfo(HttpListenerContext ctx)
+        {
+            try
+            {
+                using var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding);
+                string body = reader.ReadToEnd();
+                var items = JsonSerializer.Deserialize<List<OrderInfo>>(body, _jsonOptions);
+                if (items == null || items.Count == 0)
+                {
+                    SendJson(ctx, 400, new { error = "空数据" });
+                    return;
+                }
+
+                int count = 0;
+                lock (_orderInfoLock)
+                {
+                    // 超过上限时清理24小时前的旧数据
+                    if (_orderInfoCache.Count > MaxOrderInfoEntries)
+                    {
+                        var cutoff = DateTime.Now.AddHours(-24);
+                        var expiredKeys = _orderInfoCache.Where(kv => kv.Value.PushTime < cutoff).Select(kv => kv.Key).ToList();
+                        foreach (var k in expiredKeys) _orderInfoCache.Remove(k);
+                    }
+
+                    foreach (var item in items)
+                    {
+                        if (string.IsNullOrWhiteSpace(item.TrackingNumber)) continue;
+                        string key = item.TrackingNumber.Trim().ToUpperInvariant();
+                        item.PushTime = DateTime.Now;
+                        _orderInfoCache[key] = item;
+                        count++;
+                    }
+                }
+
+                Log($"HandlePushOrderInfo: 接收 {count} 条订单信息, 缓存总数={_orderInfoCache.Count}");
+                // 打印每条记录详情
+                foreach (var item in items)
+                {
+                    if (!string.IsNullOrWhiteSpace(item.TrackingNumber))
+                        Log($"  订单: 运单号={item.TrackingNumber}, 订单号={item.OrderId}, 买家留言=[{item.BuyerMessage}], 卖家备注=[{item.SellerMemo}], 商品=[{item.ProductInfo}]");
+                }
+                SendJson(ctx, 200, new { ok = true, count });
+            }
+            catch (Exception ex)
+            {
+                Log($"HandlePushOrderInfo 异常: {ex.Message}");
+                SendJson(ctx, 400, new { error = ex.Message });
+            }
+        }
+
+        // ───── API: 查询订单信息 ─────
+        private void HandleQueryOrderInfo(HttpListenerContext ctx)
+        {
+            string trackingNo = (ctx.Request.QueryString["trackingNo"] ?? "").Trim().ToUpperInvariant();
+            if (string.IsNullOrEmpty(trackingNo))
+            {
+                SendJson(ctx, 400, new { error = "缺少 trackingNo 参数" });
+                return;
+            }
+
+            lock (_orderInfoLock)
+            {
+                if (_orderInfoCache.TryGetValue(trackingNo, out var info))
+                {
+                    SendJson(ctx, 200, new
+                    {
+                        found = true,
+                        info.TrackingNumber,
+                        info.OrderId,
+                        info.BuyerMessage,
+                        info.SellerMemo,
+                        info.ProductInfo
+                    });
+                    return;
+                }
+            }
+
+            SendJson(ctx, 200, new { found = false });
+        }
+
+        /// <summary>根据快递单号查询已推送的订单信息（供 ViewModel 调用）</summary>
+        public OrderInfo GetOrderInfo(string trackingNo)
+        {
+            if (string.IsNullOrWhiteSpace(trackingNo)) return null;
+            string key = trackingNo.Trim().ToUpperInvariant();
+            lock (_orderInfoLock)
+            {
+                if (_orderInfoCache.TryGetValue(key, out var info))
+                {
+                    Log($"GetOrderInfo 命中: {key} => 买家留言=[{info.BuyerMessage}], 卖家备注=[{info.SellerMemo}], 商品=[{info.ProductInfo}]");
+                    return info;
+                }
+                Log($"GetOrderInfo 未命中: {key}, 缓存总数={_orderInfoCache.Count}");
+                return null;
             }
         }
 

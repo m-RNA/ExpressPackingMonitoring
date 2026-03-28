@@ -473,6 +473,29 @@ namespace ExpressPackingMonitoring.ViewModels
                     SpeakWarning("重复单号", 3, cancelPrevious: false);
                 }
 
+                // 查询快递助手推送的订单信息，播报留言/备注/商品
+                System.Diagnostics.Debug.WriteLine($"[OrderInfo] 扫码查询: {upperResult}, EnableAnnounce={Config.EnableOrderInfoAnnounce}, WebServer={(_webServer != null ? "已启动" : "未启动")}");
+                if (Config.EnableOrderInfoAnnounce && _webServer != null)
+                {
+                    var orderInfo = _webServer.GetOrderInfo(upperResult);
+                    System.Diagnostics.Debug.WriteLine($"[OrderInfo] 查询结果: {(orderInfo != null ? $"命中 买家=[{orderInfo.BuyerMessage}] 卖家=[{orderInfo.SellerMemo}] 商品=[{orderInfo.ProductInfo}]" : "未命中")}");
+                    if (orderInfo != null)
+                    {
+                        if (!string.IsNullOrWhiteSpace(orderInfo.BuyerMessage))
+                        {
+                            Speak($"买家留言，{orderInfo.BuyerMessage}", cancelPrevious: false);
+                        }
+                        if (!string.IsNullOrWhiteSpace(orderInfo.SellerMemo))
+                        {
+                            Speak($"卖家备注，{orderInfo.SellerMemo}", cancelPrevious: false);
+                        }
+                        if (!string.IsNullOrWhiteSpace(orderInfo.ProductInfo))
+                        {
+                            Speak($"商品，{orderInfo.ProductInfo}", cancelPrevious: false);
+                        }
+                    }
+                }
+
                 // 在录制停止/启动之后设置缩放状态（InternalStopRecordingAsync 会重置缩放状态）
                 _lastScanTime = DateTime.Now;
                 _isScanning = true;

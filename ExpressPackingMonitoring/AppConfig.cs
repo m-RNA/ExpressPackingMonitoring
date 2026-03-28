@@ -101,6 +101,9 @@ namespace ExpressPackingMonitoring.ViewModels
         public int WebServerPort { get; set; } = 5280;
         public int TranscodeCacheMaxMB { get; set; } = 1024;  // 转码缓存上限(MB)，超出后按时间清理最旧的
 
+        // 订单信息播报（快递助手联动）
+        public bool EnableOrderInfoAnnounce { get; set; } = true;
+
         // 缓存的检测结果
         public List<GpuEncoderOption> EncoderOptionsCache { get; set; } = new();
         public List<string> ValidatedEncodersCache { get; set; } = new();

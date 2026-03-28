@@ -1065,6 +1065,23 @@
                                                             Maximum="10240"
                                                             Increment="256"/>
                                     </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="订单信息语音播报" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="打包扫码时，自动播报快递助手推送的买家留言、卖家备注和商品信息。需安装油猴脚本。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <CheckBox Grid.Column="1"
+                                                  IsChecked="{Binding Config.EnableOrderInfoAnnounce}"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left"
+                                                  Style="{StaticResource ToggleSwitchStyle}"/>
+                                    </Grid>
                                 </StackPanel>
                             </Border>
 
