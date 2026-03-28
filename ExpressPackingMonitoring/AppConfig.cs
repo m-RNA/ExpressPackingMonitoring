@@ -103,6 +103,9 @@ namespace ExpressPackingMonitoring.ViewModels
 
         // 订单信息播报（快递助手联动）
         public bool EnableOrderInfoAnnounce { get; set; } = true;
+        public bool AnnounceBuyerMessage { get; set; } = true;
+        public bool AnnounceSellerMemo { get; set; } = true;
+        public bool AnnounceProductInfo { get; set; } = true;
 
         // 缓存的检测结果
         public List<GpuEncoderOption> EncoderOptionsCache { get; set; } = new();

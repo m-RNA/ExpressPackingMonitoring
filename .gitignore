@@ -3,3 +3,6 @@ ExpressPackingMonitoring/bin/*
 ExpressPackingMonitoring/obj/*
 *.user
 ExpressPackingMonitoring/ffmpeg.exe
+
+Test/
+

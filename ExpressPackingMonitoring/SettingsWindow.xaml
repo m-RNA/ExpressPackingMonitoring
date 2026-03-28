@@ -8,6 +8,7 @@
         Background="{DynamicResource WindowBackground}" FontFamily="Microsoft YaHei UI, Segoe UI">
 
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
         <!-- 【必需】1. GroupTitle: 用于每个页签顶部的巨大标题 -->
         <Style x:Key="GroupTitle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="24"/>
@@ -1078,6 +1079,46 @@
                                         </StackPanel>
                                         <CheckBox Grid.Column="1"
                                                   IsChecked="{Binding Config.EnableOrderInfoAnnounce}"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left"
+                                                  Style="{StaticResource ToggleSwitchStyle}"/>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="24,8,0,0"
+                                          Visibility="{Binding Config.EnableOrderInfoAnnounce, Converter={StaticResource BoolToVisibility}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="播报买家留言" Style="{StaticResource FieldLabelStyle}"/>
+                                        <CheckBox Grid.Column="1"
+                                                  IsChecked="{Binding Config.AnnounceBuyerMessage}"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left"
+                                                  Style="{StaticResource ToggleSwitchStyle}"/>
+                                    </Grid>
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="24,8,0,0"
+                                          Visibility="{Binding Config.EnableOrderInfoAnnounce, Converter={StaticResource BoolToVisibility}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="播报卖家备注" Style="{StaticResource FieldLabelStyle}"/>
+                                        <CheckBox Grid.Column="1"
+                                                  IsChecked="{Binding Config.AnnounceSellerMemo}"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left"
+                                                  Style="{StaticResource ToggleSwitchStyle}"/>
+                                    </Grid>
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="24,8,0,0"
+                                          Visibility="{Binding Config.EnableOrderInfoAnnounce, Converter={StaticResource BoolToVisibility}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="播报商品信息" Style="{StaticResource FieldLabelStyle}"/>
+                                        <CheckBox Grid.Column="1"
+                                                  IsChecked="{Binding Config.AnnounceProductInfo}"
                                                   VerticalAlignment="Center"
                                                   HorizontalAlignment="Left"
                                                   Style="{StaticResource ToggleSwitchStyle}"/>

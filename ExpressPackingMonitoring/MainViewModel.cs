@@ -481,15 +481,15 @@ namespace ExpressPackingMonitoring.ViewModels
                     System.Diagnostics.Debug.WriteLine($"[OrderInfo] 查询结果: {(orderInfo != null ? $"命中 买家=[{orderInfo.BuyerMessage}] 卖家=[{orderInfo.SellerMemo}] 商品=[{orderInfo.ProductInfo}]" : "未命中")}");
                     if (orderInfo != null)
                     {
-                        if (!string.IsNullOrWhiteSpace(orderInfo.BuyerMessage))
+                        if (Config.AnnounceBuyerMessage && !string.IsNullOrWhiteSpace(orderInfo.BuyerMessage))
                         {
                             Speak($"买家留言，{orderInfo.BuyerMessage}", cancelPrevious: false);
                         }
-                        if (!string.IsNullOrWhiteSpace(orderInfo.SellerMemo))
+                        if (Config.AnnounceSellerMemo && !string.IsNullOrWhiteSpace(orderInfo.SellerMemo))
                         {
                             Speak($"卖家备注，{orderInfo.SellerMemo}", cancelPrevious: false);
                         }
-                        if (!string.IsNullOrWhiteSpace(orderInfo.ProductInfo))
+                        if (Config.AnnounceProductInfo && !string.IsNullOrWhiteSpace(orderInfo.ProductInfo))
                         {
                             Speak($"商品，{orderInfo.ProductInfo}", cancelPrevious: false);
                         }
