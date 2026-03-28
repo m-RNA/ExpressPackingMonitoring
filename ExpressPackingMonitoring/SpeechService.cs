@@ -186,17 +186,33 @@ namespace ExpressPackingMonitoring.Services
         private void SpeakWithKokoro(string text, bool isWarning)
         {
             int sid = isWarning ? AiTtsWarningSpeakerId : AiTtsSpeakerId;
-            // 使用回调来支持打断：生成过程中检查取消标志
-            var audio = _kokoroTts.GenerateWithCallbackProgress(text, AiTtsSpeed, sid,
-                (IntPtr samples, int n, float progress) =>
-                {
-                    // 返回 0 继续生成，返回 1 中止
-                    return (_speechCancelRequested || _isDisposed) ? 1 : 0;
-                });
+            Debug.WriteLine($"[SpeechService] Kokoro generating: sid={sid}, speed={AiTtsSpeed}, text=\"{text}\"");
 
-            if (_speechCancelRequested || _isDisposed || audio == null || audio.NumSamples <= 0)
+            // 先完整生成音频（生成速度远快于实时，不需要中途打断生成过程）
+            // 打断功能在 PlayWavBlocking 阶段通过 waveOutReset 实现
+            OfflineTtsGeneratedAudio audio;
+            try
             {
+                audio = _kokoroTts.Generate(text, AiTtsSpeed, sid);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[SpeechService] Kokoro Generate exception: {ex.Message}");
+                return;
+            }
+
+            if (audio == null || audio.NumSamples <= 0)
+            {
+                Debug.WriteLine($"[SpeechService] Kokoro returned empty audio (NumSamples={audio?.NumSamples})");
                 audio?.Dispose();
+                return;
+            }
+
+            Debug.WriteLine($"[SpeechService] Kokoro generated {audio.NumSamples} samples, sampleRate={audio.SampleRate}, duration={audio.NumSamples / (double)audio.SampleRate:F2}s");
+
+            if (_speechCancelRequested || _isDisposed)
+            {
+                audio.Dispose();
                 return;
             }
 
