@@ -457,8 +457,8 @@ namespace ExpressPackingMonitoring.ViewModels
             // 正则验证
             try { if (!System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex)) { ShowToast("非法单号，已拦截"); SpeakWarning("非法单号"); return; } } catch { }
 
-            // 重复单号检测（查数据库今日记录）
-            bool isDuplicate = _db != null && _db.OrderIdExistsToday(upperResult);
+            // 重复单号检测（查数据库最近72小时记录，含录制中）
+            bool isDuplicate = _db != null && _db.OrderIdExistsRecent(upperResult);
             if (isDuplicate)
             {
                 ShowToast("⚠ 重复单号，请确认");

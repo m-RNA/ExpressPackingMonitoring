@@ -267,9 +267,9 @@ namespace ExpressPackingMonitoring
         }
 
         /// <summary>
-        /// 检查今日是否已存在指定单号的未删除录像记录
+        /// 检查最近72小时内是否已存在指定单号的未删除录像记录（含录制中的记录）
         /// </summary>
-        public bool OrderIdExistsToday(string orderId)
+        public bool OrderIdExistsRecent(string orderId)
         {
             if (string.IsNullOrWhiteSpace(orderId)) return false;
             lock (_lock)
@@ -278,11 +278,10 @@ namespace ExpressPackingMonitoring
                 cmd.CommandText = @"
                     SELECT COUNT(1) FROM VideoRecords
                     WHERE OrderId = @orderId
-                      AND StartTime >= @today
-                      AND IsDeleted = 0
-                      AND DurationSeconds > 0;";
+                      AND StartTime >= @since
+                      AND IsDeleted = 0;";
                 cmd.Parameters.AddWithValue("@orderId", orderId);
-                cmd.Parameters.AddWithValue("@today", DateTime.Now.ToString("yyyy-MM-dd 00:00:00"));
+                cmd.Parameters.AddWithValue("@since", DateTime.Now.AddHours(-72).ToString("yyyy-MM-dd HH:mm:ss"));
                 return Convert.ToInt64(cmd.ExecuteScalar()) > 0;
             }
         }
