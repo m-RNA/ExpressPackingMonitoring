@@ -189,13 +189,27 @@
         setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
     }
 
-    // ============ 自动推送：监听页面变化 ============
+    // ============ 自动推送：监听页面变化 + 操作按钮点击 ============
     let pushTimer = null;
     function schedulePush() {
         if (pushTimer) clearTimeout(pushTimer);
         pushTimer = setTimeout(() => {
             extractAndPush();
         }, 2000); // 页面加载/翻页后 2 秒自动推送
+    }
+
+    // 监听底部操作按钮点击（打印快递单、打印发货单、打印拣货单、发货等）
+    function bindActionButtons() {
+        const btnContainer = document.querySelector('.packageActionBtn') || document.querySelector('.packageActions');
+        if (!btnContainer) return;
+        btnContainer.addEventListener('click', (e) => {
+            const btn = e.target.closest('input[type="button"], button, .btn_bluebig, .btn_pinkbig, .btn_cyanbig, .btn_graybig');
+            if (btn) {
+                console.log('[打包监控] 检测到操作按钮点击:', btn.value || btn.textContent?.trim());
+                schedulePush();
+            }
+        });
+        console.log('[打包监控] 操作按钮监听已绑定');
     }
 
     // 监听订单列表区域的 DOM 变化（放宽范围：监听整个容器或 body）
@@ -234,6 +248,8 @@
                        document.body;
         observer.observe(target, { childList: true, subtree: true });
         console.log('[打包监控] DOM 监听已启动, 目标:', target.tagName, target.className || '(body)');
+        // 绑定操作按钮监听
+        bindActionButtons();
         // 首次推送
         extractAndPush();
     }, 3000);
