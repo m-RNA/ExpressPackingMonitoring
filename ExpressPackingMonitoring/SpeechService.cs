@@ -13,18 +13,18 @@ namespace ExpressPackingMonitoring.Services
 {
     public class SpeechRequest
     {
-        public string Text { get; set; }
+        public string Text { get; set; } = string.Empty;
         public bool IsWarning { get; set; }
         public int RepeatCount { get; set; } = 1;
     }
 
     public class SpeechService : IDisposable
     {
-        private SpeechSynthesizer _ttsNormal;
-        private SpeechSynthesizer _ttsWarning;
-        private OfflineTts _kokoroTts;
-        private BlockingCollection<SpeechRequest> _speechQueue;
-        private Thread _speechThread;
+        private SpeechSynthesizer? _ttsNormal;
+        private SpeechSynthesizer? _ttsWarning;
+        private OfflineTts? _kokoroTts;
+        private BlockingCollection<SpeechRequest> _speechQueue = null!;
+        private Thread _speechThread = null!;
         private volatile bool _speechCancelRequested;
         private bool _isDisposed;
 
@@ -44,12 +44,16 @@ namespace ExpressPackingMonitoring.Services
 
         private void InitSpeechSynthesizer()
         {
+            _speechQueue = new BlockingCollection<SpeechRequest>();
+            _speechThread = new Thread(SpeechThreadLoop) { IsBackground = true, Name = "SpeechThread" };
+            _speechThread.Start();
+
             try
             {
                 var voices = SpeechSynthesizer.AllVoices;
-                var femaleZh = voices.FirstOrDefault(v => v.Gender == VoiceGender.Female && v.Language == "zh-CN");
-                var maleZh = voices.FirstOrDefault(v => v.Gender == VoiceGender.Male && v.Language == "zh-CN");
-                var anyZh = femaleZh ?? maleZh ?? voices.FirstOrDefault(v => v.Language.StartsWith("zh"));
+                var femaleZh = voices.FirstOrDefault(v => v != null && v.Gender == VoiceGender.Female && v.Language == "zh-CN");
+                var maleZh = voices.FirstOrDefault(v => v != null && v.Gender == VoiceGender.Male && v.Language == "zh-CN");
+                var anyZh = femaleZh ?? maleZh ?? voices.FirstOrDefault(v => v != null && v.Language.StartsWith("zh"));
 
                 _ttsNormal = new SpeechSynthesizer();
                 if (femaleZh != null) _ttsNormal.Voice = femaleZh;
@@ -58,10 +62,6 @@ namespace ExpressPackingMonitoring.Services
                 _ttsWarning = new SpeechSynthesizer();
                 if (maleZh != null) _ttsWarning.Voice = maleZh;
                 else if (anyZh != null) _ttsWarning.Voice = anyZh;
-
-                _speechQueue = new BlockingCollection<SpeechRequest>();
-                _speechThread = new Thread(SpeechThreadLoop) { IsBackground = true, Name = "SpeechThread" };
-                _speechThread.Start();
             }
             catch (Exception ex)
             {
@@ -188,12 +188,12 @@ namespace ExpressPackingMonitoring.Services
             int sid = isWarning ? AiTtsWarningSpeakerId : AiTtsSpeakerId;
             Debug.WriteLine($"[SpeechService] Kokoro generating: sid={sid}, speed={AiTtsSpeed}, text=\"{text}\"");
 
-            // 先完整生成音频（生成速度远快于实时，不需要中途打断生成过程）
-            // 打断功能在 PlayWavBlocking 阶段通过 waveOutReset 实现
-            OfflineTtsGeneratedAudio audio;
+            OfflineTtsGeneratedAudio? audio;
             try
             {
-                audio = _kokoroTts.Generate(text, AiTtsSpeed, sid);
+                var tts = _kokoroTts;
+                if (tts == null) return;
+                audio = tts.Generate(text, AiTtsSpeed, sid);
             }
             catch (Exception ex)
             {
@@ -285,7 +285,7 @@ namespace ExpressPackingMonitoring.Services
                     dataSize = Math.Min(chunkSize, wavData.Length - dataOffset);
                     break;
                 }
-                dataOffset += 8 + chunkSize;
+                dataOffset += 8 + (chunkSize % 2 == 0 ? chunkSize : chunkSize + 1);
             }
             if (dataSize <= 0) return;
 
@@ -296,14 +296,14 @@ namespace ExpressPackingMonitoring.Services
             GCHandle dataHandle = default;
             try
             {
-                int mmResult = waveOutOpen(out hwo, WAVE_MAPPER, wfx, null, IntPtr.Zero, CALLBACK_NULL);
+                int mmResult = waveOutOpen(out hwo, (uint)WAVE_MAPPER, wfx, null, IntPtr.Zero, CALLBACK_NULL);
                 if (mmResult != 0) return;
 
                 dataHandle = GCHandle.Alloc(wavData, GCHandleType.Pinned);
                 var header = new WaveHeader
                 {
                     lpData = dataHandle.AddrOfPinnedObject() + dataOffset,
-                    dwBufferLength = dataSize
+                    dwBufferLength = (uint)dataSize
                 };
 
                 waveOutPrepareHeader(hwo, ref header, Marshal.SizeOf<WaveHeader>());
@@ -336,23 +336,27 @@ namespace ExpressPackingMonitoring.Services
 
         public void Speak(string text, bool cancelPrevious = true)
         {
-            if (!EnableSoundPrompt || _speechQueue == null || _speechQueue.IsAddingCompleted) return;
+            if (!EnableSoundPrompt) return;
+            var queue = _speechQueue;
+            if (queue == null || queue.IsAddingCompleted) return;
             if (cancelPrevious) Stop();
-            try { _speechQueue.Add(new SpeechRequest { Text = text, IsWarning = false, RepeatCount = 1 }); } catch { }
+            try { queue.Add(new SpeechRequest { Text = text, IsWarning = false, RepeatCount = 1 }); } catch { }
         }
 
         public void SpeakWarning(string text, int repeatCount = 1, bool cancelPrevious = true)
         {
-            if (!EnableSoundPrompt || _speechQueue == null || _speechQueue.IsAddingCompleted) return;
+            if (!EnableSoundPrompt) return;
+            var queue = _speechQueue;
+            if (queue == null || queue.IsAddingCompleted) return;
             if (cancelPrevious) Stop();
-            try { _speechQueue.Add(new SpeechRequest { Text = text, IsWarning = true, RepeatCount = repeatCount }); } catch { }
+            try { queue.Add(new SpeechRequest { Text = text, IsWarning = true, RepeatCount = repeatCount }); } catch { }
         }
 
         #region winmm.dll
         private delegate void WaveOutProc(IntPtr hwo, uint uMsg, IntPtr dwInstance, IntPtr dwParam1, IntPtr dwParam2);
 
         [DllImport("winmm.dll")]
-        private static extern int waveOutOpen(out IntPtr phwo, uint uDeviceID, byte[] pwfx, WaveOutProc dwCallback, IntPtr dwInstance, uint fdwOpen);
+        private static extern int waveOutOpen(out IntPtr phwo, uint uDeviceID, byte[] pwfx, WaveOutProc? dwCallback, IntPtr dwInstance, uint fdwOpen);
         [DllImport("winmm.dll")]
         private static extern int waveOutPrepareHeader(IntPtr hwo, ref WaveHeader pwh, int cbwh);
         [DllImport("winmm.dll")]
@@ -372,11 +376,11 @@ namespace ExpressPackingMonitoring.Services
         private struct WaveHeader
         {
             public IntPtr lpData;
-            public int dwBufferLength;
-            public int dwBytesRecorded;
+            public uint dwBufferLength;
+            public uint dwBytesRecorded;
             public IntPtr dwUser;
-            public int dwFlags;
-            public int dwLoops;
+            public uint dwFlags;
+            public uint dwLoops;
             public IntPtr lpNext;
             public IntPtr reserved;
         }
