@@ -43,6 +43,9 @@ namespace ExpressPackingMonitoring
         private readonly object _orderInfoLock = new();
         private const int MaxOrderInfoEntries = 5000;
 
+        /// <summary>收到油猴脚本推送的订单信息时触发，参数为本次推送的所有订单</summary>
+        public event Action<List<OrderInfo>> OrderInfoReceived;
+
         public int Port { get; }
         public bool EnableOrderInfoLog { get; set; }
 
@@ -229,6 +232,10 @@ namespace ExpressPackingMonitoring
                             Log($"  订单: 运单号={item.TrackingNumber}, 订单号={item.OrderId}, 买家留言=[{item.BuyerMessage}], 卖家备注=[{item.SellerMemo}], 商品=[{item.ProductInfo}]");
                     }
                 }
+
+                // 通知订阅方预生成语音缓存
+                try { OrderInfoReceived?.Invoke(items); } catch { }
+
                 SendJson(ctx, 200, new { ok = true, count });
             }
             catch (Exception ex)

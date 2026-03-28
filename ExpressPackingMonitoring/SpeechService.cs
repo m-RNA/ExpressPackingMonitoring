@@ -353,6 +353,57 @@ namespace ExpressPackingMonitoring.Services
                 Debug.WriteLine($"[SpeechService] Clear cache error: {ex.Message}");
             }
         }
+
+        /// <summary>
+        /// 预生成语音缓存（不播放）。在后台线程中运行，适合收到订单数据时提前生成。
+        /// </summary>
+        public void PreGenerateCache(string text, bool isWarning = false)
+        {
+            if (!EnableAiTts || _kokoroTts == null || _ttsCacheDir == null) return;
+            if (string.IsNullOrWhiteSpace(text)) return;
+
+            int sid = isWarning ? AiTtsWarningSpeakerId : AiTtsSpeakerId;
+            string cacheKey = GetCacheKey(text, AiTtsSpeed, sid);
+
+            // 已有缓存则跳过
+            string cachePath = Path.Combine(_ttsCacheDir, cacheKey + ".wav");
+            if (File.Exists(cachePath)) return;
+
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    var tts = _kokoroTts;
+                    if (tts == null) return;
+
+                    Debug.WriteLine($"[SpeechService] PreGenerate: sid={sid}, text=\"{text}\"");
+                    var audio = tts.Generate(text, AiTtsSpeed, sid);
+                    if (audio == null || audio.NumSamples <= 0)
+                    {
+                        audio?.Dispose();
+                        return;
+                    }
+
+                    try
+                    {
+                        var wavData = BuildWav16(audio.Samples, audio.SampleRate);
+                        File.WriteAllBytes(cachePath, wavData);
+                        Debug.WriteLine($"[SpeechService] PreGenerate cached: {cacheKey}.wav ({wavData.Length / 1024}KB)");
+
+                        if (TtsCacheMaxSizeMB > 0)
+                            CleanupCache();
+                    }
+                    finally
+                    {
+                        audio.Dispose();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[SpeechService] PreGenerate error: {ex.Message}");
+                }
+            });
+        }
         #endregion
 
         /// <summary>将 float PCM [-1,1] 转为 16-bit mono WAV byte[]</summary>

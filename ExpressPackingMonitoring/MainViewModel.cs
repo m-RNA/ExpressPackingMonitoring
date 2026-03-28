@@ -822,6 +822,7 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 _webServer = new WebServer(_db, Config.WebServerPort, Config.TranscodeCacheMaxMB);
                 _webServer.EnableOrderInfoLog = Config.EnableOrderInfoLog;
+                _webServer.OrderInfoReceived += OnOrderInfoReceived;
                 _webServer.Start();
                 Debug.WriteLine($"[Web] 局域网服务已启动 http://0.0.0.0:{Config.WebServerPort}");
             }
@@ -829,6 +830,21 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 Debug.WriteLine($"[Web] 启动失败: {ex.Message}");
                 ShowToast($"⚠ 局域网服务启动失败: {ex.Message}");
+            }
+        }
+
+        /// <summary>收到油猴脚本推送的订单信息时，提前生成 TTS 缓存</summary>
+        private void OnOrderInfoReceived(List<OrderInfo> orders)
+        {
+            if (_speechService == null || !Config.EnableOrderInfoAnnounce) return;
+            foreach (var info in orders)
+            {
+                if (Config.AnnounceBuyerMessage && !string.IsNullOrWhiteSpace(info.BuyerMessage))
+                    _speechService.PreGenerateCache($"买家留言，{info.BuyerMessage}");
+                if (Config.AnnounceSellerMemo && !string.IsNullOrWhiteSpace(info.SellerMemo))
+                    _speechService.PreGenerateCache($"卖家备注，{info.SellerMemo}");
+                if (Config.AnnounceProductInfo && !string.IsNullOrWhiteSpace(info.ProductInfo))
+                    _speechService.PreGenerateCache($"商品，{info.ProductInfo}");
             }
         }
 
