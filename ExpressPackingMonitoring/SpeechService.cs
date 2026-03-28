@@ -5,6 +5,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using Windows.Media.SpeechSynthesis;
 using SherpaOnnx;
@@ -27,6 +29,10 @@ namespace ExpressPackingMonitoring.Services
         private Thread _speechThread = null!;
         private volatile bool _speechCancelRequested;
         private bool _isDisposed;
+        private string? _ttsCacheDir;
+
+        /// <summary>TTS 缓存目录最大占用空间（MB），超出后按最久未访问清理，0 = 不限制</summary>
+        public int TtsCacheMaxSizeMB { get; set; } = 500;
 
         public bool EnableSoundPrompt { get; set; } = true;
         public bool EnableAiTts { get; set; } = false;
@@ -122,9 +128,13 @@ namespace ExpressPackingMonitoring.Services
                 if (ruleFsts.Count > 0)
                     config.RuleFsts = string.Join(",", ruleFsts);
 
-                config.Model.NumThreads = 2;
+                config.Model.NumThreads = Math.Max(2, Environment.ProcessorCount);
                 config.Model.Provider = "cpu";
                 config.MaxNumSentences = 0; // 0 = 不限制句数，避免长文本被截断
+
+                // 初始化磁盘缓存目录
+                _ttsCacheDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tts_cache");
+                Directory.CreateDirectory(_ttsCacheDir);
 
                 _kokoroTts = new OfflineTts(config);
                 Debug.WriteLine($"[SpeechService] Kokoro TTS loaded, speakers={_kokoroTts.NumSpeakers}, sampleRate={_kokoroTts.SampleRate}");
@@ -186,8 +196,21 @@ namespace ExpressPackingMonitoring.Services
         private void SpeakWithKokoro(string text, bool isWarning)
         {
             int sid = isWarning ? AiTtsWarningSpeakerId : AiTtsSpeakerId;
-            Debug.WriteLine($"[SpeechService] Kokoro generating: sid={sid}, speed={AiTtsSpeed}, text=\"{text}\"");
+            Debug.WriteLine($"[SpeechService] Kokoro: sid={sid}, speed={AiTtsSpeed}, text=\"{text}\"");
 
+            // 1. 尝试从磁盘缓存读取
+            string cacheKey = GetCacheKey(text, AiTtsSpeed, sid);
+            byte[]? wavData = LoadFromCache(cacheKey);
+            if (wavData != null)
+            {
+                Debug.WriteLine($"[SpeechService] Cache HIT: {cacheKey}");
+                if (!_speechCancelRequested && !_isDisposed)
+                    PlayWavBlocking(wavData);
+                return;
+            }
+
+            // 2. 缓存未命中，生成音频
+            Debug.WriteLine($"[SpeechService] Cache MISS, generating...");
             OfflineTtsGeneratedAudio? audio;
             try
             {
@@ -218,10 +241,12 @@ namespace ExpressPackingMonitoring.Services
 
             try
             {
-                // 将 float[] PCM 转成 16-bit PCM WAV 送入 waveOut 播放
                 var samples = audio.Samples;
                 int sampleRate = audio.SampleRate;
-                var wavData = BuildWav16(samples, sampleRate);
+                wavData = BuildWav16(samples, sampleRate);
+
+                // 3. 写入磁盘缓存（异步，不阻塞播放）
+                SaveToCache(cacheKey, wavData);
 
                 if (!_speechCancelRequested && !_isDisposed)
                     PlayWavBlocking(wavData);
@@ -231,6 +256,104 @@ namespace ExpressPackingMonitoring.Services
                 audio.Dispose();
             }
         }
+
+        #region TTS 磁盘缓存
+        private static string GetCacheKey(string text, float speed, int sid)
+        {
+            string raw = $"{text}|{speed:F2}|{sid}";
+            byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
+            return Convert.ToHexString(hash);
+        }
+
+        private byte[]? LoadFromCache(string cacheKey)
+        {
+            if (_ttsCacheDir == null) return null;
+            string path = Path.Combine(_ttsCacheDir, cacheKey + ".wav");
+            if (!File.Exists(path)) return null;
+            try
+            {
+                // 更新访问时间用于 LRU 清理
+                File.SetLastAccessTimeUtc(path, DateTime.UtcNow);
+                return File.ReadAllBytes(path);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[SpeechService] Cache read error: {ex.Message}");
+                return null;
+            }
+        }
+
+        private void SaveToCache(string cacheKey, byte[] wavData)
+        {
+            if (_ttsCacheDir == null) return;
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    string path = Path.Combine(_ttsCacheDir, cacheKey + ".wav");
+                    File.WriteAllBytes(path, wavData);
+                    Debug.WriteLine($"[SpeechService] Cached: {cacheKey}.wav ({wavData.Length / 1024}KB)");
+
+                    // 检查缓存总大小，超出限制则清理最久未访问的文件
+                    if (TtsCacheMaxSizeMB > 0)
+                        CleanupCache();
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[SpeechService] Cache write error: {ex.Message}");
+                }
+            });
+        }
+
+        private void CleanupCache()
+        {
+            try
+            {
+                if (_ttsCacheDir == null) return;
+                var dir = new DirectoryInfo(_ttsCacheDir);
+                if (!dir.Exists) return;
+
+                var files = dir.GetFiles("*.wav");
+                long totalSize = files.Sum(f => f.Length);
+                long maxBytes = (long)TtsCacheMaxSizeMB * 1024 * 1024;
+
+                if (totalSize <= maxBytes) return;
+
+                // 按最后访问时间升序排列（最旧的排前面），逐个删除直到低于限制的 80%
+                long targetSize = (long)(maxBytes * 0.8);
+                var sorted = files.OrderBy(f => f.LastAccessTimeUtc).ToArray();
+                foreach (var f in sorted)
+                {
+                    if (totalSize <= targetSize) break;
+                    totalSize -= f.Length;
+                    f.Delete();
+                    Debug.WriteLine($"[SpeechService] Cache cleanup: deleted {f.Name}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[SpeechService] Cache cleanup error: {ex.Message}");
+            }
+        }
+
+        /// <summary>清空全部 TTS 缓存</summary>
+        public void ClearTtsCache()
+        {
+            try
+            {
+                if (_ttsCacheDir != null && Directory.Exists(_ttsCacheDir))
+                {
+                    foreach (var f in Directory.GetFiles(_ttsCacheDir, "*.wav"))
+                        File.Delete(f);
+                    Debug.WriteLine("[SpeechService] TTS cache cleared");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[SpeechService] Clear cache error: {ex.Message}");
+            }
+        }
+        #endregion
 
         /// <summary>将 float PCM [-1,1] 转为 16-bit mono WAV byte[]</summary>
         private static byte[] BuildWav16(float[] samples, int sampleRate)
