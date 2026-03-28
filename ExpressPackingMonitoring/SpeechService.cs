@@ -7,6 +7,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Windows.Media.SpeechSynthesis;
+using SherpaOnnx;
 
 namespace ExpressPackingMonitoring.Services
 {
@@ -21,12 +22,20 @@ namespace ExpressPackingMonitoring.Services
     {
         private SpeechSynthesizer _ttsNormal;
         private SpeechSynthesizer _ttsWarning;
+        private OfflineTts _kokoroTts;
         private BlockingCollection<SpeechRequest> _speechQueue;
         private Thread _speechThread;
         private volatile bool _speechCancelRequested;
         private bool _isDisposed;
 
         public bool EnableSoundPrompt { get; set; } = true;
+        public bool EnableAiTts { get; set; } = false;
+        public int AiTtsSpeakerId { get; set; } = 51;
+        public int AiTtsWarningSpeakerId { get; set; } = 50;
+        public float AiTtsSpeed { get; set; } = 1.0f;
+
+        /// <summary>AI TTS 模型是否已成功加载</summary>
+        public bool IsAiTtsAvailable => _kokoroTts != null;
 
         public SpeechService()
         {
@@ -62,6 +71,71 @@ namespace ExpressPackingMonitoring.Services
             }
         }
 
+        /// <summary>
+        /// 初始化 Kokoro AI TTS 模型（需要在程序启动后调用一次）。
+        /// 模型目录应位于 exe 同级的 kokoro-multi-lang-v1_0 文件夹下。
+        /// </summary>
+        public void InitAiTts(string modelDir = null)
+        {
+            try
+            {
+                if (modelDir == null)
+                {
+                    var exeDir = AppDomain.CurrentDomain.BaseDirectory;
+                    modelDir = Path.Combine(exeDir, "kokoro-multi-lang-v1_0");
+                }
+
+                var modelPath = Path.Combine(modelDir, "model.onnx");
+                if (!File.Exists(modelPath))
+                {
+                    Debug.WriteLine($"[SpeechService] Kokoro model not found: {modelPath}");
+                    return;
+                }
+
+                var config = new OfflineTtsConfig();
+                config.Model.Kokoro.Model = modelPath;
+                config.Model.Kokoro.Voices = Path.Combine(modelDir, "voices.bin");
+                config.Model.Kokoro.Tokens = Path.Combine(modelDir, "tokens.txt");
+                config.Model.Kokoro.DataDir = Path.Combine(modelDir, "espeak-ng-data");
+
+                // 中文词典
+                var lexiconZh = Path.Combine(modelDir, "lexicon-zh.txt");
+                var lexiconEn = Path.Combine(modelDir, "lexicon-us-en.txt");
+                var lexicons = new List<string>();
+                if (File.Exists(lexiconEn)) lexicons.Add(lexiconEn);
+                if (File.Exists(lexiconZh)) lexicons.Add(lexiconZh);
+                if (lexicons.Count > 0)
+                    config.Model.Kokoro.Lexicon = string.Join(",", lexicons);
+
+                var dictDir = Path.Combine(modelDir, "dict");
+                if (Directory.Exists(dictDir))
+                    config.Model.Kokoro.DictDir = dictDir;
+
+                // 中文数字/日期 FST
+                var ruleFsts = new List<string>();
+                var dateFst = Path.Combine(modelDir, "date-zh.fst");
+                var numberFst = Path.Combine(modelDir, "number-zh.fst");
+                var phoneFst = Path.Combine(modelDir, "phone-zh.fst");
+                if (File.Exists(dateFst)) ruleFsts.Add(dateFst);
+                if (File.Exists(numberFst)) ruleFsts.Add(numberFst);
+                if (File.Exists(phoneFst)) ruleFsts.Add(phoneFst);
+                if (ruleFsts.Count > 0)
+                    config.RuleFsts = string.Join(",", ruleFsts);
+
+                config.Model.NumThreads = 2;
+                config.Model.Provider = "cpu";
+                config.MaxNumSentences = 0; // 0 = 不限制句数，避免长文本被截断
+
+                _kokoroTts = new OfflineTts(config);
+                Debug.WriteLine($"[SpeechService] Kokoro TTS loaded, speakers={_kokoroTts.NumSpeakers}, sampleRate={_kokoroTts.SampleRate}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[SpeechService] Kokoro TTS init failed: {ex.Message}");
+                _kokoroTts = null;
+            }
+        }
+
         private void SpeechThreadLoop()
         {
             try
@@ -72,21 +146,18 @@ namespace ExpressPackingMonitoring.Services
                     _speechCancelRequested = false;
                     try
                     {
-                        var synth = req.IsWarning ? _ttsWarning : _ttsNormal;
-                        if (synth == null) continue;
-
                         string fullText = req.RepeatCount > 1
                             ? string.Join("，", Enumerable.Repeat(req.Text, req.RepeatCount))
                             : req.Text;
 
-                        var result = synth.SynthesizeTextToStreamAsync(fullText).AsTask().GetAwaiter().GetResult();
-                        using var ms = new MemoryStream();
-                        result.AsStreamForRead().CopyTo(ms);
-                        var wavData = ms.ToArray();
-
-                        if (_speechCancelRequested || wavData.Length < 44) continue;
-
-                        PlayWavBlocking(wavData);
+                        if (EnableAiTts && _kokoroTts != null)
+                        {
+                            SpeakWithKokoro(fullText, req.IsWarning);
+                        }
+                        else
+                        {
+                            SpeakWithWindowsTts(fullText, req.IsWarning);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -96,6 +167,89 @@ namespace ExpressPackingMonitoring.Services
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Debug.WriteLine($"[SpeechService] Thread error: {ex.Message}"); }
+        }
+
+        private void SpeakWithWindowsTts(string text, bool isWarning)
+        {
+            var synth = isWarning ? _ttsWarning : _ttsNormal;
+            if (synth == null) return;
+
+            var result = synth.SynthesizeTextToStreamAsync(text).AsTask().GetAwaiter().GetResult();
+            using var ms = new MemoryStream();
+            result.AsStreamForRead().CopyTo(ms);
+            var wavData = ms.ToArray();
+
+            if (_speechCancelRequested || wavData.Length < 44) return;
+            PlayWavBlocking(wavData);
+        }
+
+        private void SpeakWithKokoro(string text, bool isWarning)
+        {
+            int sid = isWarning ? AiTtsWarningSpeakerId : AiTtsSpeakerId;
+            // 使用回调来支持打断：生成过程中检查取消标志
+            var audio = _kokoroTts.GenerateWithCallbackProgress(text, AiTtsSpeed, sid,
+                (IntPtr samples, int n, float progress) =>
+                {
+                    // 返回 0 继续生成，返回 1 中止
+                    return (_speechCancelRequested || _isDisposed) ? 1 : 0;
+                });
+
+            if (_speechCancelRequested || _isDisposed || audio == null || audio.NumSamples <= 0)
+            {
+                audio?.Dispose();
+                return;
+            }
+
+            try
+            {
+                // 将 float[] PCM 转成 16-bit PCM WAV 送入 waveOut 播放
+                var samples = audio.Samples;
+                int sampleRate = audio.SampleRate;
+                var wavData = BuildWav16(samples, sampleRate);
+
+                if (!_speechCancelRequested && !_isDisposed)
+                    PlayWavBlocking(wavData);
+            }
+            finally
+            {
+                audio.Dispose();
+            }
+        }
+
+        /// <summary>将 float PCM [-1,1] 转为 16-bit mono WAV byte[]</summary>
+        private static byte[] BuildWav16(float[] samples, int sampleRate)
+        {
+            int numSamples = samples.Length;
+            int dataSize = numSamples * 2;
+            int fileSize = 44 + dataSize;
+
+            var wav = new byte[fileSize];
+            // RIFF header
+            wav[0] = (byte)'R'; wav[1] = (byte)'I'; wav[2] = (byte)'F'; wav[3] = (byte)'F';
+            BitConverter.GetBytes(fileSize - 8).CopyTo(wav, 4);
+            wav[8] = (byte)'W'; wav[9] = (byte)'A'; wav[10] = (byte)'V'; wav[11] = (byte)'E';
+            // fmt chunk
+            wav[12] = (byte)'f'; wav[13] = (byte)'m'; wav[14] = (byte)'t'; wav[15] = (byte)' ';
+            BitConverter.GetBytes(16).CopyTo(wav, 16);           // chunk size
+            BitConverter.GetBytes((short)1).CopyTo(wav, 20);     // PCM
+            BitConverter.GetBytes((short)1).CopyTo(wav, 22);     // mono
+            BitConverter.GetBytes(sampleRate).CopyTo(wav, 24);   // sample rate
+            BitConverter.GetBytes(sampleRate * 2).CopyTo(wav, 28); // byte rate
+            BitConverter.GetBytes((short)2).CopyTo(wav, 32);     // block align
+            BitConverter.GetBytes((short)16).CopyTo(wav, 34);    // bits per sample
+            // data chunk
+            wav[36] = (byte)'d'; wav[37] = (byte)'a'; wav[38] = (byte)'t'; wav[39] = (byte)'a';
+            BitConverter.GetBytes(dataSize).CopyTo(wav, 40);
+
+            for (int i = 0; i < numSamples; i++)
+            {
+                float s = samples[i];
+                if (s > 1.0f) s = 1.0f;
+                else if (s < -1.0f) s = -1.0f;
+                short val = (short)(s * 32767);
+                BitConverter.GetBytes(val).CopyTo(wav, 44 + i * 2);
+            }
+            return wav;
         }
 
         private void PlayWavBlocking(byte[] wavData)
@@ -221,6 +375,7 @@ namespace ExpressPackingMonitoring.Services
             try { _speechThread?.Join(2000); } catch { }
             _ttsNormal?.Dispose();
             _ttsWarning?.Dispose();
+            _kokoroTts?.Dispose();
             _speechQueue?.Dispose();
         }
     }

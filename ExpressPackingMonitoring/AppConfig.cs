@@ -101,6 +101,12 @@ namespace ExpressPackingMonitoring.ViewModels
         public int WebServerPort { get; set; } = 5280;
         public int TranscodeCacheMaxMB { get; set; } = 1024;  // 转码缓存上限(MB)，超出后按时间清理最旧的
 
+        // AI 语音合成（Kokoro TTS）
+        public bool EnableAiTts { get; set; } = false;
+        public int AiTtsSpeakerId { get; set; } = 51;        // 普通播报声线
+        public int AiTtsWarningSpeakerId { get; set; } = 50;  // 警告播报声线
+        public float AiTtsSpeed { get; set; } = 1.0f;
+
         // 订单信息播报（快递助手联动）
         public bool EnableOrderInfoAnnounce { get; set; } = true;
         public bool AnnounceBuyerMessage { get; set; } = true;

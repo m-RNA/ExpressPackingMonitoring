@@ -1006,6 +1006,91 @@
                                 </StackPanel>
                             </Border>
 
+                            <!-- AI 语音合成 -->
+                            <Border Style="{StaticResource SectionCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Text="AI 语音合成" Style="{StaticResource SectionTitleStyle}"/>
+                                    <TextBlock Text="使用开源 Kokoro TTS 模型替代系统语音，效果更自然。需下载约 350MB 模型文件到程序目录。"
+                                               Style="{StaticResource SectionHintStyle}"/>
+                                    <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,12,0,12"/>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="启用 AI 语音" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="开启后使用 Kokoro 模型生成自然语音播报，关闭则使用系统自带语音。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <CheckBox x:Name="AiTtsCheckBox"
+                                                  Grid.Column="1"
+                                                  IsChecked="{Binding Config.EnableAiTts}"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left"
+                                                  Style="{StaticResource ToggleSwitchStyle}"/>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,8"
+                                          IsEnabled="{Binding IsChecked, ElementName=AiTtsCheckBox, TargetNullValue=False}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="普通播报声线" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="中文女声: 45(小北) 46(小妮) 47(小小) 48(小怡)；男声: 49-52"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <xctk:IntegerUpDown Grid.Column="1"
+                                                            Height="32"
+                                                            Value="{Binding Config.AiTtsSpeakerId}"
+                                                            Minimum="0"
+                                                            Maximum="102"
+                                                            Increment="1"/>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,8"
+                                          IsEnabled="{Binding IsChecked, ElementName=AiTtsCheckBox, TargetNullValue=False}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="警告播报声线" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="用于重复单号、非法单号等警告场景，建议选择与普通声线不同的角色。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <xctk:IntegerUpDown Grid.Column="1"
+                                                            Height="32"
+                                                            Value="{Binding Config.AiTtsWarningSpeakerId}"
+                                                            Minimum="0"
+                                                            Maximum="102"
+                                                            Increment="1"/>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,0"
+                                          IsEnabled="{Binding IsChecked, ElementName=AiTtsCheckBox, TargetNullValue=False}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="语速" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="语音播放速度，1.0 为正常速度。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <xctk:DoubleUpDown Grid.Column="1"
+                                                           Height="32"
+                                                           Value="{Binding Config.AiTtsSpeed}"
+                                                           Minimum="0.5"
+                                                           Maximum="2.0"
+                                                           Increment="0.1"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
                             <!-- 局域网 Web 服务 -->
                             <Border Style="{StaticResource SectionCardStyle}">
                                 <StackPanel>

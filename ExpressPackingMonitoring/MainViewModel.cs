@@ -296,7 +296,16 @@ namespace ExpressPackingMonitoring.ViewModels
             });
             InitDatabase();
             RefreshTodayStats();
-            _speechService = new SpeechService { EnableSoundPrompt = Config.EnableSoundPrompt };
+            _speechService = new SpeechService
+            {
+                EnableSoundPrompt = Config.EnableSoundPrompt,
+                EnableAiTts = Config.EnableAiTts,
+                AiTtsSpeakerId = Config.AiTtsSpeakerId,
+                AiTtsWarningSpeakerId = Config.AiTtsWarningSpeakerId,
+                AiTtsSpeed = Config.AiTtsSpeed
+            };
+            if (Config.EnableAiTts)
+                _speechService.InitAiTts();
             ScanCommand = new RelayCommand<string>(HandleScan);
             OpenSettingsCommand = new RelayCommand(OpenSettings);
             OpenPlaybackCommand = new RelayCommand(OpenPlaybackWindow);
@@ -610,9 +619,22 @@ namespace ExpressPackingMonitoring.ViewModels
                         || Config.Fps != clonedConfig.Fps;
                     bool themeChanged = Config.Theme != clonedConfig.Theme;
                     bool globalKeyChanged = Config.EnableGlobalKeyboard != clonedConfig.EnableGlobalKeyboard;
+                    bool aiTtsChanged = Config.EnableAiTts != clonedConfig.EnableAiTts;
 
                     Config = clonedConfig; 
                     SaveConfig(); 
+
+                    // 同步语音服务配置
+                    if (_speechService != null)
+                    {
+                        _speechService.EnableSoundPrompt = Config.EnableSoundPrompt;
+                        _speechService.EnableAiTts = Config.EnableAiTts;
+                        _speechService.AiTtsSpeakerId = Config.AiTtsSpeakerId;
+                        _speechService.AiTtsWarningSpeakerId = Config.AiTtsWarningSpeakerId;
+                        _speechService.AiTtsSpeed = Config.AiTtsSpeed;
+                        if (aiTtsChanged && Config.EnableAiTts && !_speechService.IsAiTtsAvailable)
+                            _speechService.InitAiTts();
+                    }
 
                     if (themeChanged)
                     {

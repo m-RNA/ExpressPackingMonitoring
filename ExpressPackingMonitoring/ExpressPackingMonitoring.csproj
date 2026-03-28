@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <PackageReference Include="AForge.Video" Version="2.2.5" />
+    <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.12.34" />
     <PackageReference Include="AForge.Video.DirectShow" Version="2.2.5" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="Extended.Wpf.Toolkit" Version="5.0.0" />
