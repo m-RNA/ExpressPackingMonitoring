@@ -106,6 +106,7 @@ namespace ExpressPackingMonitoring.ViewModels
         public bool AnnounceBuyerMessage { get; set; } = true;
         public bool AnnounceSellerMemo { get; set; } = true;
         public bool AnnounceProductInfo { get; set; } = true;
+        public bool EnableOrderInfoLog { get; set; } = false;
 
         // 缓存的检测结果
         public List<GpuEncoderOption> EncoderOptionsCache { get; set; } = new();

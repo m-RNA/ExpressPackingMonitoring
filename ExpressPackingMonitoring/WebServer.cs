@@ -44,6 +44,7 @@ namespace ExpressPackingMonitoring
         private const int MaxOrderInfoEntries = 5000;
 
         public int Port { get; }
+        public bool EnableOrderInfoLog { get; set; }
 
         private static void Log(string msg)
         {
@@ -219,12 +220,14 @@ namespace ExpressPackingMonitoring
                     }
                 }
 
-                Log($"HandlePushOrderInfo: 接收 {count} 条订单信息, 缓存总数={_orderInfoCache.Count}");
-                // 打印每条记录详情
-                foreach (var item in items)
+                if (EnableOrderInfoLog)
                 {
-                    if (!string.IsNullOrWhiteSpace(item.TrackingNumber))
-                        Log($"  订单: 运单号={item.TrackingNumber}, 订单号={item.OrderId}, 买家留言=[{item.BuyerMessage}], 卖家备注=[{item.SellerMemo}], 商品=[{item.ProductInfo}]");
+                    Log($"HandlePushOrderInfo: 接收 {count} 条订单信息, 缓存总数={_orderInfoCache.Count}");
+                    foreach (var item in items)
+                    {
+                        if (!string.IsNullOrWhiteSpace(item.TrackingNumber))
+                            Log($"  订单: 运单号={item.TrackingNumber}, 订单号={item.OrderId}, 买家留言=[{item.BuyerMessage}], 卖家备注=[{item.SellerMemo}], 商品=[{item.ProductInfo}]");
+                    }
                 }
                 SendJson(ctx, 200, new { ok = true, count });
             }
@@ -274,10 +277,12 @@ namespace ExpressPackingMonitoring
             {
                 if (_orderInfoCache.TryGetValue(key, out var info))
                 {
-                    Log($"GetOrderInfo 命中: {key} => 买家留言=[{info.BuyerMessage}], 卖家备注=[{info.SellerMemo}], 商品=[{info.ProductInfo}]");
+                    if (EnableOrderInfoLog)
+                        Log($"GetOrderInfo 命中: {key} => 买家留言=[{info.BuyerMessage}], 卖家备注=[{info.SellerMemo}], 商品=[{info.ProductInfo}]");
                     return info;
                 }
-                Log($"GetOrderInfo 未命中: {key}, 缓存总数={_orderInfoCache.Count}");
+                if (EnableOrderInfoLog)
+                    Log($"GetOrderInfo 未命中: {key}, 缓存总数={_orderInfoCache.Count}");
                 return null;
             }
         }

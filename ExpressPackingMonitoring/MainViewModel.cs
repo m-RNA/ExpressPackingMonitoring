@@ -474,11 +474,13 @@ namespace ExpressPackingMonitoring.ViewModels
                 }
 
                 // 查询快递助手推送的订单信息，播报留言/备注/商品
-                System.Diagnostics.Debug.WriteLine($"[OrderInfo] 扫码查询: {upperResult}, EnableAnnounce={Config.EnableOrderInfoAnnounce}, WebServer={(_webServer != null ? "已启动" : "未启动")}");
+                if (Config.EnableOrderInfoLog)
+                    System.Diagnostics.Debug.WriteLine($"[OrderInfo] 扫码查询: {upperResult}, EnableAnnounce={Config.EnableOrderInfoAnnounce}, WebServer={(_webServer != null ? "已启动" : "未启动")}");
                 if (Config.EnableOrderInfoAnnounce && _webServer != null)
                 {
                     var orderInfo = _webServer.GetOrderInfo(upperResult);
-                    System.Diagnostics.Debug.WriteLine($"[OrderInfo] 查询结果: {(orderInfo != null ? $"命中 买家=[{orderInfo.BuyerMessage}] 卖家=[{orderInfo.SellerMemo}] 商品=[{orderInfo.ProductInfo}]" : "未命中")}");
+                    if (Config.EnableOrderInfoLog)
+                        System.Diagnostics.Debug.WriteLine($"[OrderInfo] 查询结果: {(orderInfo != null ? $"命中 买家=[{orderInfo.BuyerMessage}] 卖家=[{orderInfo.SellerMemo}] 商品=[{orderInfo.ProductInfo}]" : "未命中")}");
                     if (orderInfo != null)
                     {
                         if (Config.AnnounceBuyerMessage && !string.IsNullOrWhiteSpace(orderInfo.BuyerMessage))
@@ -797,6 +799,7 @@ namespace ExpressPackingMonitoring.ViewModels
             try
             {
                 _webServer = new WebServer(_db, Config.WebServerPort, Config.TranscodeCacheMaxMB);
+                _webServer.EnableOrderInfoLog = Config.EnableOrderInfoLog;
                 _webServer.Start();
                 Debug.WriteLine($"[Web] 局域网服务已启动 http://0.0.0.0:{Config.WebServerPort}");
             }

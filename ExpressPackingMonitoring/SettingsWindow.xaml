@@ -1123,6 +1123,23 @@
                                                   HorizontalAlignment="Left"
                                                   Style="{StaticResource ToggleSwitchStyle}"/>
                                     </Grid>
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="24,8,0,0"
+                                          Visibility="{Binding Config.EnableOrderInfoAnnounce, Converter={StaticResource BoolToVisibility}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="调试日志" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="记录订单推送和查询的详细日志到 web_debug.log"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <CheckBox Grid.Column="1"
+                                                  IsChecked="{Binding Config.EnableOrderInfoLog}"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left"
+                                                  Style="{StaticResource ToggleSwitchStyle}"/>
+                                    </Grid>
                                 </StackPanel>
                             </Border>
 
