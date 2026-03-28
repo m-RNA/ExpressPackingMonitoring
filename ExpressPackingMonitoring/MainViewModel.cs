@@ -810,6 +810,33 @@ namespace ExpressPackingMonitoring.ViewModels
             Task.Run(CheckDiskAndCleanup);
             Task.Run(CameraIdleWatchdog);
             StartWebServer();
+
+            // 启动时自动将上次断电残留的 MKV 转换为 MP4
+            Task.Run(RecoverOrphanedMkvAsync);
+        }
+
+        private async Task RecoverOrphanedMkvAsync()
+        {
+            try
+            {
+                var result = await BatchConvertMkvToMp4Async(
+                    new Progress<string>(msg => Debug.WriteLine($"[MkvRecover] {msg}")),
+                    CancellationToken.None);
+
+                if (result.success > 0 || result.fail > 0)
+                {
+                    Debug.WriteLine($"[MkvRecover] 启动恢复完成: 成功={result.success}, 失败={result.fail}, 跳过={result.skip}");
+                    if (result.success > 0)
+                    {
+                        _ = Application.Current.Dispatcher.BeginInvoke(() =>
+                            ShowToast($"已恢复 {result.success} 个断电残留视频"));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[MkvRecover] 异常: {ex.Message}");
+            }
         }
 
         private void StartWebServer()
