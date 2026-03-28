@@ -457,13 +457,6 @@ namespace ExpressPackingMonitoring.ViewModels
             // 正则验证
             try { if (!System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex)) { ShowToast("非法单号，已拦截"); SpeakWarning("非法单号"); return; } } catch { }
 
-            // 重复单号检测（查数据库最近72小时记录，含录制中）
-            bool isDuplicate = _db != null && _db.OrderIdExistsRecent(upperResult);
-            if (isDuplicate)
-            {
-                ShowToast("⚠ 重复单号，请确认");
-            }
-
             Debug.WriteLine($"[Zoom] 扫码事件触发: ID={upperResult}, ZoomEnabled={Config.EnableSmartZoom}, Delay={Config.ZoomDelaySeconds}");
             StartInputCooldown();
             CurrentOrderId = upperResult;
@@ -477,9 +470,11 @@ namespace ExpressPackingMonitoring.ViewModels
                 if (IsRecording) await InternalStopRecordingAsync();
                 await InternalStartRecordingAsync();
 
-                // 先播"开始录制"，再播"重复单号"（排队不打断）
+                // 录制已启动、数据库记录已写入，此时检查重复单号（排除刚刚插入的当前记录）
+                bool isDuplicate = _db != null && _db.OrderIdExistsRecent(upperResult, excludeRecordId: _currentRecordId);
                 if (isDuplicate)
                 {
+                    ShowToast("⚠ 重复单号，请确认");
                     SpeakWarning("重复单号", 3, cancelPrevious: false);
                 }
 
