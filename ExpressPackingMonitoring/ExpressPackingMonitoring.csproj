@@ -24,6 +24,15 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <!-- 修复自包含发布时 ComboBox 因缺少 Accessibility.dll 报错的问题 -->
+  <ItemGroup>
+    <Content Include="$(WinDir)\Microsoft.NET\Framework64\v4.0.30319\Accessibility.dll"
+             Link="Accessibility.dll"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"
+             Visible="false" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="AForge.Video" Version="2.2.5" />
     <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.12.34" />
