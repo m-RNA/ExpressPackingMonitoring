@@ -983,7 +983,7 @@
                             <Border Style="{StaticResource SectionCardStyle}">
                                 <StackPanel>
                                     <TextBlock Text="视频水印" Style="{StaticResource SectionTitleStyle}"/>
-                                    <TextBlock Text="在录像画面左上角叠加单号和实时时间戳。"
+                                    <TextBlock Text="在录像画面右上角叠加单号和实时时间戳。"
                                                Style="{StaticResource SectionHintStyle}"/>
                                     <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,12,0,12"/>
 
@@ -994,7 +994,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="启用录像水印" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="在视频左上角叠加当前单号与日期时间。"
+                                            <TextBlock Text="在视频右上角叠加当前单号与日期时间。"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <CheckBox Grid.Column="1"
