@@ -7,6 +7,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using Windows.Media.SpeechSynthesis;
 using SherpaOnnx;
@@ -39,6 +40,9 @@ namespace ExpressPackingMonitoring.Services
         public int AiTtsSpeakerId { get; set; } = 51;
         public int AiTtsWarningSpeakerId { get; set; } = 50;
         public float AiTtsSpeed { get; set; } = 1.0f;
+
+        /// <summary>推理提供者：cpu / directml / cuda。切换 GPU 需要对应的 onnxruntime DLL</summary>
+        public string AiTtsProvider { get; set; } = "cpu";
 
         /// <summary>AI TTS 模型是否已成功加载</summary>
         public bool IsAiTtsAvailable => _kokoroTts != null;
@@ -129,7 +133,7 @@ namespace ExpressPackingMonitoring.Services
                     config.RuleFsts = string.Join(",", ruleFsts);
 
                 config.Model.NumThreads = Math.Max(2, Environment.ProcessorCount);
-                config.Model.Provider = "cpu";
+                config.Model.Provider = AiTtsProvider ?? "cpu";
                 config.MaxNumSentences = 0; // 0 = 不限制句数，避免长文本被截断
 
                 // 初始化磁盘缓存目录
@@ -196,6 +200,10 @@ namespace ExpressPackingMonitoring.Services
         private void SpeakWithKokoro(string text, bool isWarning)
         {
             int sid = isWarning ? AiTtsWarningSpeakerId : AiTtsSpeakerId;
+
+            // 电商场景文本预处理
+            text = PreprocessTextForTts(text);
+
             Debug.WriteLine($"[SpeechService] Kokoro: sid={sid}, speed={AiTtsSpeed}, text=\"{text}\"");
 
             // 1. 尝试从磁盘缓存读取
@@ -362,6 +370,9 @@ namespace ExpressPackingMonitoring.Services
             if (!EnableAiTts || _kokoroTts == null || _ttsCacheDir == null) return;
             if (string.IsNullOrWhiteSpace(text)) return;
 
+            // 预处理文本（与播放时保持一致）
+            text = PreprocessTextForTts(text);
+
             int sid = isWarning ? AiTtsWarningSpeakerId : AiTtsSpeakerId;
             string cacheKey = GetCacheKey(text, AiTtsSpeed, sid);
 
@@ -403,6 +414,71 @@ namespace ExpressPackingMonitoring.Services
                     Debug.WriteLine($"[SpeechService] PreGenerate error: {ex.Message}");
                 }
             });
+        }
+        #endregion
+
+        #region 电商文本预处理
+        // 预编译正则表达式
+        private static readonly Regex _reNumberRange = new(@"(\d+)\s*[-–—~～]\s*(\d+)", RegexOptions.Compiled);
+        private static readonly Regex _reMultiply = new(@"(\d+)\s*[xX×]\s*(\d+)", RegexOptions.Compiled);
+        private static readonly Regex _reSlash = new(@"(\d+)\s*/\s*(\d+)", RegexOptions.Compiled);
+        private static readonly Regex _rePlusSign = new(@"(\d+)\s*\+\s*(\d+)", RegexOptions.Compiled);
+        private static readonly Regex _reStar = new(@"\*+", RegexOptions.Compiled);
+        private static readonly Regex _reMultiSpace = new(@"\s{2,}", RegexOptions.Compiled);
+
+        /// <summary>
+        /// 针对电商场景优化的文本预处理，用于 TTS 前的文本规范化。
+        /// </summary>
+        internal static string PreprocessTextForTts(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return text;
+
+            // 1. 数字范围: "3-6个月" → "3到6个月", "100-200ml" → "100到200ml"
+            text = _reNumberRange.Replace(text, "$1到$2");
+
+            // 2. 乘号: "2x3" "2×3" → "2乘3"
+            text = _reMultiply.Replace(text, "$1乘$2");
+
+            // 3. 斜杠分隔: "S/M/L" → "S M L", "男/女" → "男 女"
+            text = _reSlash.Replace(text, "$1或$2"); // 数字斜杠: "1/2" → "1或2"
+            text = text.Replace("/", " "); // 其他斜杠作为分隔
+
+            // 4. 加号: "2+1" → "2加1"
+            text = _rePlusSign.Replace(text, "$1加$2");
+
+            // 5. 星号遮罩（常见脱敏）: "张***" → "张"
+            text = _reStar.Replace(text, "");
+
+            // 6. 英文括号转中文括号（方便 TTS 停顿）
+            text = text.Replace("(", "（").Replace(")", "）");
+
+            // 7. 方括号、花括号替换为空格
+            text = text.Replace("[", " ").Replace("]", " ").Replace("{", " ").Replace("}", " ");
+
+            // 8. 连续标点去重: "！！！" → "！"
+            text = DeduplicatePunctuation(text);
+
+            // 9. 清理多余空格
+            text = _reMultiSpace.Replace(text, " ").Trim();
+
+            return text;
+        }
+
+        private static string DeduplicatePunctuation(string text)
+        {
+            if (text.Length < 2) return text;
+            var sb = new StringBuilder(text.Length);
+            sb.Append(text[0]);
+            for (int i = 1; i < text.Length; i++)
+            {
+                char c = text[i];
+                char prev = text[i - 1];
+                // 跳过重复的中英文标点
+                if (c == prev && (char.IsPunctuation(c) || c == '！' || c == '？' || c == '。' || c == '，'))
+                    continue;
+                sb.Append(c);
+            }
+            return sb.ToString();
         }
         #endregion
 
