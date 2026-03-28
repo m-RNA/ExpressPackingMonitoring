@@ -304,6 +304,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 AiTtsWarningSpeakerId = Config.AiTtsWarningSpeakerId,
                 AiTtsSpeed = Config.AiTtsSpeed
             };
+            _speechService.UpdateBreakWords(Config.TtsBreakWords);
             if (Config.EnableAiTts)
                 _speechService.InitAiTts();
             ScanCommand = new RelayCommand<string>(HandleScan);
@@ -632,6 +633,7 @@ namespace ExpressPackingMonitoring.ViewModels
                         _speechService.AiTtsSpeakerId = Config.AiTtsSpeakerId;
                         _speechService.AiTtsWarningSpeakerId = Config.AiTtsWarningSpeakerId;
                         _speechService.AiTtsSpeed = Config.AiTtsSpeed;
+                        _speechService.UpdateBreakWords(Config.TtsBreakWords);
                         if (aiTtsChanged && Config.EnableAiTts && !_speechService.IsAiTtsAvailable)
                             _speechService.InitAiTts();
                     }

@@ -114,6 +114,19 @@ namespace ExpressPackingMonitoring.ViewModels
         public bool AnnounceProductInfo { get; set; } = true;
         public bool EnableOrderInfoLog { get; set; } = false;
 
+        // TTS 断句关键词（电商场景，在这些词前自动插入停顿）
+        public List<string> TtsBreakWords { get; set; } = new()
+        {
+            "适用", "适合", "通用", "专用", "原装", "官方", "旗舰店", "正品",
+            "配件", "套装", "组合", "升级", "加厚", "加大", "加长",
+            "男款", "女款", "男士", "女士", "儿童", "宝宝", "婴儿",
+            "新款", "同款", "经典", "限定", "定制",
+            "防水", "防滑", "防尘", "防摔", "保暖", "透气", "速干",
+            "大号", "小号", "中号", "均码", "标准",
+            "春季", "夏季", "秋季", "冬季", "四季",
+            "包邮", "现货", "预售", "清仓", "特价", "买一送一",
+        };
+
         // 缓存的检测结果
         public List<GpuEncoderOption> EncoderOptionsCache { get; set; } = new();
         public List<string> ValidatedEncodersCache { get; set; } = new();

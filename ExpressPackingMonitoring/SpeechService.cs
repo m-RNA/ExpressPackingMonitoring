@@ -425,6 +425,16 @@ namespace ExpressPackingMonitoring.Services
         private static readonly Regex _rePlusSign = new(@"(\d+)\s*\+\s*(\d+)", RegexOptions.Compiled);
         private static readonly Regex _reStar = new(@"\*+", RegexOptions.Compiled);
         private static readonly Regex _reMultiSpace = new(@"\s{2,}", RegexOptions.Compiled);
+        // 匹配连续 10 个以上的中日韩字符（无标点/空格）
+        private static readonly Regex _reLongCjk = new(@"[\u4e00-\u9fff\u3400-\u4dbf]{10,}", RegexOptions.Compiled);
+        // 断句关键词（从配置读取，可在设置中编辑）
+        private static HashSet<string> _breakWords = new(StringComparer.Ordinal);
+
+        /// <summary>从配置更新断句关键词列表</summary>
+        public void UpdateBreakWords(IEnumerable<string> words)
+        {
+            _breakWords = new HashSet<string>(words.Where(w => !string.IsNullOrWhiteSpace(w)), StringComparer.Ordinal);
+        }
 
         /// <summary>
         /// 针对电商场景优化的文本预处理，用于 TTS 前的文本规范化。
@@ -458,7 +468,10 @@ namespace ExpressPackingMonitoring.Services
             // 8. 连续标点去重: "！！！" → "！"
             text = DeduplicatePunctuation(text);
 
-            // 9. 清理多余空格
+            // 9. 长连续中文文本自动断句（在关键词前插逗号，或按固定长度断）
+            text = _reLongCjk.Replace(text, m => BreakLongCjk(m.Value));
+
+            // 10. 清理多余空格
             text = _reMultiSpace.Replace(text, " ").Trim();
 
             return text;
@@ -479,6 +492,72 @@ namespace ExpressPackingMonitoring.Services
                 sb.Append(c);
             }
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// 将长连续CJK字符串在关键词前插入逗号断句；如果两个断点之间仍然很长，则按固定长度再断。
+        /// 例: "世喜奶嘴吸管嘴奶瓶配件原装手柄防尘盖吸管安抚奶嘴官方旗舰店"
+        ///   → "世喜奶嘴吸管嘴奶瓶，配件，原装手柄，防尘盖吸管安抚奶嘴，官方旗舰店"
+        /// </summary>
+        private static string BreakLongCjk(string s)
+        {
+            if (s.Length < 10) return s;
+
+            // 第一轮：在关键词前插入逗号
+            var sb = new StringBuilder(s.Length + 16);
+            int i = 0;
+            int sinceLastBreak = 0;
+            while (i < s.Length)
+            {
+                if (sinceLastBreak >= 4) // 断点之间至少保留4个字
+                {
+                    foreach (var kw in _breakWords)
+                    {
+                        if (i + kw.Length <= s.Length && s.AsSpan(i, kw.Length).SequenceEqual(kw.AsSpan()))
+                        {
+                            sb.Append('，');
+                            sinceLastBreak = 0;
+                            break;
+                        }
+                    }
+                }
+                sb.Append(s[i]);
+                sinceLastBreak++;
+                i++;
+            }
+
+            // 第二轮：如果仍有超长片段（>12字无标点），按固定长度断
+            string result = sb.ToString();
+            var parts = result.Split('，');
+            bool needSecondPass = false;
+            foreach (var p in parts)
+            {
+                if (p.Length > 12) { needSecondPass = true; break; }
+            }
+
+            if (!needSecondPass) return result;
+
+            var sb2 = new StringBuilder(result.Length + 8);
+            for (int pi = 0; pi < parts.Length; pi++)
+            {
+                if (pi > 0) sb2.Append('，');
+                string part = parts[pi];
+                if (part.Length > 12)
+                {
+                    // 每 8 个字断一次
+                    for (int j = 0; j < part.Length; j++)
+                    {
+                        if (j > 0 && j % 8 == 0)
+                            sb2.Append('，');
+                        sb2.Append(part[j]);
+                    }
+                }
+                else
+                {
+                    sb2.Append(part);
+                }
+            }
+            return sb2.ToString();
         }
         #endregion
 

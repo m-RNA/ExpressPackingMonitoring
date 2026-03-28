@@ -9,6 +9,7 @@ using System.Linq;
 using System.Windows.Controls;
 using System.Threading;
 using System.IO;
+using ExpressPackingMonitoring.Services;
 
 namespace ExpressPackingMonitoring
 {
@@ -83,6 +84,10 @@ namespace ExpressPackingMonitoring
             {
                 _isLoadingDevices = false;
             }
+
+            // 加载断句关键词到文本框
+            if (Config.TtsBreakWords != null && Config.TtsBreakWords.Count > 0)
+                TtsBreakWordsTextBox.Text = string.Join("\n", Config.TtsBreakWords);
 
             if (_isRecording)
             {
@@ -521,6 +526,14 @@ namespace ExpressPackingMonitoring
                 Config.VideoCodec = codecOpt.Value;
             }
 
+            // 保存断句关键词
+            Config.TtsBreakWords = TtsBreakWordsTextBox.Text
+                .Split(new[] { '\r', '\n', '，', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(w => w.Trim())
+                .Where(w => w.Length > 0)
+                .Distinct()
+                .ToList();
+
             // 3. 校验并保存
             if (!ValidateEncoderSelectionBeforeSave())
                 return;
@@ -542,6 +555,9 @@ namespace ExpressPackingMonitoring
         protected override void OnClosed(EventArgs e)
         {
             MainVM.PreviewZoomScale = null;
+            _previewSpeechService?.Stop();
+            _previewSpeechService?.Dispose();
+            _previewSpeechService = null;
             base.OnClosed(e);
         }
 
@@ -656,6 +672,62 @@ namespace ExpressPackingMonitoring
             }
             this.DialogResult = false;
             this.Close();
+        }
+
+        private SpeechService _previewSpeechService;
+
+        private void BtnTtsPreview_Click(object sender, RoutedEventArgs e)
+        {
+            string text = TtsPreviewTextBox.Text?.Trim();
+            if (string.IsNullOrEmpty(text))
+            {
+                TtsPreviewStatus.Text = "请输入预览文本";
+                return;
+            }
+
+            // 显示预处理后的文本
+            string processed = SpeechService.PreprocessTextForTts(text);
+            TtsPreviewStatus.Text = $"断句: {processed}";
+
+            // 初始化或复用预览用 SpeechService
+            if (_previewSpeechService == null)
+            {
+                _previewSpeechService = new SpeechService
+                {
+                    EnableSoundPrompt = true,
+                    EnableAiTts = Config.EnableAiTts,
+                    AiTtsSpeakerId = Config.AiTtsSpeakerId,
+                    AiTtsWarningSpeakerId = Config.AiTtsWarningSpeakerId,
+                    AiTtsSpeed = Config.AiTtsSpeed,
+                };
+                // 同步当前编辑中的断句关键词
+                var words = TtsBreakWordsTextBox.Text
+                    .Split(new[] { '\r', '\n', '\uff0c', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(w => w.Trim()).Where(w => w.Length > 0);
+                _previewSpeechService.UpdateBreakWords(words);
+                if (Config.EnableAiTts)
+                    _previewSpeechService.InitAiTts();
+            }
+            else
+            {
+                // 更新参数
+                _previewSpeechService.EnableAiTts = Config.EnableAiTts;
+                _previewSpeechService.AiTtsSpeakerId = Config.AiTtsSpeakerId;
+                _previewSpeechService.AiTtsWarningSpeakerId = Config.AiTtsWarningSpeakerId;
+                _previewSpeechService.AiTtsSpeed = Config.AiTtsSpeed;
+                var words = TtsBreakWordsTextBox.Text
+                    .Split(new[] { '\r', '\n', '\uff0c', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(w => w.Trim()).Where(w => w.Length > 0);
+                _previewSpeechService.UpdateBreakWords(words);
+            }
+
+            _previewSpeechService.Speak(text);
+        }
+
+        private void BtnTtsStop_Click(object sender, RoutedEventArgs e)
+        {
+            _previewSpeechService?.Stop();
+            TtsPreviewStatus.Text = "已停止";
         }
 
         private CancellationTokenSource _migrationCts;

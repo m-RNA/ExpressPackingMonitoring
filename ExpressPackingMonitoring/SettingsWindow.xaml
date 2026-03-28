@@ -1088,6 +1088,55 @@
                                                            Maximum="2.0"
                                                            Increment="0.1"/>
                                     </Grid>
+
+                                    <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,8,0,8"/>
+
+                                    <!-- TTS 语音预览 -->
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,8"
+                                          IsEnabled="{Binding IsChecked, ElementName=AiTtsCheckBox, TargetNullValue=False}">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <StackPanel Grid.Row="0" Margin="0,0,0,8">
+                                            <TextBlock Text="语音预览" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="输入文本测试 TTS 效果，可验证断句和语音质量。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <TextBox x:Name="TtsPreviewTextBox" Grid.Row="1" Height="60"
+                                                 AcceptsReturn="True" TextWrapping="Wrap"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 Text="打包监控程序官方开源软件适用中小电商"/>
+                                        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
+                                            <Button Content="▶ 播放" x:Name="BtnTtsPreview" Click="BtnTtsPreview_Click"
+                                                    Style="{StaticResource PrimaryActionButtonStyle}"
+                                                    Width="70" Margin="0,0,8,0"/>
+                                            <Button Content="⏹ 停止" x:Name="BtnTtsStop" Click="BtnTtsStop_Click"
+                                                    Width="70" Margin="0,0,8,0" Height="34"/>
+                                            <TextBlock x:Name="TtsPreviewStatus" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextSecondary}" FontSize="12"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,4,0,8"/>
+
+                                    <!-- 断句关键词编辑 -->
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,0"
+                                          IsEnabled="{Binding IsChecked, ElementName=AiTtsCheckBox, TargetNullValue=False}">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <StackPanel Grid.Row="0" Margin="0,0,0,8">
+                                            <TextBlock Text="断句关键词" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="长商品名会在这些词前自动插入停顿，每行一个关键词。可根据实际商品类目增减。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <TextBox x:Name="TtsBreakWordsTextBox" Grid.Row="1" Height="100"
+                                                 AcceptsReturn="True" TextWrapping="Wrap"
+                                                 VerticalScrollBarVisibility="Auto"/>
+                                    </Grid>
                                 </StackPanel>
                             </Border>
 
