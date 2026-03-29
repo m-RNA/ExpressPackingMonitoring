@@ -366,9 +366,9 @@ namespace ExpressPackingMonitoring
         {
             var items = new[]
             {
-                new GpuEncoderOption { Value = "h264", DisplayName = "H.264 (\u517c\u5bb9\u6027\u597d)" },
-                new GpuEncoderOption { Value = "h265", DisplayName = "H.265 / HEVC (\u4f53\u79ef\u66f4\u5c0f)" },
-                new GpuEncoderOption { Value = "av1",  DisplayName = "AV1 (\u6781\u81f4\u538b\u7f29\uff0c\u63a8\u8350)" }
+                new GpuEncoderOption { Value = "h264", DisplayName = "H.264 (兼容性好)" },
+                new GpuEncoderOption { Value = "h265", DisplayName = "H.265 / HEVC (体积更小)" },
+                new GpuEncoderOption { Value = "av1",  DisplayName = "AV1 (极致压缩，推荐)" }
             };
             VideoCodecComboBox.ItemsSource = items;
             string current = Config.VideoCodec?.ToLowerInvariant() ?? "h264";
@@ -702,7 +702,7 @@ namespace ExpressPackingMonitoring
                 };
                 // 同步当前编辑中的断句关键词
                 var words = TtsBreakWordsTextBox.Text
-                    .Split(new[] { '\r', '\n', '\uff0c', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Split(new[] { '\r', '\n', '，', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
                     .Select(w => w.Trim()).Where(w => w.Length > 0);
                 _previewSpeechService.UpdateBreakWords(words);
                 if (Config.EnableAiTts)
@@ -716,7 +716,7 @@ namespace ExpressPackingMonitoring
                 _previewSpeechService.AiTtsWarningSpeakerId = Config.AiTtsWarningSpeakerId;
                 _previewSpeechService.AiTtsSpeed = Config.AiTtsSpeed;
                 var words = TtsBreakWordsTextBox.Text
-                    .Split(new[] { '\r', '\n', '\uff0c', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Split(new[] { '\r', '\n', '，', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
                     .Select(w => w.Trim()).Where(w => w.Length > 0);
                 _previewSpeechService.UpdateBreakWords(words);
             }

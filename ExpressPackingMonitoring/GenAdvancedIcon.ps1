@@ -92,14 +92,14 @@ public class AdvancedIconGenerator {
                             using (Font font = new Font("Microsoft YaHei", fontSize, FontStyle.Bold)) {
                                 RectangleF r1 = new RectangleF(0, margin + size * 0.05f, size, size * 0.45f);
                                 RectangleF r2 = new RectangleF(0, margin + size * 0.40f, size, size * 0.45f);
-                                g.DrawString("\u6253\u5305", font, textBrush, r1, format); // 打包
-                                g.DrawString("\u76D1\u63A7", font, textBrush, r2, format); // 监控
+                                g.DrawString("打包", font, textBrush, r1, format);
+                                g.DrawString("监控", font, textBrush, r2, format);
                             }
                         } else {
                             float fontSize = size <= 16 ? 10.5f : size * 0.55f;
                             using (Font font = new Font("Microsoft YaHei", fontSize, FontStyle.Bold)) {
                                 RectangleF rect = new RectangleF(0, size <= 16 ? -1 : size * -0.05f, size, size);
-                                g.DrawString("\u5305", font, textBrush, rect, format); // 包
+                                g.DrawString("包", font, textBrush, rect, format);
                             }
                         }
                     }
