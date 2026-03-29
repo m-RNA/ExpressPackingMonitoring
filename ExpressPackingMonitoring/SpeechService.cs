@@ -140,7 +140,7 @@ namespace ExpressPackingMonitoring.Services
                 if (ruleFsts.Count > 0)
                     config.RuleFsts = string.Join(",", ruleFsts);
 
-                config.Model.NumThreads = Math.Max(2, Environment.ProcessorCount / 2);
+                config.Model.NumThreads = Math.Max(2, Environment.ProcessorCount / 3);
                 config.Model.Provider = AiTtsProvider ?? "cpu";
                 config.MaxNumSentences = 0; // 0 = 不限制句数，避免长文本被截断
 
@@ -174,7 +174,7 @@ namespace ExpressPackingMonitoring.Services
                             ? string.Join("，", Enumerable.Repeat(req.Text, req.RepeatCount))
                             : req.Text;
 
-                        if (EnableAiTts && _kokoroTts != null)
+                        if (EnableAiTts)
                         {
                             SpeakWithKokoro(fullText, req.IsWarning);
                         }
@@ -227,48 +227,11 @@ namespace ExpressPackingMonitoring.Services
                 return;
             }
 
-            // 2. 缓存未命中，确保模型已加载，然后生成音频（与预生成互斥，同一时刻只有一个 Generate）
-            Debug.WriteLine($"[SpeechService] Cache MISS, generating...");
-            lock (_kokoroLock)
-            {
-                EnsureKokoroLoaded();
-                var tts = _kokoroTts;
-                if (tts == null) return;
-                _lastTtsUseTime = DateTime.Now;
-
-                OfflineTtsGeneratedAudio? audio;
-                try
-                {
-                    audio = tts.Generate(text, AiTtsSpeed, sid);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"[SpeechService] Kokoro Generate exception: {ex.Message}");
-                    return;
-                }
-
-                if (audio == null || audio.NumSamples <= 0)
-                {
-                    Debug.WriteLine($"[SpeechService] Kokoro returned empty audio (NumSamples={audio?.NumSamples})");
-                    audio?.Dispose();
-                    return;
-                }
-
-                Debug.WriteLine($"[SpeechService] Kokoro generated {audio.NumSamples} samples, sampleRate={audio.SampleRate}, duration={audio.NumSamples / (double)audio.SampleRate:F2}s");
-
-                try
-                {
-                    wavData = BuildWav16(audio.Samples, audio.SampleRate);
-                    SaveToCache(cacheKey, wavData);
-                }
-                finally
-                {
-                    audio.Dispose();
-                }
-            }
-
-            if (!_speechCancelRequested && !_isDisposed)
-                PlayWavBlocking(wavData);
+            // 2. 缓存未命中：先用系统语音及时播报，后台预生成AI缓存供下次使用
+            Debug.WriteLine($"[SpeechService] Cache MISS, 先用系统语音播报，后台预生成AI缓存");
+            SpeakWithWindowsTts(text, isWarning);
+            // 后台排队生成AI缓存，下次就能直接命中（text 已预处理，跳过重复预处理）
+            PreGenerateCacheInternal(text, isWarning);
         }
 
         #region TTS 磁盘缓存
@@ -374,6 +337,14 @@ namespace ExpressPackingMonitoring.Services
 
             // 预处理文本（与播放时保持一致）
             text = PreprocessTextForTts(text);
+            PreGenerateCacheInternal(text, isWarning);
+        }
+
+        /// <summary>内部版本，text 已预处理，避免重复预处理</summary>
+        private void PreGenerateCacheInternal(string text, bool isWarning)
+        {
+            if (!EnableAiTts || _ttsCacheDir == null) return;
+            if (string.IsNullOrWhiteSpace(text)) return;
 
             int sid = isWarning ? AiTtsWarningSpeakerId : AiTtsSpeakerId;
             string cacheKey = GetCacheKey(text, AiTtsSpeed, sid);

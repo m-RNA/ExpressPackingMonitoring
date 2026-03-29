@@ -341,7 +341,7 @@ namespace ExpressPackingMonitoring
                     foreach (var k in expiredKeys) _orderInfoCache.Remove(k);
                     snapshot = _orderInfoCache.Values.ToList();
                 }
-                string json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = false, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+                string json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = false, PropertyNamingPolicy = JsonNamingPolicy.CamelCase, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
                 File.WriteAllText(_orderInfoCachePath, json);
             }
             catch (Exception ex)
