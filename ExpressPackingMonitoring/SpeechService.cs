@@ -38,7 +38,7 @@ namespace ExpressPackingMonitoring.Services
         private Thread? _preGenThread;
 
         /// <summary>AI TTS 模型空闲多少分钟后自动卸载释放内存，0 = 不自动卸载</summary>
-        public int AiTtsIdleUnloadMinutes { get; set; } = 10;
+        public int AiTtsIdleUnloadMinutes { get; set; } = 1;
 
         /// <summary>TTS 缓存目录最大占用空间（MB），超出后按最久未访问清理，0 = 不限制</summary>
         public int TtsCacheMaxSizeMB { get; set; } = 500;
