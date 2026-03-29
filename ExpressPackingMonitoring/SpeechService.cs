@@ -34,6 +34,8 @@ namespace ExpressPackingMonitoring.Services
         private string? _ttsCacheDir;
         private DateTime _lastTtsUseTime = DateTime.MinValue;
         private Timer? _idleUnloadTimer;
+        private BlockingCollection<(string text, bool isWarning)>? _preGenQueue;
+        private Thread? _preGenThread;
 
         /// <summary>AI TTS 模型空闲多少分钟后自动卸载释放内存，0 = 不自动卸载</summary>
         public int AiTtsIdleUnloadMinutes { get; set; } = 10;
@@ -225,54 +227,48 @@ namespace ExpressPackingMonitoring.Services
                 return;
             }
 
-            // 2. 缓存未命中，确保模型已加载，然后生成音频
-            EnsureKokoroLoaded();
+            // 2. 缓存未命中，确保模型已加载，然后生成音频（与预生成互斥，同一时刻只有一个 Generate）
             Debug.WriteLine($"[SpeechService] Cache MISS, generating...");
-            OfflineTtsGeneratedAudio? audio;
-            try
+            lock (_kokoroLock)
             {
+                EnsureKokoroLoaded();
                 var tts = _kokoroTts;
                 if (tts == null) return;
                 _lastTtsUseTime = DateTime.Now;
-                audio = tts.Generate(text, AiTtsSpeed, sid);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[SpeechService] Kokoro Generate exception: {ex.Message}");
-                return;
+
+                OfflineTtsGeneratedAudio? audio;
+                try
+                {
+                    audio = tts.Generate(text, AiTtsSpeed, sid);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[SpeechService] Kokoro Generate exception: {ex.Message}");
+                    return;
+                }
+
+                if (audio == null || audio.NumSamples <= 0)
+                {
+                    Debug.WriteLine($"[SpeechService] Kokoro returned empty audio (NumSamples={audio?.NumSamples})");
+                    audio?.Dispose();
+                    return;
+                }
+
+                Debug.WriteLine($"[SpeechService] Kokoro generated {audio.NumSamples} samples, sampleRate={audio.SampleRate}, duration={audio.NumSamples / (double)audio.SampleRate:F2}s");
+
+                try
+                {
+                    wavData = BuildWav16(audio.Samples, audio.SampleRate);
+                    SaveToCache(cacheKey, wavData);
+                }
+                finally
+                {
+                    audio.Dispose();
+                }
             }
 
-            if (audio == null || audio.NumSamples <= 0)
-            {
-                Debug.WriteLine($"[SpeechService] Kokoro returned empty audio (NumSamples={audio?.NumSamples})");
-                audio?.Dispose();
-                return;
-            }
-
-            Debug.WriteLine($"[SpeechService] Kokoro generated {audio.NumSamples} samples, sampleRate={audio.SampleRate}, duration={audio.NumSamples / (double)audio.SampleRate:F2}s");
-
-            if (_speechCancelRequested || _isDisposed)
-            {
-                audio.Dispose();
-                return;
-            }
-
-            try
-            {
-                var samples = audio.Samples;
-                int sampleRate = audio.SampleRate;
-                wavData = BuildWav16(samples, sampleRate);
-
-                // 3. 写入磁盘缓存（异步，不阻塞播放）
-                SaveToCache(cacheKey, wavData);
-
-                if (!_speechCancelRequested && !_isDisposed)
-                    PlayWavBlocking(wavData);
-            }
-            finally
-            {
-                audio.Dispose();
-            }
+            if (!_speechCancelRequested && !_isDisposed)
+                PlayWavBlocking(wavData);
         }
 
         #region TTS 磁盘缓存
@@ -304,23 +300,19 @@ namespace ExpressPackingMonitoring.Services
         private void SaveToCache(string cacheKey, byte[] wavData)
         {
             if (_ttsCacheDir == null) return;
-            ThreadPool.QueueUserWorkItem(_ =>
+            try
             {
-                try
-                {
-                    string path = Path.Combine(_ttsCacheDir, cacheKey + ".wav");
-                    File.WriteAllBytes(path, wavData);
-                    Debug.WriteLine($"[SpeechService] Cached: {cacheKey}.wav ({wavData.Length / 1024}KB)");
+                string path = Path.Combine(_ttsCacheDir, cacheKey + ".wav");
+                File.WriteAllBytes(path, wavData);
+                Debug.WriteLine($"[SpeechService] Cached: {cacheKey}.wav ({wavData.Length / 1024}KB)");
 
-                    // 检查缓存总大小，超出限制则清理最久未访问的文件
-                    if (TtsCacheMaxSizeMB > 0)
-                        CleanupCache();
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"[SpeechService] Cache write error: {ex.Message}");
-                }
-            });
+                if (TtsCacheMaxSizeMB > 0)
+                    CleanupCache();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[SpeechService] Cache write error: {ex.Message}");
+            }
         }
 
         private void CleanupCache()
@@ -390,42 +382,75 @@ namespace ExpressPackingMonitoring.Services
             string cachePath = Path.Combine(_ttsCacheDir, cacheKey + ".wav");
             if (File.Exists(cachePath)) return;
 
-            ThreadPool.QueueUserWorkItem(_ =>
+            // 加入预生成队列，由专用单线程依次处理
+            EnsurePreGenThreadStarted();
+            try { _preGenQueue?.TryAdd((text, isWarning)); }
+            catch (InvalidOperationException) { /* queue completed */ }
+        }
+
+        private void EnsurePreGenThreadStarted()
+        {
+            if (_preGenThread != null) return;
+            lock (_kokoroLock)
             {
-                try
+                if (_preGenThread != null) return;
+                _preGenQueue = new BlockingCollection<(string text, bool isWarning)>();
+                _preGenThread = new Thread(PreGenThreadLoop) { IsBackground = true, Name = "TtsPreGenThread" };
+                _preGenThread.Start();
+            }
+        }
+
+        private void PreGenThreadLoop()
+        {
+            try
+            {
+                foreach (var (text, isWarning) in _preGenQueue!.GetConsumingEnumerable())
                 {
-                    EnsureKokoroLoaded();
-                    var tts = _kokoroTts;
-                    if (tts == null) return;
-                    _lastTtsUseTime = DateTime.Now;
-
-                    Debug.WriteLine($"[SpeechService] PreGenerate: sid={sid}, text=\"{text}\"");
-                    var audio = tts.Generate(text, AiTtsSpeed, sid);
-                    if (audio == null || audio.NumSamples <= 0)
-                    {
-                        audio?.Dispose();
-                        return;
-                    }
-
+                    if (_isDisposed) break;
                     try
                     {
-                        var wavData = BuildWav16(audio.Samples, audio.SampleRate);
-                        File.WriteAllBytes(cachePath, wavData);
-                        Debug.WriteLine($"[SpeechService] PreGenerate cached: {cacheKey}.wav ({wavData.Length / 1024}KB)");
+                        int sid = isWarning ? AiTtsWarningSpeakerId : AiTtsSpeakerId;
+                        string cacheKey = GetCacheKey(text, AiTtsSpeed, sid);
+                        string cachePath = Path.Combine(_ttsCacheDir!, cacheKey + ".wav");
+                        if (File.Exists(cachePath)) continue;
+
+                        lock (_kokoroLock)
+                        {
+                            EnsureKokoroLoaded();
+                            var tts = _kokoroTts;
+                            if (tts == null) return;
+                            _lastTtsUseTime = DateTime.Now;
+
+                            Debug.WriteLine($"[SpeechService] PreGenerate: sid={sid}, text=\"{text}\"");
+                            var audio = tts.Generate(text, AiTtsSpeed, sid);
+                            if (audio == null || audio.NumSamples <= 0)
+                            {
+                                audio?.Dispose();
+                                continue;
+                            }
+
+                            try
+                            {
+                                var wavData = BuildWav16(audio.Samples, audio.SampleRate);
+                                File.WriteAllBytes(cachePath, wavData);
+                                Debug.WriteLine($"[SpeechService] PreGenerate cached: {cacheKey}.wav ({wavData.Length / 1024}KB)");
+                            }
+                            finally
+                            {
+                                audio.Dispose();
+                            }
+                        }
 
                         if (TtsCacheMaxSizeMB > 0)
                             CleanupCache();
                     }
-                    finally
+                    catch (Exception ex)
                     {
-                        audio.Dispose();
+                        Debug.WriteLine($"[SpeechService] PreGenerate error: {ex.Message}");
                     }
                 }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"[SpeechService] PreGenerate error: {ex.Message}");
-                }
-            });
+            }
+            catch (OperationCanceledException) { }
         }
         #endregion
 
@@ -768,6 +793,8 @@ namespace ExpressPackingMonitoring.Services
             _isDisposed = true;
             Stop();
             _idleUnloadTimer?.Dispose();
+            try { _preGenQueue?.CompleteAdding(); } catch { }
+            try { _preGenThread?.Join(2000); } catch { }
             try { _speechQueue?.CompleteAdding(); } catch { }
             try { _speechThread?.Join(2000); } catch { }
             _ttsNormal?.Dispose();
