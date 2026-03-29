@@ -132,7 +132,7 @@ namespace ExpressPackingMonitoring.Services
                 if (ruleFsts.Count > 0)
                     config.RuleFsts = string.Join(",", ruleFsts);
 
-                config.Model.NumThreads = Math.Max(2, Environment.ProcessorCount);
+                config.Model.NumThreads = Math.Max(2, Environment.ProcessorCount / 2);
                 config.Model.Provider = AiTtsProvider ?? "cpu";
                 config.MaxNumSentences = 0; // 0 = 不限制句数，避免长文本被截断
 
