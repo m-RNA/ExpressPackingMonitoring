@@ -26,11 +26,17 @@ namespace ExpressPackingMonitoring.Services
         private SpeechSynthesizer? _ttsNormal;
         private SpeechSynthesizer? _ttsWarning;
         private OfflineTts? _kokoroTts;
+        private readonly object _kokoroLock = new();
         private BlockingCollection<SpeechRequest> _speechQueue = null!;
         private Thread _speechThread = null!;
         private volatile bool _speechCancelRequested;
         private bool _isDisposed;
         private string? _ttsCacheDir;
+        private DateTime _lastTtsUseTime = DateTime.MinValue;
+        private Timer? _idleUnloadTimer;
+
+        /// <summary>AI TTS 模型空闲多少分钟后自动卸载释放内存，0 = 不自动卸载</summary>
+        public int AiTtsIdleUnloadMinutes { get; set; } = 10;
 
         /// <summary>TTS 缓存目录最大占用空间（MB），超出后按最久未访问清理，0 = 不限制</summary>
         public int TtsCacheMaxSizeMB { get; set; } = 500;
@@ -141,6 +147,8 @@ namespace ExpressPackingMonitoring.Services
                 Directory.CreateDirectory(_ttsCacheDir);
 
                 _kokoroTts = new OfflineTts(config);
+                _lastTtsUseTime = DateTime.Now;
+                StartIdleUnloadTimer();
                 Debug.WriteLine($"[SpeechService] Kokoro TTS loaded, speakers={_kokoroTts.NumSpeakers}, sampleRate={_kokoroTts.SampleRate}");
             }
             catch (Exception ex)
@@ -206,7 +214,7 @@ namespace ExpressPackingMonitoring.Services
 
             Debug.WriteLine($"[SpeechService] Kokoro: sid={sid}, speed={AiTtsSpeed}, text=\"{text}\"");
 
-            // 1. 尝试从磁盘缓存读取
+            // 1. 尝试从磁盘缓存读取（命中缓存不需要加载模型）
             string cacheKey = GetCacheKey(text, AiTtsSpeed, sid);
             byte[]? wavData = LoadFromCache(cacheKey);
             if (wavData != null)
@@ -217,13 +225,15 @@ namespace ExpressPackingMonitoring.Services
                 return;
             }
 
-            // 2. 缓存未命中，生成音频
+            // 2. 缓存未命中，确保模型已加载，然后生成音频
+            EnsureKokoroLoaded();
             Debug.WriteLine($"[SpeechService] Cache MISS, generating...");
             OfflineTtsGeneratedAudio? audio;
             try
             {
                 var tts = _kokoroTts;
                 if (tts == null) return;
+                _lastTtsUseTime = DateTime.Now;
                 audio = tts.Generate(text, AiTtsSpeed, sid);
             }
             catch (Exception ex)
@@ -367,7 +377,7 @@ namespace ExpressPackingMonitoring.Services
         /// </summary>
         public void PreGenerateCache(string text, bool isWarning = false)
         {
-            if (!EnableAiTts || _kokoroTts == null || _ttsCacheDir == null) return;
+            if (!EnableAiTts || _ttsCacheDir == null) return;
             if (string.IsNullOrWhiteSpace(text)) return;
 
             // 预处理文本（与播放时保持一致）
@@ -384,8 +394,10 @@ namespace ExpressPackingMonitoring.Services
             {
                 try
                 {
+                    EnsureKokoroLoaded();
                     var tts = _kokoroTts;
                     if (tts == null) return;
+                    _lastTtsUseTime = DateTime.Now;
 
                     Debug.WriteLine($"[SpeechService] PreGenerate: sid={sid}, text=\"{text}\"");
                     var audio = tts.Generate(text, AiTtsSpeed, sid);
@@ -715,16 +727,52 @@ namespace ExpressPackingMonitoring.Services
         }
         #endregion
 
+        /// <summary>如果模型已卸载则重新加载</summary>
+        private void EnsureKokoroLoaded()
+        {
+            if (_kokoroTts != null || _isDisposed || !EnableAiTts) return;
+            lock (_kokoroLock)
+            {
+                if (_kokoroTts != null) return;
+                Debug.WriteLine("[SpeechService] Kokoro 模型按需重新加载...");
+                InitAiTts();
+            }
+        }
+
+        /// <summary>启动空闲卸载定时器</summary>
+        private void StartIdleUnloadTimer()
+        {
+            _idleUnloadTimer?.Dispose();
+            if (AiTtsIdleUnloadMinutes <= 0) return;
+            _idleUnloadTimer = new Timer(_ => CheckIdleUnload(), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+        }
+
+        private void CheckIdleUnload()
+        {
+            if (_isDisposed || _kokoroTts == null || AiTtsIdleUnloadMinutes <= 0) return;
+            if ((DateTime.Now - _lastTtsUseTime).TotalMinutes < AiTtsIdleUnloadMinutes) return;
+
+            lock (_kokoroLock)
+            {
+                if (_kokoroTts == null) return;
+                if ((DateTime.Now - _lastTtsUseTime).TotalMinutes < AiTtsIdleUnloadMinutes) return;
+                Debug.WriteLine($"[SpeechService] Kokoro 模型空闲 {AiTtsIdleUnloadMinutes} 分钟，卸载释放内存");
+                _kokoroTts.Dispose();
+                _kokoroTts = null;
+            }
+        }
+
         public void Dispose()
         {
             if (_isDisposed) return;
             _isDisposed = true;
             Stop();
+            _idleUnloadTimer?.Dispose();
             try { _speechQueue?.CompleteAdding(); } catch { }
             try { _speechThread?.Join(2000); } catch { }
             _ttsNormal?.Dispose();
             _ttsWarning?.Dispose();
-            _kokoroTts?.Dispose();
+            lock (_kokoroLock) { _kokoroTts?.Dispose(); _kokoroTts = null; }
             _speechQueue?.Dispose();
         }
     }
