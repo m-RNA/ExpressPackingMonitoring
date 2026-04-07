@@ -64,6 +64,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
         // 摄像头重连控制
         private volatile bool _isRestartingCamera = false;
+        private volatile bool _cameraEverConnected = false; // 摄像头是否曾经成功连接过（区分启动vs断连）
         private DateTime _lastRestartAttempt = DateTime.MinValue;
         private int _consecutiveRestartFailures = 0;
         private const int MaxConsecutiveRestartFailures = 5;
@@ -943,26 +944,55 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 if (IsRecording)
                 {
-                    _stopReason = "摄像头断连";
-                    await SafeStopRecordingAsync();
-                }
-                StopCamera();
-                StartCamera();
-                _lastRestartAttempt = DateTime.Now;
+                    // 录制中：先尝试不停止录制的重连
+                    StopCamera();
+                    StartCamera();
+                    _lastRestartAttempt = DateTime.Now;
 
-                // 检查重启是否成功
-                if (_videoSource != null && _videoSource.IsRunning)
-                {
-                    _consecutiveRestartFailures = 0;
+                    if (_videoSource != null && _videoSource.IsRunning)
+                    {
+                        _consecutiveRestartFailures = 0;
+                        ShowToast("✅ 摄像头已重连，录制继续");
+                        Speak("摄像头已重连");
+                    }
+                    else
+                    {
+                        _consecutiveRestartFailures++;
+                        if (_consecutiveRestartFailures >= MaxConsecutiveRestartFailures)
+                        {
+                            // 多次重连失败，停止录制
+                            _stopReason = "摄像头断连";
+                            await SafeStopRecordingAsync();
+                            ShowToast($"⚠ 摄像头连续 {MaxConsecutiveRestartFailures} 次重连失败，录制已停止。请重新插拔后在设置中手动重启。");
+                            SpeakWarning("请重新连接摄像头", 3);
+                            Debug.WriteLine($"[Camera] 录制中连续 {_consecutiveRestartFailures} 次重连失败，停止录制和自动重连");
+                        }
+                        else
+                        {
+                            SpeakWarning("摄像头断开，正在尝试重连");
+                        }
+                    }
                 }
                 else
                 {
-                    _consecutiveRestartFailures++;
-                    if (_consecutiveRestartFailures >= MaxConsecutiveRestartFailures)
+                    // 非录制状态：原有逻辑
+                    StopCamera();
+                    StartCamera();
+                    _lastRestartAttempt = DateTime.Now;
+
+                    if (_videoSource != null && _videoSource.IsRunning)
                     {
-                        ShowToast($"⚠ 摄像头连续 {MaxConsecutiveRestartFailures} 次重连失败，已停止自动重连。请重新插拔后在设置中手动重启。");
-                        SpeakWarning("请重新连接摄像头", 3);
-                        Debug.WriteLine($"[Camera] 连续 {_consecutiveRestartFailures} 次重连失败，停止自动重连");
+                        _consecutiveRestartFailures = 0;
+                    }
+                    else
+                    {
+                        _consecutiveRestartFailures++;
+                        if (_consecutiveRestartFailures >= MaxConsecutiveRestartFailures)
+                        {
+                            ShowToast($"⚠ 摄像头连续 {MaxConsecutiveRestartFailures} 次重连失败，已停止自动重连。请重新插拔后在设置中手动重启。");
+                            SpeakWarning("请重新连接摄像头", 3);
+                            Debug.WriteLine($"[Camera] 连续 {_consecutiveRestartFailures} 次重连失败，停止自动重连");
+                        }
                     }
                 }
             }
@@ -1045,7 +1075,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 string targetMoniker = Config.CameraMonikerString;
                 int targetIndex = -1;
 
-                // 1. 优先通过 MonikerString 查找
+                // 1. 优先通过 MonikerString 查找（精确匹配目标设备）
                 if (!string.IsNullOrEmpty(targetMoniker))
                 {
                     for (int i = 0; i < videoDevices.Count; i++)
@@ -1056,9 +1086,17 @@ namespace ExpressPackingMonitoring.ViewModels
                             break;
                         }
                     }
+
+                    // 目标摄像头已配置但未找到：不切换到其他设备
+                    if (targetIndex == -1)
+                    {
+                        Debug.WriteLine($"[Camera] 目标摄像头未找到: {targetMoniker}，不切换到其他设备");
+                        ShowToast("⚠ 目标摄像头未连接，等待重新插入");
+                        return;
+                    }
                 }
 
-                // 2. 如果没找到，尝试通过索引 (回退逻辑)
+                // 2. 首次使用（未配置 MonikerString）：使用索引选择并记录 MonikerString
                 if (targetIndex == -1)
                 {
                     if (Config.CameraIndex >= 0 && Config.CameraIndex < videoDevices.Count)
@@ -1085,11 +1123,12 @@ namespace ExpressPackingMonitoring.ViewModels
                     Config.AudioSyncOffsetMs = settings.AudioSyncOffsetMs;
                 }
 
-                // 设置错误处理器
+                // 设置错误处理器（摄像头拔掉时 AForge 会触发此事件）
                 _videoSource.VideoSourceError += (s, e) => {
                     Debug.WriteLine($"[Camera] 视频源错误: {e.Description}");
                     _ = Application.Current.Dispatcher.InvokeAsync(() => {
-                        ShowToast("⚠ 摄像头连接发生错误");
+                        ShowToast("⚠ 摄像头连接发生错误，尝试重连...");
+                        RestartCameraWithRecordingStop();
                     });
                 };
 
@@ -1119,6 +1158,8 @@ namespace ExpressPackingMonitoring.ViewModels
                     _actualCameraFps = Config.Fps > 0 ? Config.Fps : 15;
                 }
                 _videoSource.NewFrame += VideoSource_NewFrame; _videoSource.Start();
+                _lastFrameTime = DateTime.Now; // 防止 VideoProcessLoop 启动时误判无帧
+                _cameraEverConnected = true;
             }
             catch { ShowToast("摄像头启动失败"); }
         }
@@ -1144,7 +1185,7 @@ namespace ExpressPackingMonitoring.ViewModels
             lock (_frameLock) { _latestFrame?.Dispose(); _latestFrame = null; }
         }
         
-        private void VideoSource_NewFrame(object sender, NewFrameEventArgs eventArgs) { try { Mat newMat = BitmapToMat(eventArgs.Frame); lock (_frameLock) { _latestFrame?.Dispose(); _latestFrame = newMat; } } catch { } }
+        private void VideoSource_NewFrame(object sender, NewFrameEventArgs eventArgs) { try { Mat newMat = BitmapToMat(eventArgs.Frame); lock (_frameLock) { _latestFrame?.Dispose(); _latestFrame = newMat; } _lastFrameTime = DateTime.Now; } catch { } }
 
         private Mat BitmapToMat(Bitmap bitmap)
         {
@@ -1158,8 +1199,6 @@ namespace ExpressPackingMonitoring.ViewModels
         private async Task VideoProcessLoop(CancellationToken token)
         {
             int frameTickCounter = 0;
-            int cameraErrorCounter = 0;
-            int cameraMissingCounter = 0;
 
             try
             {
@@ -1170,10 +1209,20 @@ namespace ExpressPackingMonitoring.ViewModels
                     DateTime startTime = DateTime.Now; Mat currentFrame = null;
                     lock (_frameLock) { if (_latestFrame != null && !_latestFrame.IsDisposed) currentFrame = _latestFrame.Clone(); }
 
+                    // 检测摄像头是否已断开：_latestFrame 是旧帧不会自动清除，必须用 _lastFrameTime 判断
+                    if (currentFrame != null && _cameraEverConnected && !_isCameraSleeping)
+                    {
+                        double sinceLastNewFrame = (DateTime.Now - _lastFrameTime).TotalSeconds;
+                        if (sinceLastNewFrame > 3.0)
+                        {
+                            currentFrame.Dispose();
+                            currentFrame = null;
+                            lock (_frameLock) { _latestFrame?.Dispose(); _latestFrame = null; }
+                        }
+                    }
+
                     if (currentFrame != null && !currentFrame.Empty())
                     {
-                        cameraErrorCounter = 0; // 重置错误计数
-                        _lastFrameTime = DateTime.Now;
 
                         Mat processedFrame = currentFrame;
                         CameraFrameSize = new System.Windows.Size(currentFrame.Width, currentFrame.Height);
@@ -1360,30 +1409,22 @@ namespace ExpressPackingMonitoring.ViewModels
                         // 休眠期间不做任何自动重连操作
                         if (_isCameraSleeping)
                         {
-                            cameraErrorCounter = 0;
-                            cameraMissingCounter = 0;
                         }
                         // 如果已达重连上限或正在重启中，不再尝试
                         else if (_isRestartingCamera || _consecutiveRestartFailures >= MaxConsecutiveRestartFailures)
                         {
-                            cameraErrorCounter = 0;
-                            cameraMissingCounter = 0;
                         }
                         // 冷却期间不尝试重连（退避机制）
                         else if ((DateTime.Now - _lastRestartAttempt).TotalSeconds < MinRestartIntervalSeconds * Math.Max(1, _consecutiveRestartFailures))
                         {
-                            cameraErrorCounter = 0;
-                            cameraMissingCounter = 0;
                         }
-                        // 摄像头掉线检测：如果 3秒没帧，且 _videoSource 理论上在运行
+                        // 摄像头掉线检测：使用时间差（避免 200ms 循环间隔导致帧计数不准）
                         else if (_videoSource != null && _videoSource.IsRunning)
                         {
-                            cameraErrorCounter++;
-                            // 约 3秒 (假设 15fps，45帧)
-                            if (cameraErrorCounter > (_actualCameraFps * 3))
+                            double noFrameSeconds = (DateTime.Now - _lastFrameTime).TotalSeconds;
+                            if (noFrameSeconds > 3.0)
                             {
-                                cameraErrorCounter = 0;
-                                Debug.WriteLine($"[Camera] 信号丢失，尝试重连 (失败次数={_consecutiveRestartFailures})");
+                                Debug.WriteLine($"[Camera] 信号丢失 {noFrameSeconds:F1}s，尝试重连 (失败次数={_consecutiveRestartFailures})");
                                 _ = Application.Current.Dispatcher.InvokeAsync(() => {
                                     ShowToast("⚠ 摄像头信号丢失，尝试重连...");
                                     SpeakWarning("摄像头重新连接中");
@@ -1391,23 +1432,18 @@ namespace ExpressPackingMonitoring.ViewModels
                                 });
                             }
                         }
-                        else
+                        else if (_cameraEverConnected)
                         {
-                            // 摄像头完全没启动或已停止：每 5秒尝试发现并启动一次
-                            cameraMissingCounter++;
-                            if (cameraMissingCounter > (_actualCameraFps * 5))
+                            // 摄像头曾连接过但现在不可用（断连/拔掉）：持续尝试重连
+                            double missingSeconds = (DateTime.Now - _lastFrameTime).TotalSeconds;
+                            if (missingSeconds > 5.0)
                             {
-                                cameraMissingCounter = 0;
-                                var videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
-                                if (videoDevices.Count > 0)
-                                {
-                                    Debug.WriteLine($"[Camera] 检测到设备，尝试启动 (失败次数={_consecutiveRestartFailures})");
-                                    _ = Application.Current.Dispatcher.InvokeAsync(() => {
-                                        ShowToast("📷 检测到摄像头，尝试启动...");
-                                        Speak("摄像头重启中");
-                                        RestartCameraWithRecordingStop();
-                                    });
-                                }
+                                Debug.WriteLine($"[Camera] 摄像头断开，尝试重连 (失败次数={_consecutiveRestartFailures})");
+                                _ = Application.Current.Dispatcher.InvokeAsync(() => {
+                                    ShowToast("⚠ 摄像头已断开，等待重新连接...");
+                                    SpeakWarning("摄像头重新连接中");
+                                    RestartCameraWithRecordingStop();
+                                });
                             }
                         }
 
