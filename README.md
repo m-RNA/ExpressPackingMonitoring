@@ -115,7 +115,7 @@
 ```powershell
 # 克隆仓库（GitHub为主仓库，Gitee为同步镜像，二选一即可）
 git clone https://github.com/m-RNA/ExpressPackingMonitoring.git
-git clone https://gitee.com/chenjjian/ExpressPackingMonitoring.git
+# git clone https://gitee.com/chenjjian/ExpressPackingMonitoring.git
 
 cd ExpressPackingMonitoring
 
