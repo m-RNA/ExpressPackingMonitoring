@@ -728,7 +728,8 @@ namespace ExpressPackingMonitoring.ViewModels
                 Directory.CreateDirectory(Path.GetDirectoryName(audioFilePath)!);
 
                 var capture = CreateWasapiCapture(device);
-                var writer = new WaveFileWriter(audioFilePath, capture.WaveFormat);
+                var writerFormat = CreatePcm16WaveFormat(capture.WaveFormat);
+                var writer = new WaveFileWriter(audioFilePath, writerFormat);
 
                 lock (_audioLock)
                 {
@@ -748,7 +749,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 capture.StartRecording();
                 _audioMonitorTask = Task.Run(() => AudioCaptureMonitorLoop(_audioMonitorCts.Token));
                 Debug.WriteLine($"[Audio] 开始录音: {device.FriendlyName}");
-                WriteAudioDiagnostic($"开始录音: device={device.FriendlyName}, format={capture.WaveFormat}");
+                WriteAudioDiagnostic($"开始录音: device={device.FriendlyName}, sourceFormat={capture.WaveFormat}, wavFormat={writerFormat}");
                 return true;
             }
             catch (Exception ex)
@@ -821,11 +822,17 @@ namespace ExpressPackingMonitoring.ViewModels
                 lock (_audioLock)
                 {
                     if (_audioWriter == null || e.BytesRecorded <= 0) return;
+                    byte[]? pcmBytes = ConvertCaptureBufferToPcm16(e.Buffer, e.BytesRecorded, capture.WaveFormat);
+                    if (pcmBytes == null || pcmBytes.Length == 0)
+                    {
+                        WriteAudioDiagnostic($"麦克风格式暂不支持转换: format={capture.WaveFormat}, bytes={e.BytesRecorded}");
+                        return;
+                    }
                     PadAudioGapIfNeeded(DateTime.Now);
-                    UpdateAudioLevelStats(e.Buffer, e.BytesRecorded, _audioWriter.WaveFormat);
-                    _audioWriter.Write(e.Buffer, 0, e.BytesRecorded);
+                    UpdateAudioLevelStats(pcmBytes, pcmBytes.Length, _audioWriter.WaveFormat);
+                    _audioWriter.Write(pcmBytes, 0, pcmBytes.Length);
                     _audioWriter.Flush();
-                    _audioBytesWritten += e.BytesRecorded;
+                    _audioBytesWritten += pcmBytes.Length;
                     _lastAudioDataAt = DateTime.Now;
                 }
             };
@@ -881,6 +888,116 @@ namespace ExpressPackingMonitoring.ViewModels
                 _audioPeakSinceLastCheck = short.MaxValue;
 
             _audioBytesSinceLastCheck += bytesRecorded;
+        }
+
+        private static WaveFormat CreatePcm16WaveFormat(WaveFormat sourceFormat)
+        {
+            int sampleRate = Math.Max(8000, sourceFormat.SampleRate);
+            int channels = Math.Clamp(sourceFormat.Channels, 1, 8);
+            return new WaveFormat(sampleRate, 16, channels);
+        }
+
+        private static byte[]? ConvertCaptureBufferToPcm16(byte[] buffer, int bytesRecorded, WaveFormat sourceFormat)
+        {
+            if (bytesRecorded <= 0) return Array.Empty<byte>();
+
+            int channels = sourceFormat.Channels;
+            int blockAlign = sourceFormat.BlockAlign;
+            int bitsPerSample = sourceFormat.BitsPerSample;
+            if (channels <= 0 || blockAlign <= 0 || bitsPerSample <= 0) return null;
+
+            int bytesPerSample = bitsPerSample / 8;
+            if (bytesPerSample <= 0 || blockAlign < channels * bytesPerSample) return null;
+
+            int frames = bytesRecorded / blockAlign;
+            if (frames <= 0) return Array.Empty<byte>();
+
+            bool isFloat = IsFloatWaveFormat(sourceFormat);
+            bool isPcm = IsPcmWaveFormat(sourceFormat);
+            if (!isFloat && !isPcm) return null;
+
+            byte[] output = new byte[frames * channels * 2];
+            int outOffset = 0;
+            for (int frame = 0; frame < frames; frame++)
+            {
+                int frameOffset = frame * blockAlign;
+                for (int channel = 0; channel < channels; channel++)
+                {
+                    int sampleOffset = frameOffset + channel * bytesPerSample;
+                    short sample = isFloat
+                        ? ReadFloatSampleAsPcm16(buffer, sampleOffset, bytesPerSample)
+                        : ReadPcmSampleAsPcm16(buffer, sampleOffset, bytesPerSample);
+                    output[outOffset++] = (byte)(sample & 0xff);
+                    output[outOffset++] = (byte)((sample >> 8) & 0xff);
+                }
+            }
+            return output;
+        }
+
+        private static bool IsFloatWaveFormat(WaveFormat format)
+        {
+            if (format.Encoding == WaveFormatEncoding.IeeeFloat) return true;
+            if (format.Encoding != WaveFormatEncoding.Extensible) return false;
+
+            var subFormat = GetWaveFormatSubFormat(format);
+            if (subFormat == Guid.Empty)
+                return format.BitsPerSample == 32;
+
+            return subFormat == new Guid("00000003-0000-0010-8000-00aa00389b71");
+        }
+
+        private static bool IsPcmWaveFormat(WaveFormat format)
+        {
+            if (format.Encoding == WaveFormatEncoding.Pcm) return true;
+            if (format.Encoding != WaveFormatEncoding.Extensible) return false;
+
+            var subFormat = GetWaveFormatSubFormat(format);
+            if (subFormat == Guid.Empty)
+                return format.BitsPerSample == 8 || format.BitsPerSample == 16 || format.BitsPerSample == 24;
+
+            return subFormat == new Guid("00000001-0000-0010-8000-00aa00389b71");
+        }
+
+        private static Guid GetWaveFormatSubFormat(WaveFormat format)
+        {
+            try
+            {
+                var property = format.GetType().GetProperty("SubFormat");
+                if (property?.GetValue(format) is Guid guid)
+                    return guid;
+            }
+            catch { }
+            return Guid.Empty;
+        }
+
+        private static short ReadFloatSampleAsPcm16(byte[] buffer, int offset, int bytesPerSample)
+        {
+            if (bytesPerSample != 4 || offset + 4 > buffer.Length) return 0;
+            float value = BitConverter.ToSingle(buffer, offset);
+            if (float.IsNaN(value) || float.IsInfinity(value)) value = 0;
+            value = Math.Clamp(value, -1.0f, 1.0f);
+            return (short)Math.Round(value * short.MaxValue);
+        }
+
+        private static short ReadPcmSampleAsPcm16(byte[] buffer, int offset, int bytesPerSample)
+        {
+            if (offset + bytesPerSample > buffer.Length) return 0;
+            return bytesPerSample switch
+            {
+                1 => (short)((buffer[offset] - 128) << 8),
+                2 => BitConverter.ToInt16(buffer, offset),
+                3 => (short)(ReadInt24(buffer, offset) >> 8),
+                4 => (short)(BitConverter.ToInt32(buffer, offset) >> 16),
+                _ => 0
+            };
+        }
+
+        private static int ReadInt24(byte[] buffer, int offset)
+        {
+            int value = buffer[offset] | (buffer[offset + 1] << 8) | (buffer[offset + 2] << 16);
+            if ((value & 0x800000) != 0)
+                value |= unchecked((int)0xff000000);
+            return value;
         }
 
         private static bool TryGetAudioPeak(byte[] buffer, int bytesRecorded, WaveFormat format, out short peak)
@@ -1027,6 +1144,14 @@ namespace ExpressPackingMonitoring.ViewModels
                         try { capture.Dispose(); } catch { }
                         return;
                     }
+                    var restartFormat = CreatePcm16WaveFormat(capture.WaveFormat);
+                    if (restartFormat.SampleRate != _audioWriter.WaveFormat.SampleRate
+                        || restartFormat.Channels != _audioWriter.WaveFormat.Channels)
+                    {
+                        try { capture.Dispose(); } catch { }
+                        WriteAudioDiagnostic($"重启失败({reason}): 麦克风格式变化 sourceFormat={capture.WaveFormat}, wavFormat={_audioWriter.WaveFormat}");
+                        return;
+                    }
                     _audioCapture = capture;
                     _lastAudioDataAt = DateTime.Now;
                     _audioPeakSinceLastCheck = 0;
@@ -1036,7 +1161,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
                 capture.StartRecording();
                 Debug.WriteLine($"[Audio] 已重启录音({reason}): {device.FriendlyName}");
-                WriteAudioDiagnostic($"已重启录音({reason}): device={device.FriendlyName}, format={capture.WaveFormat}");
+                WriteAudioDiagnostic($"已重启录音({reason}): device={device.FriendlyName}, sourceFormat={capture.WaveFormat}, wavFormat={CreatePcm16WaveFormat(capture.WaveFormat)}");
             }
             catch (Exception ex)
             {
