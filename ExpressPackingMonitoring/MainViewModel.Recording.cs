@@ -793,19 +793,8 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 _audioStopRequested = true;
                 capture = _audioCapture;
-                writer = _audioWriter;
-                writeQueue = _audioWriteQueue;
-                writeTask = _audioFileWriteTask;
-                writeFailed = _audioWriteFailed;
-                resampleTailBytes = FlushResamplerTail(_audioPreviousSourceSample, _audioHasPreviousSourceSample, ref _audioResamplePosition);
-                audioFilePath = _currentAudioFilePath;
                 monitorCts = _audioMonitorCts;
                 monitorTask = _audioMonitorTask;
-                _audioCapture = null;
-                _audioWriter = null;
-                _audioWriteQueue = null;
-                _audioFileWriteTask = null;
-                _currentAudioFilePath = null;
                 _audioMonitorCts = null;
                 _audioMonitorTask = null;
                 _audioRestarting = false;
@@ -816,6 +805,22 @@ namespace ExpressPackingMonitoring.ViewModels
             try { capture?.Dispose(); } catch { }
             try { monitorTask?.Wait(1000); } catch { }
             try { monitorCts?.Dispose(); } catch { }
+
+            lock (_audioLock)
+            {
+                writer = _audioWriter;
+                writeQueue = _audioWriteQueue;
+                writeTask = _audioFileWriteTask;
+                writeFailed = _audioWriteFailed;
+                resampleTailBytes = FlushResamplerTail(_audioPreviousSourceSample, _audioHasPreviousSourceSample, ref _audioResamplePosition);
+                audioFilePath = _currentAudioFilePath;
+                _audioCapture = null;
+                _audioWriter = null;
+                _audioWriteQueue = null;
+                _audioFileWriteTask = null;
+                _currentAudioFilePath = null;
+            }
+
             if (resampleTailBytes != null && resampleTailBytes.Length > 0 && writeQueue != null && !writeQueue.IsAddingCompleted && !writeFailed)
             {
                 try
