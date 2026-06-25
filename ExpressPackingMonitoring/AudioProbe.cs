@@ -32,8 +32,8 @@ namespace ExpressPackingMonitoring
             {
                 int repeat = ParseRepeat(args);
                 var result = repeat <= 1
-                    ? Run(seconds, logPath, "audio_probe")
-                    : RunRepeated(seconds, repeat, logPath);
+                    ? Run(seconds, logPath, "audio_probe", args)
+                    : RunRepeated(seconds, repeat, logPath, args);
                 exitCode = result ? 0 : 2;
             }
             catch (Exception ex)
@@ -130,19 +130,32 @@ namespace ExpressPackingMonitoring
             return 15;
         }
 
-        private static bool RunRepeated(int seconds, int repeat, string summaryLogPath)
+        private sealed class ProbeVideoOptions
         {
+            public int Width { get; init; } = 320;
+            public int Height { get; init; } = 180;
+            public int Fps { get; init; } = 10;
+            public string Encoder { get; init; } = "libx264";
+            public int Cqp { get; init; } = 35;
+            public bool FromConfig { get; init; }
+        }
+
+        private static bool RunRepeated(int seconds, int repeat, string summaryLogPath, string[] args)
+        {
+            var config = LoadConfig();
+            var video = ParseVideoOptions(args, config);
             var summary = new StringBuilder();
             summary.AppendLine($"Audio probe repeated run: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
             summary.AppendLine($"DurationSeconds={seconds}");
             summary.AppendLine($"Repeat={repeat}");
+            summary.AppendLine($"Video={video.Width}x{video.Height}@{video.Fps}, encoder={video.Encoder}, cqp={video.Cqp}, fromConfig={video.FromConfig}");
 
             bool allOk = true;
             for (int i = 1; i <= repeat; i++)
             {
                 string prefix = $"audio_probe_{i:00}";
                 string runLogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"{prefix}.log");
-                bool ok = Run(seconds, runLogPath, prefix);
+                bool ok = Run(seconds, runLogPath, prefix, args);
                 allOk &= ok;
                 summary.AppendLine($"Run{i:00}={(ok ? "OK" : "FAILED")}; Log={runLogPath}");
             }
@@ -152,9 +165,10 @@ namespace ExpressPackingMonitoring
             return allOk;
         }
 
-        private static bool Run(int seconds, string logPath, string filePrefix)
+        private static bool Run(int seconds, string logPath, string filePrefix, string[] args)
         {
             var config = LoadConfig();
+            var video = ParseVideoOptions(args, config);
             using var enumerator = new MMDeviceEnumerator();
             var devices = enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active);
             using var device = ResolveAudioEndpoint(config, devices);
@@ -174,6 +188,12 @@ namespace ExpressPackingMonitoring
             log.AppendLine($"ConfiguredEndpoint={config.AudioDeviceMoniker}");
             log.AppendLine($"SelectedDevice={device.FriendlyName}");
             log.AppendLine($"SelectedEndpoint={device.ID}");
+            log.AppendLine($"VideoWidth={video.Width}");
+            log.AppendLine($"VideoHeight={video.Height}");
+            log.AppendLine($"VideoFps={video.Fps}");
+            log.AppendLine($"VideoEncoder={video.Encoder}");
+            log.AppendLine($"VideoCqp={video.Cqp}");
+            log.AppendLine($"VideoFromConfig={video.FromConfig}");
 
             int packets = 0;
             long rawBytes = 0;
@@ -270,7 +290,7 @@ namespace ExpressPackingMonitoring
             {
                 return string.IsNullOrEmpty(ffmpegPath)
                     ? (false, -1, "ffmpeg.exe not found.")
-                    : WriteSyntheticMkv(ffmpegPath, mkvPath, seconds);
+                    : WriteSyntheticMkv(ffmpegPath, mkvPath, seconds, video);
             });
             Thread.Sleep(TimeSpan.FromSeconds(seconds));
             capture.StopRecording();
@@ -382,12 +402,81 @@ namespace ExpressPackingMonitoring
             return (decodeOk, new FileInfo(mp4Path).Length, decodeOk, decodedInfo.FileBytes, decodedInfo.DurationSeconds, decodedTimeline, error);
         }
 
-        private static (bool Exited, int ExitCode, string Stderr) WriteSyntheticMkv(string ffmpegPath, string mkvPath, int seconds)
+        private static ProbeVideoOptions ParseVideoOptions(string[] args, AppConfig config)
         {
-            const int width = 320;
-            const int height = 180;
-            const int fps = 10;
-            string args = MainViewModel.BuildFFmpegArgs(width, height, fps, mkvPath, "libx264", false, 35);
+            bool fromConfig = args.Any(a => string.Equals(a, "--video-config", StringComparison.OrdinalIgnoreCase));
+            int width = fromConfig ? Math.Clamp(config.FrameWidth, 16, 7680) : 320;
+            int height = fromConfig ? Math.Clamp(config.FrameHeight, 16, 4320) : 180;
+            int fps = fromConfig ? Math.Clamp(config.Fps, 1, 120) : 10;
+            int cqp = fromConfig && config.VideoCqp > 0 ? config.VideoCqp : 35;
+            string encoder = fromConfig ? ResolveProbeEncoder(config) : "libx264";
+
+            string? size = GetArgValue(args, "--video-size");
+            if (!string.IsNullOrWhiteSpace(size))
+            {
+                var parts = size.ToLowerInvariant().Split('x', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (parts.Length == 2 && int.TryParse(parts[0], out int parsedWidth) && int.TryParse(parts[1], out int parsedHeight))
+                {
+                    width = Math.Clamp(parsedWidth, 16, 7680);
+                    height = Math.Clamp(parsedHeight, 16, 4320);
+                }
+            }
+
+            string? fpsValue = GetArgValue(args, "--video-fps");
+            if (int.TryParse(fpsValue, out int parsedFps))
+                fps = Math.Clamp(parsedFps, 1, 120);
+
+            string? encoderValue = GetArgValue(args, "--video-encoder");
+            if (!string.IsNullOrWhiteSpace(encoderValue))
+                encoder = encoderValue.Trim();
+
+            string? cqpValue = GetArgValue(args, "--video-cqp");
+            if (int.TryParse(cqpValue, out int parsedCqp))
+                cqp = Math.Clamp(parsedCqp, 1, 63);
+
+            return new ProbeVideoOptions
+            {
+                Width = width,
+                Height = height,
+                Fps = fps,
+                Encoder = encoder,
+                Cqp = cqp,
+                FromConfig = fromConfig
+            };
+        }
+
+        private static string? GetArgValue(string[] args, string name)
+        {
+            int index = Array.FindIndex(args, a => string.Equals(a, name, StringComparison.OrdinalIgnoreCase));
+            return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
+        }
+
+        private static string ResolveProbeEncoder(AppConfig config)
+        {
+            string codec = config.VideoCodec?.Trim().ToLowerInvariant() ?? "h264";
+            if (codec != "h264" && codec != "h265" && codec != "av1") codec = "h264";
+            string cpuEncoder = codec switch { "h265" => "libx265", "av1" => "libsvtav1", _ => "libx264" };
+            var validated = new HashSet<string>(config.ValidatedEncodersCache ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            string gpu = EncodingHelper.NormalizeGpuSetting(config.GpuEncoder?.Trim().ToLowerInvariant() ?? "auto");
+
+            if (gpu != "auto")
+            {
+                string requested = EncodingHelper.ResolveRequestedEncoder(gpu, codec);
+                return requested == cpuEncoder || validated.Contains(requested) ? requested : cpuEncoder;
+            }
+
+            foreach (var candidateGpu in new[] { "nvidia", "amd", "intel" })
+            {
+                string candidate = EncodingHelper.ResolveRequestedEncoder(candidateGpu, codec);
+                if (validated.Contains(candidate))
+                    return candidate;
+            }
+            return cpuEncoder;
+        }
+
+        private static (bool Exited, int ExitCode, string Stderr) WriteSyntheticMkv(string ffmpegPath, string mkvPath, int seconds, ProbeVideoOptions video)
+        {
+            string args = MainViewModel.BuildFFmpegArgs(video.Width, video.Height, video.Fps, mkvPath, video.Encoder, false, video.Cqp);
             var psi = new ProcessStartInfo
             {
                 FileName = ffmpegPath,
@@ -405,16 +494,16 @@ namespace ExpressPackingMonitoring
 
             var stderrTask = process.StandardError.ReadToEndAsync();
             var stdoutTask = process.StandardOutput.ReadToEndAsync();
-            byte[] frame = new byte[width * height * 3];
-            int totalFrames = seconds * fps;
+            byte[] frame = new byte[video.Width * video.Height * 3];
+            int totalFrames = seconds * video.Fps;
             try
             {
                 var stopwatch = Stopwatch.StartNew();
                 for (int i = 0; i < totalFrames; i++)
                 {
-                    FillBgrFrame(frame, width, height, i);
+                    FillBgrFrame(frame, video.Width, video.Height, i);
                     process.StandardInput.BaseStream.Write(frame, 0, frame.Length);
-                    double targetMs = (i + 1) * 1000.0 / fps;
+                    double targetMs = (i + 1) * 1000.0 / video.Fps;
                     int sleepMs = (int)(targetMs - stopwatch.Elapsed.TotalMilliseconds);
                     if (sleepMs > 0)
                         Thread.Sleep(sleepMs);
