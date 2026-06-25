@@ -54,6 +54,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private NAudio.CoreAudioApi.WasapiCapture _audioCapture;
         private NAudio.Wave.WaveFileWriter _audioWriter;
         private string _currentAudioFilePath;
+        private string _currentAudioLogPath;
         private CancellationTokenSource _audioMonitorCts;
         private Task _audioMonitorTask;
         private volatile bool _audioStopRequested;

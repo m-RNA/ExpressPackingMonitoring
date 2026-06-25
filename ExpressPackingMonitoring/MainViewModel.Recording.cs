@@ -151,7 +151,14 @@ namespace ExpressPackingMonitoring.ViewModels
                         });
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    WriteAudioDiagnostic($"Finalize 异常: {ex.Message}");
+                }
+                finally
+                {
+                    _currentAudioLogPath = null;
+                }
             });
             
             // 如果是在关闭窗口时发生，不要解除 Busy，防止被再次点击
@@ -352,6 +359,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 string fileName = $"{CurrentOrderId}_{DateTime.Now:yyyyMMdd_HHmmss}_{CurrentMode}.mkv";
                 string filePath = Path.Combine(dateFolder, fileName);
                 string audioFilePath = Path.ChangeExtension(filePath, ".wav");
+                _currentAudioLogPath = Path.ChangeExtension(filePath, ".audio.log");
                 _currentVideoFilePath = filePath;
                 _stopReason = "手动";
                 _recordingOrderId = CurrentOrderId;
@@ -368,8 +376,10 @@ namespace ExpressPackingMonitoring.ViewModels
 
                 if (Config.EnableAudioRecording && HasConfiguredAudioDevice())
                 {
+                    WriteAudioDiagnostic($"准备启动麦克风录制: name={Config.AudioDeviceName}, moniker={(string.IsNullOrWhiteSpace(Config.AudioDeviceMoniker) ? "(empty)" : Config.AudioDeviceMoniker)}");
                     if (!StartAudioRecording(audioFilePath))
                     {
+                        WriteAudioDiagnostic("麦克风录音启动失败");
                         ShowToast("⚠ 麦克风录音启动失败");
                         SpeakWarning("麦克风录音启动失败");
                         return;
@@ -704,6 +714,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 if (device == null)
                 {
                     Debug.WriteLine("[Audio] 未找到可用麦克风端点");
+                    WriteAudioDiagnostic("未找到可用麦克风端点");
                     return false;
                 }
 
@@ -727,11 +738,13 @@ namespace ExpressPackingMonitoring.ViewModels
                 capture.StartRecording();
                 _audioMonitorTask = Task.Run(() => AudioCaptureMonitorLoop(_audioMonitorCts.Token));
                 Debug.WriteLine($"[Audio] 开始录音: {device.FriendlyName}");
+                WriteAudioDiagnostic($"开始录音: device={device.FriendlyName}, format={capture.WaveFormat}");
                 return true;
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[Audio] 启动失败: {ex.Message}");
+                WriteAudioDiagnostic($"启动失败: {ex.Message}");
                 StopAudioRecording();
                 DeleteAudioTempFile(audioFilePath);
                 return false;
@@ -808,7 +821,10 @@ namespace ExpressPackingMonitoring.ViewModels
             capture.RecordingStopped += (_, e) =>
             {
                 if (e.Exception != null)
+                {
                     Debug.WriteLine($"[Audio] 录音停止异常: {e.Exception.Message}");
+                    WriteAudioDiagnostic($"录音停止异常: {e.Exception.Message}");
+                }
 
                 if (ShouldRestartAudioCapture())
                     _ = Task.Run(() => RestartAudioCapture("stopped"));
@@ -840,6 +856,7 @@ namespace ExpressPackingMonitoring.ViewModels
             }
             _audioBytesWritten += silenceBytes;
             Debug.WriteLine($"[Audio] 补齐录音间隙: {gapMs:F0}ms");
+            WriteAudioDiagnostic($"补齐录音间隙: {gapMs:F0}ms, silenceBytes={silenceBytes}");
         }
 
         private async Task AudioCaptureMonitorLoop(CancellationToken token)
@@ -866,6 +883,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"[Audio] 监控异常: {ex.Message}");
+                    WriteAudioDiagnostic($"监控异常: {ex.Message}");
                 }
             }
         }
@@ -899,6 +917,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 if (device == null)
                 {
                     Debug.WriteLine($"[Audio] 重启失败({reason}): 未找到麦克风端点");
+                    WriteAudioDiagnostic($"重启失败({reason}): 未找到麦克风端点");
                     return;
                 }
 
@@ -916,10 +935,12 @@ namespace ExpressPackingMonitoring.ViewModels
 
                 capture.StartRecording();
                 Debug.WriteLine($"[Audio] 已重启录音({reason}): {device.FriendlyName}");
+                WriteAudioDiagnostic($"已重启录音({reason}): device={device.FriendlyName}, format={capture.WaveFormat}");
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[Audio] 重启异常({reason}): {ex.Message}");
+                WriteAudioDiagnostic($"重启异常({reason}): {ex.Message}");
             }
             finally
             {
@@ -1135,12 +1156,16 @@ namespace ExpressPackingMonitoring.ViewModels
 
                 bool ok = process.ExitCode == 0;
                 if (!ok)
+                {
                     Debug.WriteLine($"[MkvToMp4] 音轨校验失败: {stderr}");
+                    WriteAudioDiagnostic($"MP4 音轨校验失败: {stderr}");
+                }
                 return ok;
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[MkvToMp4] 音轨校验异常: {ex.Message}");
+                WriteAudioDiagnostic($"MP4 音轨校验异常: {ex.Message}");
                 return false;
             }
         }
@@ -1152,12 +1177,28 @@ namespace ExpressPackingMonitoring.ViewModels
             try
             {
                 using var reader = new WaveFileReader(audioPath);
-                Debug.WriteLine($"[Audio] WAV 时长={reader.TotalTime.TotalSeconds:F1}s 大小={new FileInfo(audioPath).Length} bytes 写入字节={_audioBytesWritten}");
+                string summary = $"WAV 时长={reader.TotalTime.TotalSeconds:F1}s 大小={new FileInfo(audioPath).Length} bytes 写入字节={_audioBytesWritten}";
+                Debug.WriteLine($"[Audio] {summary}");
+                WriteAudioDiagnostic(summary);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[Audio] WAV 检查失败: {ex.Message}");
+                WriteAudioDiagnostic($"WAV 检查失败: {ex.Message}");
             }
+        }
+
+        private void WriteAudioDiagnostic(string message)
+        {
+            string? logPath = _currentAudioLogPath;
+            if (string.IsNullOrWhiteSpace(logPath)) return;
+
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+                File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {message}{Environment.NewLine}");
+            }
+            catch { }
         }
 
         private static string FindFFmpeg()
