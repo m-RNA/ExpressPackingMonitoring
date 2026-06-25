@@ -709,35 +709,23 @@ namespace ExpressPackingMonitoring.ViewModels
 
                 Directory.CreateDirectory(Path.GetDirectoryName(audioFilePath)!);
 
-                var capture = new WasapiCapture(device)
-                {
-                    ShareMode = AudioClientShareMode.Shared
-                };
+                var capture = CreateWasapiCapture(device);
                 var writer = new WaveFileWriter(audioFilePath, capture.WaveFormat);
-
-                capture.DataAvailable += (_, e) =>
-                {
-                    lock (_audioLock)
-                    {
-                        if (_audioWriter == null) return;
-                        _audioWriter.Write(e.Buffer, 0, e.BytesRecorded);
-                        _audioWriter.Flush();
-                    }
-                };
-                capture.RecordingStopped += (_, e) =>
-                {
-                    if (e.Exception != null)
-                        Debug.WriteLine($"[Audio] 录音停止异常: {e.Exception.Message}");
-                };
 
                 lock (_audioLock)
                 {
                     _audioCapture = capture;
                     _audioWriter = writer;
                     _currentAudioFilePath = audioFilePath;
+                    _audioStopRequested = false;
+                    _audioRestarting = false;
+                    _lastAudioDataAt = DateTime.Now;
+                    _audioBytesWritten = 0;
+                    _audioMonitorCts = new CancellationTokenSource();
                 }
 
                 capture.StartRecording();
+                _audioMonitorTask = Task.Run(() => AudioCaptureMonitorLoop(_audioMonitorCts.Token));
                 Debug.WriteLine($"[Audio] 开始录音: {device.FriendlyName}");
                 return true;
             }
@@ -755,19 +743,30 @@ namespace ExpressPackingMonitoring.ViewModels
             WasapiCapture? capture;
             WaveFileWriter? writer;
             string? audioFilePath;
+            CancellationTokenSource? monitorCts;
+            Task? monitorTask;
 
             lock (_audioLock)
             {
+                _audioStopRequested = true;
                 capture = _audioCapture;
                 writer = _audioWriter;
                 audioFilePath = _currentAudioFilePath;
+                monitorCts = _audioMonitorCts;
+                monitorTask = _audioMonitorTask;
                 _audioCapture = null;
                 _audioWriter = null;
                 _currentAudioFilePath = null;
+                _audioMonitorCts = null;
+                _audioMonitorTask = null;
+                _audioRestarting = false;
             }
 
+            try { monitorCts?.Cancel(); } catch { }
             try { capture?.StopRecording(); } catch { }
             try { capture?.Dispose(); } catch { }
+            try { monitorTask?.Wait(1000); } catch { }
+            try { monitorCts?.Dispose(); } catch { }
 
             lock (_audioLock)
             {
@@ -785,6 +784,150 @@ namespace ExpressPackingMonitoring.ViewModels
 
             DeleteAudioTempFile(audioFilePath);
             return null;
+        }
+
+        private WasapiCapture CreateWasapiCapture(MMDevice device)
+        {
+            var capture = new WasapiCapture(device)
+            {
+                ShareMode = AudioClientShareMode.Shared
+            };
+
+            capture.DataAvailable += (_, e) =>
+            {
+                lock (_audioLock)
+                {
+                    if (_audioWriter == null || e.BytesRecorded <= 0) return;
+                    PadAudioGapIfNeeded(DateTime.Now);
+                    _audioWriter.Write(e.Buffer, 0, e.BytesRecorded);
+                    _audioWriter.Flush();
+                    _audioBytesWritten += e.BytesRecorded;
+                    _lastAudioDataAt = DateTime.Now;
+                }
+            };
+            capture.RecordingStopped += (_, e) =>
+            {
+                if (e.Exception != null)
+                    Debug.WriteLine($"[Audio] 录音停止异常: {e.Exception.Message}");
+
+                if (ShouldRestartAudioCapture())
+                    _ = Task.Run(() => RestartAudioCapture("stopped"));
+            };
+
+            return capture;
+        }
+
+        private void PadAudioGapIfNeeded(DateTime now)
+        {
+            if (_audioWriter == null || _lastAudioDataAt == DateTime.MinValue) return;
+
+            double gapMs = (now - _lastAudioDataAt).TotalMilliseconds;
+            if (gapMs <= 750) return;
+
+            int bytesPerSecond = _audioWriter.WaveFormat.AverageBytesPerSecond;
+            int blockAlign = Math.Max(1, _audioWriter.WaveFormat.BlockAlign);
+            int silenceBytes = (int)(bytesPerSecond * (gapMs / 1000.0));
+            silenceBytes -= silenceBytes % blockAlign;
+            if (silenceBytes <= 0) return;
+
+            byte[] silence = new byte[Math.Min(silenceBytes, bytesPerSecond)];
+            int remaining = silenceBytes;
+            while (remaining > 0)
+            {
+                int chunk = Math.Min(remaining, silence.Length);
+                _audioWriter.Write(silence, 0, chunk);
+                remaining -= chunk;
+            }
+            _audioBytesWritten += silenceBytes;
+            Debug.WriteLine($"[Audio] 补齐录音间隙: {gapMs:F0}ms");
+        }
+
+        private async Task AudioCaptureMonitorLoop(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(2000, token);
+                    if (token.IsCancellationRequested) break;
+
+                    DateTime lastDataAt;
+                    bool shouldMonitor;
+                    lock (_audioLock)
+                    {
+                        shouldMonitor = !_audioStopRequested && _audioWriter != null && _audioCapture != null;
+                        lastDataAt = _lastAudioDataAt;
+                    }
+
+                    if (shouldMonitor && (DateTime.Now - lastDataAt).TotalSeconds > 5)
+                        RestartAudioCapture("no-data");
+                }
+                catch (OperationCanceledException) { break; }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[Audio] 监控异常: {ex.Message}");
+                }
+            }
+        }
+
+        private bool ShouldRestartAudioCapture()
+        {
+            lock (_audioLock)
+            {
+                return !_audioStopRequested && _audioWriter != null && !_audioRestarting;
+            }
+        }
+
+        private void RestartAudioCapture(string reason)
+        {
+            WasapiCapture? oldCapture = null;
+
+            lock (_audioLock)
+            {
+                if (_audioStopRequested || _audioWriter == null || _audioRestarting) return;
+                _audioRestarting = true;
+                oldCapture = _audioCapture;
+                _audioCapture = null;
+            }
+
+            try { oldCapture?.StopRecording(); } catch { }
+            try { oldCapture?.Dispose(); } catch { }
+
+            try
+            {
+                var device = ResolveAudioEndpoint();
+                if (device == null)
+                {
+                    Debug.WriteLine($"[Audio] 重启失败({reason}): 未找到麦克风端点");
+                    return;
+                }
+
+                var capture = CreateWasapiCapture(device);
+                lock (_audioLock)
+                {
+                    if (_audioStopRequested || _audioWriter == null)
+                    {
+                        try { capture.Dispose(); } catch { }
+                        return;
+                    }
+                    _audioCapture = capture;
+                    _lastAudioDataAt = DateTime.Now;
+                }
+
+                capture.StartRecording();
+                Debug.WriteLine($"[Audio] 已重启录音({reason}): {device.FriendlyName}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Audio] 重启异常({reason}): {ex.Message}");
+            }
+            finally
+            {
+                lock (_audioLock)
+                {
+                    _audioRestarting = false;
+                }
+            }
         }
 
         private MMDevice? ResolveAudioEndpoint()
@@ -929,19 +1072,21 @@ namespace ExpressPackingMonitoring.ViewModels
                 return $"-y -i \"{mkvPath}\" -vcodec copy -acodec copy \"{mp4Path}\"";
 
             int offsetMs = Math.Clamp(Config.AudioSyncOffsetMs, -5000, 5000);
-            string audioMap = "1:a:0";
-            string filter = "";
+            string audioMap = "[a]";
+            string filter;
 
             if (offsetMs > 0)
             {
-                filter = $" -filter_complex \"[1:a]adelay={offsetMs}:all=1[a]\"";
-                audioMap = "[a]";
+                filter = $" -filter_complex \"[1:a]adelay={offsetMs}:all=1,apad[a]\"";
             }
             else if (offsetMs < 0)
             {
                 double trimStartSec = Math.Abs(offsetMs) / 1000.0;
-                filter = $" -filter_complex \"[1:a]atrim=start={trimStartSec:0.###},asetpts=PTS-STARTPTS[a]\"";
-                audioMap = "[a]";
+                filter = $" -filter_complex \"[1:a]atrim=start={trimStartSec:0.###},asetpts=PTS-STARTPTS,apad[a]\"";
+            }
+            else
+            {
+                filter = " -filter_complex \"[1:a]apad[a]\"";
             }
 
             return $"-y -i \"{mkvPath}\" -i \"{audioPath}\"{filter} -map 0:v:0 -map \"{audioMap}\" -c:v copy -c:a aac -b:a 128k -shortest \"{mp4Path}\"";
