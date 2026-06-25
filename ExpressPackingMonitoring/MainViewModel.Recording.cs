@@ -739,10 +739,12 @@ namespace ExpressPackingMonitoring.ViewModels
                     _audioStopRequested = false;
                     _audioRestarting = false;
                     _lastAudioDataAt = DateTime.Now;
+                    _lastAudioPacketAt = DateTime.Now;
                     _audioBytesWritten = 0;
                     _audioPeakSinceLastCheck = 0;
                     _audioBytesSinceLastCheck = 0;
                     _silentAudioCheckCount = 0;
+                    _audioConvertFailureCount = 0;
                     _audioSelectedSourceChannel = -1;
                     _audioMonitorCts = new CancellationTokenSource();
                 }
@@ -825,14 +827,18 @@ namespace ExpressPackingMonitoring.ViewModels
                 lock (_audioLock)
                 {
                     if (_audioWriter == null || e.BytesRecorded <= 0) return;
+                    _lastAudioPacketAt = DateTime.Now;
                     int selectedChannel = _audioSelectedSourceChannel;
                     byte[]? pcmBytes = ConvertCaptureBufferToPcm16(e.Buffer, e.BytesRecorded, capture.WaveFormat, _audioWriter.WaveFormat, ref selectedChannel);
                     if (pcmBytes == null || pcmBytes.Length == 0)
                     {
-                        diagnosticMessage = $"麦克风格式暂不支持转换: format={capture.WaveFormat}, bytes={e.BytesRecorded}";
+                        _audioConvertFailureCount++;
+                        if (_audioConvertFailureCount == 1 || _audioConvertFailureCount % 10 == 0)
+                            diagnosticMessage = $"麦克风格式暂不支持转换: format={capture.WaveFormat}, bytes={e.BytesRecorded}, failures={_audioConvertFailureCount}";
                     }
                     else
                     {
+                        _audioConvertFailureCount = 0;
                         if (selectedChannel != _audioSelectedSourceChannel)
                         {
                             _audioSelectedSourceChannel = selectedChannel;
@@ -1112,6 +1118,8 @@ namespace ExpressPackingMonitoring.ViewModels
                     {
                         shouldMonitor = !_audioStopRequested && _audioWriter != null && _audioCapture != null;
                         lastDataAt = _lastAudioDataAt;
+                        if (_lastAudioPacketAt > lastDataAt)
+                            lastDataAt = _lastAudioPacketAt;
                         peak = _audioPeakSinceLastCheck;
                         bytes = _audioBytesSinceLastCheck;
                         _audioPeakSinceLastCheck = 0;
@@ -1191,9 +1199,11 @@ namespace ExpressPackingMonitoring.ViewModels
                     }
                     _audioCapture = capture;
                     _lastAudioDataAt = DateTime.Now;
+                    _lastAudioPacketAt = DateTime.Now;
                     _audioPeakSinceLastCheck = 0;
                     _audioBytesSinceLastCheck = 0;
                     _silentAudioCheckCount = 0;
+                    _audioConvertFailureCount = 0;
                 }
 
                 capture.StartRecording();

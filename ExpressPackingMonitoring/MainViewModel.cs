@@ -60,10 +60,12 @@ namespace ExpressPackingMonitoring.ViewModels
         private volatile bool _audioStopRequested;
         private bool _audioRestarting;
         private DateTime _lastAudioDataAt = DateTime.MinValue;
+        private DateTime _lastAudioPacketAt = DateTime.MinValue;
         private long _audioBytesWritten;
         private short _audioPeakSinceLastCheck;
         private long _audioBytesSinceLastCheck;
         private int _silentAudioCheckCount;
+        private int _audioConvertFailureCount;
         private int _audioSelectedSourceChannel = -1;
 
         private Mat _previousCheckFrame = new Mat();
