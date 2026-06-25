@@ -954,7 +954,11 @@ namespace ExpressPackingMonitoring.ViewModels
                         }
                         if (now < _audioSuppressUntil)
                             Array.Clear(pcmBytes, 0, pcmBytes.Length);
-                        PadAudioGapIfNeeded(now);
+                        var gapDiagnostic = PadAudioGapIfNeeded(now);
+                        if (!string.IsNullOrEmpty(gapDiagnostic))
+                            diagnosticMessage = string.IsNullOrEmpty(diagnosticMessage)
+                                ? gapDiagnostic
+                                : $"{diagnosticMessage}; {gapDiagnostic}";
                         UpdateAudioLevelStats(pcmBytes, pcmBytes.Length, _audioWriter.WaveFormat);
                         _audioBytesWritten += EnqueueAudioBytes(pcmBytes);
                         _lastAudioDataAt = DateTime.Now;
@@ -978,18 +982,18 @@ namespace ExpressPackingMonitoring.ViewModels
             return capture;
         }
 
-        private void PadAudioGapIfNeeded(DateTime now)
+        private string? PadAudioGapIfNeeded(DateTime now)
         {
-            if (_audioWriter == null || _lastAudioDataAt == DateTime.MinValue) return;
+            if (_audioWriter == null || _lastAudioDataAt == DateTime.MinValue) return null;
 
             double gapMs = (now - _lastAudioDataAt).TotalMilliseconds;
-            if (gapMs <= 750) return;
+            if (gapMs <= 750) return null;
 
             int bytesPerSecond = _audioWriter.WaveFormat.AverageBytesPerSecond;
             int blockAlign = Math.Max(1, _audioWriter.WaveFormat.BlockAlign);
             int silenceBytes = (int)(bytesPerSecond * (gapMs / 1000.0));
             silenceBytes -= silenceBytes % blockAlign;
-            if (silenceBytes <= 0) return;
+            if (silenceBytes <= 0) return null;
 
             byte[] silence = new byte[Math.Min(silenceBytes, bytesPerSecond)];
             int remaining = silenceBytes;
@@ -1008,7 +1012,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 remaining -= chunk;
             }
             Debug.WriteLine($"[Audio] 补齐录音间隙: {gapMs:F0}ms");
-            WriteAudioDiagnostic($"补齐录音间隙: {gapMs:F0}ms, silenceBytes={silenceBytes}");
+            return $"补齐录音间隙: {gapMs:F0}ms, silenceBytes={silenceBytes}";
         }
 
         private int EnqueueAudioBytes(byte[] bytes)
