@@ -444,8 +444,22 @@ namespace ExpressPackingMonitoring.ViewModels
             string encoder = ResolveEncoder();
             bool hasAudio = false;
             string requestedEncoder = encoder;
+            string? firstError = null;
 
             var (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, encoder, hasAudio);
+            if (!ok && !token.IsCancellationRequested)
+            {
+                firstError = err;
+                string fallbackEncoder = GetCpuEncoder();
+                if (!string.Equals(encoder, fallbackEncoder, StringComparison.OrdinalIgnoreCase))
+                {
+                    WriteAudioDiagnostic($"视频编码器启动失败，改用 CPU 软编码重试: requested={encoder}, fallback={fallbackEncoder}, error={err}");
+                    try { if (File.Exists(filePath) && new FileInfo(filePath).Length == 0) File.Delete(filePath); } catch { }
+
+                    encoder = fallbackEncoder;
+                    (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, encoder, hasAudio);
+                }
+            }
             
             if (ok)
             {
@@ -461,7 +475,9 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 DeleteAudioTempFile(StopAudioRecording());
                 try { if (File.Exists(filePath) && new FileInfo(filePath).Length == 0) File.Delete(filePath); } catch { }
-                string errMsg = string.IsNullOrEmpty(err) ? "" : $"\n{err}";
+                string errorDetail = string.IsNullOrWhiteSpace(firstError) || string.Equals(firstError, err, StringComparison.Ordinal)
+                    ? err
+                    : $"{firstError}\nCPU 软编码重试: {err}";
 
                 _ = Application.Current.Dispatcher.BeginInvoke(() =>
                 {
@@ -484,7 +500,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     ShowToast($"⚠ 录制启动失败");
                     SpeakWarning("录制失败");
                     MessageBox.Show(
-                        $"当前设置的编码器无法完成录制，视频未保存。\n\n请求编码器: {EncodingHelper.GetEncoderLabel(requestedEncoder)}\n错误详情: {err}\n\n建议在设置中更换编码器或尝试 CPU 软编码。",
+                        $"当前设置的编码器无法完成录制，视频未保存。\n\n请求编码器: {EncodingHelper.GetEncoderLabel(requestedEncoder)}\n错误详情: {errorDetail}\n\n已自动尝试 CPU 软编码；若仍失败，请检查摄像头画面和存储路径。",
                         "录制失败", MessageBoxButton.OK, MessageBoxImage.Warning);
                 });
             }
@@ -636,7 +652,12 @@ namespace ExpressPackingMonitoring.ViewModels
                 return (false, finalErr);
             }
             catch (OperationCanceledException) { return (anyFrameWritten, ""); }
-            catch (IOException) { return (anyFrameWritten, ""); }
+            catch (IOException ex)
+            {
+                return token.IsCancellationRequested && anyFrameWritten
+                    ? (true, "")
+                    : (false, ex.Message);
+            }
             catch (Exception ex) { return (false, ex.Message); }
             finally
             {
