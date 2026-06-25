@@ -1040,7 +1040,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="语音引擎" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="Kokoro 为本地离线模型；Edge TTS 使用在线神经语音，失败时回退系统语音。"
+                                            <TextBlock Text="默认使用 Edge TTS 在线神经语音；Kokoro 需自行准备本地运行依赖。"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <ComboBox Grid.Column="1"
@@ -1048,8 +1048,8 @@
                                                   HorizontalAlignment="Left"
                                                   SelectedValue="{Binding Config.AiTtsEngine}"
                                                   SelectedValuePath="Tag">
-                                            <ComboBoxItem Content="Kokoro 本地模型" Tag="Kokoro"/>
                                             <ComboBoxItem Content="Edge TTS 在线语音" Tag="Edge"/>
+                                            <ComboBoxItem Content="Kokoro 本地模型" Tag="Kokoro"/>
                                         </ComboBox>
                                     </Grid>
 

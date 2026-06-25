@@ -52,8 +52,8 @@ namespace ExpressPackingMonitoring.Services
         public int TtsCacheMaxSizeMB { get; set; } = 500;
 
         public bool EnableSoundPrompt { get; set; } = true;
-        public bool EnableAiTts { get; set; } = false;
-        public string AiTtsEngine { get; set; } = "Kokoro";
+        public bool EnableAiTts { get; set; } = true;
+        public string AiTtsEngine { get; set; } = "Edge";
         public int AiTtsSpeakerId { get; set; } = 51;
         public int AiTtsWarningSpeakerId { get; set; } = 50;
         public float AiTtsSpeed { get; set; } = 1.0f;

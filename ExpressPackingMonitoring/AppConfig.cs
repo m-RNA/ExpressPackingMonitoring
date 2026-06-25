@@ -102,8 +102,8 @@ namespace ExpressPackingMonitoring.ViewModels
         public int TranscodeCacheMaxMB { get; set; } = 1024;  // 转码缓存上限(MB)，超出后按时间清理最旧的
 
         // AI 语音合成
-        public bool EnableAiTts { get; set; } = false;
-        public string AiTtsEngine { get; set; } = "Kokoro"; // "Kokoro" or "Edge"
+        public bool EnableAiTts { get; set; } = true;
+        public string AiTtsEngine { get; set; } = "Edge"; // "Kokoro" or "Edge"
         public int AiTtsSpeakerId { get; set; } = 51;        // 普通播报声线
         public int AiTtsWarningSpeakerId { get; set; } = 50;  // 警告播报声线
         public float AiTtsSpeed { get; set; } = 1.0f;

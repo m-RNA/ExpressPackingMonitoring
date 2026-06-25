@@ -632,7 +632,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 Config.VideoCqp = 25;
             Config.AudioSyncOffsetMs = Math.Clamp(Config.AudioSyncOffsetMs, -5000, 5000);
             if (string.IsNullOrWhiteSpace(Config.AiTtsEngine))
-                Config.AiTtsEngine = "Kokoro";
+                Config.AiTtsEngine = "Edge";
             if (string.IsNullOrWhiteSpace(Config.EdgeTtsVoice))
                 Config.EdgeTtsVoice = "zh-CN-XiaoxiaoNeural";
             if (string.IsNullOrWhiteSpace(Config.EdgeTtsWarningVoice))
