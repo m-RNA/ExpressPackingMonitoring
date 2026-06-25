@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Diagnostics;
@@ -73,6 +74,10 @@ namespace ExpressPackingMonitoring
             double resamplePosition = 0;
             short previousSourceSample = 0;
             bool hasPreviousSourceSample = false;
+            bool writeFailed = false;
+            bool queueFull = false;
+            bool writeCompleted = false;
+            string? writeError = null;
             DateTime lastPacketAt = DateTime.MinValue;
             using var capture = new WasapiCapture(device, true, 100)
             {
@@ -80,6 +85,25 @@ namespace ExpressPackingMonitoring
             };
             var writerFormat = MainViewModel.CreatePcm16WaveFormat(capture.WaveFormat);
             var writer = new WaveFileWriter(wavPath, writerFormat);
+            using var writeQueue = new BlockingCollection<byte[]>(boundedCapacity: 150);
+            var writeTask = System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    foreach (var chunk in writeQueue.GetConsumingEnumerable())
+                        writer.Write(chunk, 0, chunk.Length);
+                    writer.Flush();
+                }
+                catch (Exception ex)
+                {
+                    writeFailed = true;
+                    writeError = ex.Message;
+                }
+                finally
+                {
+                    try { writer.Dispose(); } catch { }
+                }
+            });
 
             log.AppendLine($"SourceFormat={capture.WaveFormat}");
             log.AppendLine($"WavFormat={writerFormat}");
@@ -115,8 +139,13 @@ namespace ExpressPackingMonitoring
                 if (pcmBytes == null || pcmBytes.Length == 0)
                     return;
 
+                if (!writeQueue.TryAdd(pcmBytes))
+                {
+                    queueFull = true;
+                    writeFailed = true;
+                    return;
+                }
                 bytes += pcmBytes.Length;
-                writer.Write(pcmBytes, 0, pcmBytes.Length);
                 if (MainViewModel.TryGetAudioPeak(pcmBytes, pcmBytes.Length, writerFormat, out short packetPeak) && packetPeak > peak)
                     peak = packetPeak;
             };
@@ -138,11 +167,20 @@ namespace ExpressPackingMonitoring
             byte[]? tailBytes = MainViewModel.FlushResamplerTail(previousSourceSample, hasPreviousSourceSample, ref resamplePosition);
             if (tailBytes != null && tailBytes.Length > 0)
             {
-                bytes += tailBytes.Length;
-                writer.Write(tailBytes, 0, tailBytes.Length);
+                if (!writeQueue.TryAdd(tailBytes))
+                {
+                    queueFull = true;
+                    writeFailed = true;
+                }
+                else
+                {
+                    bytes += tailBytes.Length;
+                }
             }
-            writer.Flush();
-            writer.Dispose();
+            writeQueue.CompleteAdding();
+            writeCompleted = writeTask.Wait(5000);
+            if (!writeCompleted)
+                writeFailed = true;
 
             var wavInfo = ReadWavInfo(wavPath);
             var wavTimeline = ReadWavTimeline(wavPath);
@@ -150,6 +188,8 @@ namespace ExpressPackingMonitoring
             bool ok = stoppedException == null
                 && videoInfo.Exited
                 && videoInfo.ExitCode == 0
+                && !writeFailed
+                && writeCompleted
                 && packets > 0
                 && bytes > 0
                 && gapCount == 0
@@ -166,6 +206,10 @@ namespace ExpressPackingMonitoring
             log.AppendLine($"GapCount={gapCount}");
             log.AppendLine($"MaxGapMs={maxGapMs:F0}");
             log.AppendLine($"WavValid={wavInfo.Valid}");
+            log.AppendLine($"WavWriterCompleted={writeCompleted}");
+            log.AppendLine($"WavWriterFailed={writeFailed}");
+            log.AppendLine($"WavWriterQueueFull={queueFull}");
+            log.AppendLine($"WavWriterError={writeError ?? "(none)"}");
             log.AppendLine($"WavBytes={wavInfo.FileBytes}");
             log.AppendLine($"WavDurationSeconds={wavInfo.DurationSeconds:F2}");
             log.AppendLine($"WavError={wavInfo.Error ?? "(none)"}");
