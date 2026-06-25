@@ -47,6 +47,8 @@ namespace ExpressPackingMonitoring
             using var enumerator = new MMDeviceEnumerator();
             var devices = enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active);
             using var device = ResolveAudioEndpoint(config, devices);
+            string wavPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "audio_probe.wav");
+            try { if (File.Exists(wavPath)) File.Delete(wavPath); } catch { }
 
             var log = new StringBuilder();
             log.AppendLine($"Audio probe started: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
@@ -66,10 +68,12 @@ namespace ExpressPackingMonitoring
             {
                 ShareMode = AudioClientShareMode.Shared
             };
+            var writer = new WaveFileWriter(wavPath, capture.WaveFormat);
 
             log.AppendLine($"SourceFormat={capture.WaveFormat}");
             log.AppendLine("WasapiEventSync=true");
             log.AppendLine("BufferMs=100");
+            log.AppendLine($"WavPath={wavPath}");
 
             capture.DataAvailable += (_, e) =>
             {
@@ -87,6 +91,7 @@ namespace ExpressPackingMonitoring
                 lastPacketAt = now;
                 packets++;
                 bytes += e.BytesRecorded;
+                writer.Write(e.Buffer, 0, e.BytesRecorded);
                 if (TryGetPeak(e.Buffer, e.BytesRecorded, capture.WaveFormat, out short packetPeak) && packetPeak > peak)
                     peak = packetPeak;
             };
@@ -97,17 +102,44 @@ namespace ExpressPackingMonitoring
             capture.StartRecording();
             Thread.Sleep(TimeSpan.FromSeconds(seconds));
             capture.StopRecording();
+            writer.Flush();
+            writer.Dispose();
 
-            bool ok = stoppedException == null && packets > 0 && bytes > 0 && gapCount == 0;
+            var wavInfo = ReadWavInfo(wavPath);
+            bool ok = stoppedException == null
+                && packets > 0
+                && bytes > 0
+                && gapCount == 0
+                && wavInfo.Valid
+                && wavInfo.DurationSeconds >= seconds * 0.8;
             log.AppendLine($"Packets={packets}");
             log.AppendLine($"Bytes={bytes}");
             log.AppendLine($"Peak={peak}");
             log.AppendLine($"GapCount={gapCount}");
             log.AppendLine($"MaxGapMs={maxGapMs:F0}");
+            log.AppendLine($"WavValid={wavInfo.Valid}");
+            log.AppendLine($"WavBytes={wavInfo.FileBytes}");
+            log.AppendLine($"WavDurationSeconds={wavInfo.DurationSeconds:F2}");
+            log.AppendLine($"WavError={wavInfo.Error ?? "(none)"}");
             log.AppendLine($"StoppedException={stoppedException?.Message ?? "(none)"}");
             log.AppendLine($"Result={(ok ? "OK" : "FAILED")}");
             File.WriteAllText(logPath, log.ToString(), Encoding.UTF8);
             return ok;
+        }
+
+        private static (bool Valid, long FileBytes, double DurationSeconds, string? Error) ReadWavInfo(string wavPath)
+        {
+            try
+            {
+                if (!File.Exists(wavPath))
+                    return (false, 0, 0, "File not found.");
+                using var reader = new WaveFileReader(wavPath);
+                return (reader.Length > 0, new FileInfo(wavPath).Length, reader.TotalTime.TotalSeconds, null);
+            }
+            catch (Exception ex)
+            {
+                return (false, File.Exists(wavPath) ? new FileInfo(wavPath).Length : 0, 0, ex.Message);
+            }
         }
 
         private static AppConfig LoadConfig()
