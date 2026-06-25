@@ -20,6 +20,7 @@ namespace ExpressPackingMonitoring.Services
         public string Text { get; set; } = string.Empty;
         public bool IsWarning { get; set; }
         public int RepeatCount { get; set; } = 1;
+        public bool PreferImmediateAiGeneration { get; set; }
     }
 
     public class SpeechService : IDisposable
@@ -244,7 +245,7 @@ namespace ExpressPackingMonitoring.Services
 
                         if (EnableAiTts)
                         {
-                            SpeakWithAiTts(fullText, req.IsWarning);
+                            SpeakWithAiTts(fullText, req.IsWarning, req.PreferImmediateAiGeneration);
                         }
                         else
                         {
@@ -278,7 +279,7 @@ namespace ExpressPackingMonitoring.Services
             return true;
         }
 
-        private bool SpeakWithAiTts(string text, bool isWarning)
+        private bool SpeakWithAiTts(string text, bool isWarning, bool preferImmediateGeneration)
         {
             text = PreprocessTextForTts(text);
             string voiceKey = GetCurrentVoiceKey(isWarning);
@@ -287,10 +288,22 @@ namespace ExpressPackingMonitoring.Services
             Debug.WriteLine($"[SpeechService] {AiTtsEngine}: voice={voiceKey}, speed={AiTtsSpeed}, text=\"{text}\"");
 
             string cacheKey = GetCacheKey(text, AiTtsSpeed, voiceKey, AiTtsEngine);
-            string? cachePath = GetCachePath(cacheKey, extension);
-            if (cachePath != null && File.Exists(cachePath))
+            string cachePath = GetCachePath(cacheKey, extension);
+            if (File.Exists(cachePath))
             {
                 Debug.WriteLine($"[SpeechService] Cache HIT: {cacheKey}");
+                if (!_speechCancelRequested && !_isDisposed)
+                {
+                    if (IsEdgeTtsEngine)
+                        PlayAudioFileBlocking(cachePath);
+                    else
+                        PlayWavBlocking(File.ReadAllBytes(cachePath));
+                }
+                return true;
+            }
+
+            if (preferImmediateGeneration && TryGenerateAiCache(text, isWarning, cachePath))
+            {
                 if (!_speechCancelRequested && !_isDisposed)
                 {
                     if (IsEdgeTtsEngine)
@@ -306,17 +319,83 @@ namespace ExpressPackingMonitoring.Services
             PreGenerateCacheInternal(text, isWarning);
             return true;
         }
+
+        private bool TryGenerateAiCache(string text, bool isWarning, string cachePath)
+        {
+            try
+            {
+                WaitWhilePaused();
+                if (_isDisposed || _speechCancelRequested) return false;
+
+                if (IsEdgeTtsEngine)
+                {
+                    GenerateEdgeTtsFile(text, isWarning, cachePath);
+                }
+                else
+                {
+                    int sid = isWarning ? AiTtsWarningSpeakerId : AiTtsSpeakerId;
+                    lock (_kokoroLock)
+                    {
+                        EnsureKokoroLoaded();
+                        var tts = _kokoroTts;
+                        if (tts == null) return false;
+                        _lastTtsUseTime = DateTime.Now;
+
+                        var audio = tts.Generate(text, AiTtsSpeed, sid);
+                        if (audio == null || audio.NumSamples <= 0)
+                        {
+                            audio?.Dispose();
+                            return false;
+                        }
+
+                        try
+                        {
+                            File.WriteAllBytes(cachePath, BuildWav16(audio.Samples, audio.SampleRate));
+                        }
+                        finally
+                        {
+                            audio.Dispose();
+                        }
+                    }
+                }
+
+                if (TtsCacheMaxSizeMB > 0)
+                    CleanupCache();
+                return File.Exists(cachePath);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[SpeechService] Immediate AI generation error: {ex.Message}");
+                return false;
+            }
+        }
         private void GenerateEdgeTtsFile(string text, bool isWarning, string outputPath)
         {
             string voice = isWarning ? EdgeTtsWarningVoice : EdgeTtsVoice;
             if (string.IsNullOrWhiteSpace(voice))
                 voice = isWarning ? "zh-CN-YunxiNeural" : "zh-CN-XiaoxiaoNeural";
 
-            string tempPath = outputPath + ".tmp";
+            string tempPath = Path.Combine(
+                Path.GetDirectoryName(outputPath) ?? AppDomain.CurrentDomain.BaseDirectory,
+                Path.GetFileNameWithoutExtension(outputPath) + ".tmp" + Path.GetExtension(outputPath));
             if (File.Exists(tempPath)) File.Delete(tempPath);
 
-            var communicate = new Communicate(text, voice, ToEdgeRate(AiTtsSpeed), "+0%", "+0Hz", null);
-            communicate.Save(tempPath).GetAwaiter().GetResult();
+            var client = new EdgeTTSClient(false, false, 0);
+            try
+            {
+                var result = client.SynthesisAsync(text, voice, "+0Hz", ToEdgeRate(AiTtsSpeed), "+0%")
+                    .GetAwaiter()
+                    .GetResult();
+
+                if (result.Code != ResultCode.Success || result.Data == null || result.Data.Length == 0)
+                    throw new InvalidOperationException($"Edge TTS failed: {result.Code} {result.Message}");
+
+                File.WriteAllBytes(tempPath, result.Data.ToArray());
+            }
+            finally
+            {
+                try { client.Dispose(); } catch { }
+            }
 
             if (!File.Exists(tempPath) || new FileInfo(tempPath).Length == 0)
                 throw new InvalidOperationException("Edge TTS did not create audio output.");
@@ -379,7 +458,7 @@ namespace ExpressPackingMonitoring.Services
             Directory.CreateDirectory(_ttsCacheDir);
         }
 
-        private string? GetCachePath(string cacheKey, string extension)
+        private string GetCachePath(string cacheKey, string extension)
         {
             EnsureTtsCacheDir();
             string path = Path.Combine(_ttsCacheDir!, cacheKey + extension);
@@ -860,6 +939,19 @@ namespace ExpressPackingMonitoring.Services
             if (!EnableSoundPrompt) return;
             if (cancelPrevious) Stop();
             EnqueueSpeechRequest(new SpeechRequest { Text = text, IsWarning = false, RepeatCount = 1 });
+        }
+
+        public void Preview(string text)
+        {
+            if (!EnableSoundPrompt) return;
+            Stop();
+            EnqueueSpeechRequest(new SpeechRequest
+            {
+                Text = text,
+                IsWarning = false,
+                RepeatCount = 1,
+                PreferImmediateAiGeneration = true
+            });
         }
 
         public void SpeakWarning(string text, int repeatCount = 1, bool cancelPrevious = true)

@@ -1102,10 +1102,14 @@
                                             <TextBlock Text="例如 zh-CN-XiaoxiaoNeural，切换到 Edge TTS 时使用。"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
-                                        <TextBox Grid.Column="1"
-                                                 Width="260"
-                                                 HorizontalAlignment="Left"
-                                                 Text="{Binding Config.EdgeTtsVoice, UpdateSourceTrigger=PropertyChanged}"/>
+                                        <ComboBox Grid.Column="1"
+                                                  Width="260"
+                                                  HorizontalAlignment="Left"
+                                                  IsTextSearchEnabled="True"
+                                                  ItemsSource="{Binding EdgeVoiceOptions}"
+                                                  DisplayMemberPath="DisplayName"
+                                                  SelectedValuePath="ShortName"
+                                                  SelectedValue="{Binding Config.EdgeTtsVoice, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                     </Grid>
 
                                     <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,8"
@@ -1119,10 +1123,14 @@
                                             <TextBlock Text="例如 zh-CN-YunxiNeural，用于重复单号、非法单号等警告。"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
-                                        <TextBox Grid.Column="1"
-                                                 Width="260"
-                                                 HorizontalAlignment="Left"
-                                                 Text="{Binding Config.EdgeTtsWarningVoice, UpdateSourceTrigger=PropertyChanged}"/>
+                                        <ComboBox Grid.Column="1"
+                                                  Width="260"
+                                                  HorizontalAlignment="Left"
+                                                  IsTextSearchEnabled="True"
+                                                  ItemsSource="{Binding EdgeVoiceOptions}"
+                                                  DisplayMemberPath="DisplayName"
+                                                  SelectedValuePath="ShortName"
+                                                  SelectedValue="{Binding Config.EdgeTtsWarningVoice, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                     </Grid>
 
                                     <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,0"

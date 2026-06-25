@@ -7,6 +7,7 @@ using ExpressPackingMonitoring.ViewModels;
 using AForge.Video.DirectShow;
 using System.Linq;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Threading;
 using System.IO;
 using ExpressPackingMonitoring.Services;
@@ -17,6 +18,7 @@ namespace ExpressPackingMonitoring
     public class ResOption { public string Name { get; set; } public int Width { get; set; } public int Height { get; set; } public override string ToString() => Name; }
     public class MicInfo { public string Name { get; set; } public override string ToString() => Name; }
     public class FpsOption { public int Fps { get; set; } public string Label { get; set; } public override string ToString() => Label; }
+    public class EdgeVoiceOption { public string ShortName { get; set; } public string DisplayName { get; set; } public override string ToString() => DisplayName; }
 
     public partial class SettingsWindow : Window
     {
@@ -24,6 +26,21 @@ namespace ExpressPackingMonitoring
         public AppConfig Config { get; set; }
         public double CurrentDiskUsagePercent { get; set; }
         public string CurrentDiskUsageText { get; set; }
+        public List<EdgeVoiceOption> EdgeVoiceOptions { get; } = new()
+        {
+            new EdgeVoiceOption { ShortName = "zh-CN-XiaoxiaoNeural", DisplayName = "晓晓 - 女声" },
+            new EdgeVoiceOption { ShortName = "zh-CN-XiaoyiNeural", DisplayName = "晓伊 - 女声" },
+            new EdgeVoiceOption { ShortName = "zh-CN-YunjianNeural", DisplayName = "云健 - 男声" },
+            new EdgeVoiceOption { ShortName = "zh-CN-YunxiNeural", DisplayName = "云希 - 男声" },
+            new EdgeVoiceOption { ShortName = "zh-CN-YunxiaNeural", DisplayName = "云夏 - 男声" },
+            new EdgeVoiceOption { ShortName = "zh-CN-YunyangNeural", DisplayName = "云扬 - 男声" },
+            new EdgeVoiceOption { ShortName = "zh-CN-liaoning-XiaobeiNeural", DisplayName = "辽宁晓北 - 女声" },
+            new EdgeVoiceOption { ShortName = "zh-CN-shaanxi-XiaoniNeural", DisplayName = "陕西晓妮 - 女声" },
+            new EdgeVoiceOption { ShortName = "zh-HK-HiuGaaiNeural", DisplayName = "粤语 HiuGaai - 女声" },
+            new EdgeVoiceOption { ShortName = "zh-HK-WanLungNeural", DisplayName = "粤语 WanLung - 男声" },
+            new EdgeVoiceOption { ShortName = "zh-TW-HsiaoChenNeural", DisplayName = "台湾晓臻 - 女声" },
+            new EdgeVoiceOption { ShortName = "zh-TW-YunJheNeural", DisplayName = "台湾云哲 - 男声" }
+        };
 
         private string _originalTheme;
         private bool _isRecording;
@@ -474,6 +491,8 @@ namespace ExpressPackingMonitoring
 
         private void BtnSave_Click(object sender, RoutedEventArgs e)
         {
+            Keyboard.ClearFocus();
+
             // 0. 验证音频
             if (Config.EnableAudioRecording && string.IsNullOrEmpty(Config.AudioDeviceName))
             {
@@ -678,6 +697,8 @@ namespace ExpressPackingMonitoring
 
         private void BtnTtsPreview_Click(object sender, RoutedEventArgs e)
         {
+            Keyboard.ClearFocus();
+
             string text = TtsPreviewTextBox.Text?.Trim();
             if (string.IsNullOrEmpty(text))
             {
@@ -727,7 +748,7 @@ namespace ExpressPackingMonitoring
                 _previewSpeechService.UpdateBreakWords(words);
             }
 
-            _previewSpeechService.Speak(text);
+            _previewSpeechService.Preview(text);
         }
 
         private void BtnTtsStop_Click(object sender, RoutedEventArgs e)
