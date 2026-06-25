@@ -1190,6 +1190,12 @@ namespace ExpressPackingMonitoring.ViewModels
                     // 转换失败，保留 MKV，清理可能的残留 MP4
                     try { if (File.Exists(mp4Path)) File.Delete(mp4Path); } catch { }
                     Debug.WriteLine($"[MkvToMp4] 转换失败，保留原始 MKV");
+                    WriteAudioDiagnostic($"MP4 转换或音轨校验失败，已保留 MKV/WAV: mkv={mkvPath}, wav={audioPath}", audioLogPath);
+                    _ = Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        if (!_isDisposed)
+                            ShowToast("⚠ 音轨校验失败，已保留原始文件");
+                    });
                 }
             }
             catch (Exception ex)
