@@ -1857,7 +1857,7 @@ namespace ExpressPackingMonitoring.ViewModels
             }
         }
 
-        private static bool IsAudioTimelineUsable(double durationSeconds, double firstActiveSecond, double lastActiveSecond, int activeWindowCount, int maxConsecutiveActiveWindows, out string reason)
+        internal static bool IsAudioTimelineUsable(double durationSeconds, double firstActiveSecond, double lastActiveSecond, int activeWindowCount, int maxConsecutiveActiveWindows, out string reason)
         {
             reason = string.Empty;
             if (durationSeconds < 10) return true;
@@ -1865,10 +1865,37 @@ namespace ExpressPackingMonitoring.ViewModels
             if (lastActiveSecond < 0)
             {
                 reason = $"duration={durationSeconds:F1}s, lastActive=none";
-                return true;
+                return false;
             }
 
+            double leadingSilentSeconds = firstActiveSecond < 0 ? durationSeconds : firstActiveSecond;
             double trailingSilentSeconds = durationSeconds - lastActiveSecond;
+            int sparsePulseLimit = Math.Max(2, (int)Math.Floor(durationSeconds / 6.0));
+            if (durationSeconds >= 10
+                && leadingSilentSeconds >= Math.Max(5, durationSeconds * 0.5)
+                && activeWindowCount <= 3)
+            {
+                reason = $"duration={durationSeconds:F1}s, firstActive={firstActiveSecond:F1}s, activeWindows={activeWindowCount}, leadingSilent={leadingSilentSeconds:F1}s";
+                return false;
+            }
+
+            if (durationSeconds >= 10
+                && activeWindowCount > 0
+                && activeWindowCount <= sparsePulseLimit
+                && maxConsecutiveActiveWindows <= 2)
+            {
+                reason = $"duration={durationSeconds:F1}s, firstActive={firstActiveSecond:F1}s, lastActive={lastActiveSecond:F1}s, activeWindows={activeWindowCount}, maxConsecutive={maxConsecutiveActiveWindows}, sparsePulseLimit={sparsePulseLimit}";
+                return false;
+            }
+
+            if (durationSeconds >= 10
+                && trailingSilentSeconds >= Math.Max(5, durationSeconds * 0.5)
+                && activeWindowCount <= 3)
+            {
+                reason = $"duration={durationSeconds:F1}s, lastActive={lastActiveSecond:F1}s, activeWindows={activeWindowCount}, trailingSilent={trailingSilentSeconds:F1}s";
+                return false;
+            }
+
             if (durationSeconds >= 30
                 && activeWindowCount > 0
                 && activeWindowCount <= 4

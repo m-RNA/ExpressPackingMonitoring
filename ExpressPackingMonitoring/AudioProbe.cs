@@ -17,6 +17,12 @@ namespace ExpressPackingMonitoring
         public static bool TryHandleCommandLine(string[] args, out int exitCode)
         {
             exitCode = 0;
+            if (args.Any(a => string.Equals(a, "--audio-check", StringComparison.OrdinalIgnoreCase)))
+            {
+                exitCode = RunAudioCheck(args) ? 0 : 2;
+                return true;
+            }
+
             if (!args.Any(a => string.Equals(a, "--audio-probe", StringComparison.OrdinalIgnoreCase)))
                 return false;
 
@@ -36,6 +42,76 @@ namespace ExpressPackingMonitoring
                 exitCode = 1;
             }
             return true;
+        }
+
+        private static bool RunAudioCheck(string[] args)
+        {
+            int index = Array.FindIndex(args, a => string.Equals(a, "--audio-check", StringComparison.OrdinalIgnoreCase));
+            if (index < 0 || index + 1 >= args.Length)
+            {
+                Console.Error.WriteLine("Missing file path after --audio-check.");
+                return false;
+            }
+
+            string inputPath = args[index + 1];
+            if (!File.Exists(inputPath))
+            {
+                Console.Error.WriteLine($"File not found: {inputPath}");
+                return false;
+            }
+
+            string wavPath = inputPath;
+            bool deleteWav = false;
+            try
+            {
+                if (!inputPath.EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
+                {
+                    string? ffmpegPath = FindFFmpeg();
+                    if (string.IsNullOrEmpty(ffmpegPath))
+                    {
+                        Console.Error.WriteLine("FFmpeg not found.");
+                        return false;
+                    }
+
+                    wavPath = Path.Combine(Path.GetTempPath(), $"audio_check_{Guid.NewGuid():N}.wav");
+                    deleteWav = true;
+                    var decode = RunProcess(ffmpegPath, $"-y -v error -i \"{inputPath}\" -map 0:a:0 -ac 1 -ar 48000 -sample_fmt s16 \"{wavPath}\"", 120000);
+                    if (!decode.Exited || decode.ExitCode != 0 || !File.Exists(wavPath))
+                    {
+                        Console.Error.WriteLine($"Audio decode failed: exited={decode.Exited}, exitCode={decode.ExitCode}, stderr={TrimForLog(decode.Stderr)}");
+                        return false;
+                    }
+                }
+
+                var info = ReadWavInfo(wavPath);
+                var timeline = ReadWavTimeline(wavPath);
+                string reason = string.Empty;
+                bool timelineUsable = MainViewModel.IsAudioTimelineUsable(
+                        info.DurationSeconds,
+                        timeline.FirstActiveSecond,
+                        timeline.LastActiveSecond,
+                        timeline.ActiveWindowCount,
+                        timeline.MaxConsecutiveActiveWindows,
+                        out reason);
+                bool usable = info.Valid && timeline.Valid && timelineUsable;
+
+                Console.WriteLine($"File={inputPath}");
+                Console.WriteLine($"DurationSeconds={info.DurationSeconds:F2}");
+                Console.WriteLine($"FirstActiveSecond={timeline.FirstActiveSecond:F1}");
+                Console.WriteLine($"LastActiveSecond={timeline.LastActiveSecond:F1}");
+                Console.WriteLine($"ActiveWindows={timeline.ActiveWindowCount}");
+                Console.WriteLine($"MaxConsecutiveActiveWindows={timeline.MaxConsecutiveActiveWindows}");
+                Console.WriteLine($"Usable={usable}");
+                Console.WriteLine($"Reason={(string.IsNullOrWhiteSpace(reason) ? "(none)" : reason)}");
+                return usable;
+            }
+            finally
+            {
+                if (deleteWav)
+                {
+                    try { if (File.Exists(wavPath)) File.Delete(wavPath); } catch { }
+                }
+            }
         }
 
         private static int ParseRepeat(string[] args)
@@ -505,14 +581,13 @@ namespace ExpressPackingMonitoring
 
         private static bool LooksLikeShortPulseThenSilence(double durationSeconds, int activeWindowCount, int maxConsecutiveActiveWindows, double lastActiveSecond)
         {
-            if (durationSeconds < 30 || lastActiveSecond < 0)
-                return false;
-
-            double trailingSilentSeconds = durationSeconds - lastActiveSecond;
-            return activeWindowCount > 0
-                && activeWindowCount <= 4
-                && maxConsecutiveActiveWindows <= 2
-                && trailingSilentSeconds >= 5;
+            return !MainViewModel.IsAudioTimelineUsable(
+                durationSeconds,
+                -1,
+                lastActiveSecond,
+                activeWindowCount,
+                maxConsecutiveActiveWindows,
+                out _);
         }
 
         private static AppConfig LoadConfig()
