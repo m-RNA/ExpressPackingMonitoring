@@ -364,6 +364,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 string audioFilePath = Path.ChangeExtension(filePath, ".wav");
                 string audioLogPath = Path.ChangeExtension(filePath, ".audio.log");
                 _currentAudioLogPath = audioLogPath;
+                _audioFailedForCurrentRecording = false;
                 _currentVideoFilePath = filePath;
                 _stopReason = "手动";
                 _recordingOrderId = CurrentOrderId;
@@ -758,6 +759,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     _audioWriteFailed = false;
                     _audioWriteQueueFullLogged = false;
                     _audioWriteQueueFullReported = false;
+                    _audioFailedForCurrentRecording = false;
                     _audioMonitorCts = new CancellationTokenSource();
                 }
 
@@ -873,6 +875,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
             if (writeFailed)
             {
+                _audioFailedForCurrentRecording = true;
                 DeleteAudioTempFile(audioFilePath);
                 return null;
             }
@@ -884,6 +887,7 @@ namespace ExpressPackingMonitoring.ViewModels
             }
             catch { }
 
+            _audioFailedForCurrentRecording = true;
             DeleteAudioTempFile(audioFilePath);
             return null;
         }
@@ -1585,6 +1589,16 @@ namespace ExpressPackingMonitoring.ViewModels
                 }
 
                 string mp4Path = Path.ChangeExtension(mkvPath, ".mp4");
+                if (_audioFailedForCurrentRecording)
+                {
+                    WriteAudioDiagnostic($"音频录制失败，已保留 MKV: mkv={mkvPath}", audioLogPath);
+                    _ = Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        if (!_isDisposed)
+                            ShowToast("⚠️ 音频录制失败，已保留原始文件");
+                    });
+                    return;
+                }
                 if (!ValidateAudioCaptureForMux(audioPath, audioLogPath))
                 {
                     Debug.WriteLine("[MkvToMp4] WAV 音频疑似提前静音，跳过 MP4 合成");
