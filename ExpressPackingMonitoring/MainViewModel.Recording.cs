@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using OpenCvSharp;
 using AForge.Video.DirectShow;
+using NAudio.Wave;
 
 namespace ExpressPackingMonitoring.ViewModels
 {
@@ -29,6 +30,7 @@ namespace ExpressPackingMonitoring.ViewModels
             CancellationTokenSource oldCts;
             BlockingCollection<Mat> oldQueue;
             Task oldWriteTask;
+            string? audioFilePath;
 
             lock (_videoLock)
             {
@@ -43,6 +45,7 @@ namespace ExpressPackingMonitoring.ViewModels
             // 2. 停止生产
             try { oldQueue?.CompleteAdding(); } catch { }
             oldCts?.Cancel(); // 3. 通知 FFmpeg 线程停止
+            audioFilePath = StopAudioRecording();
 
             // 4. 等待录制线程真正退出（FFmpeg 进程关闭）
             try
@@ -112,6 +115,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     if (fileSize < 1024 * 50 || tooShort)
                     {
                         try { if (File.Exists(filePath)) File.Delete(filePath); } catch { }
+                        DeleteAudioTempFile(audioFilePath);
                         _ = Application.Current.Dispatcher.InvokeAsync(() => {
                             if (!_isDisposed) {
                                 _allLogs.Remove(scanRecord);
@@ -134,7 +138,7 @@ namespace ExpressPackingMonitoring.ViewModels
                         _db?.UpdateVideoRecordOnStop(recordId, DateTime.Now, durSec, fileSize, stopReason, videoCodec, videoEncoder);
 
                         // 自动将 MKV 转换为 MP4（无损容器转换）
-                        ConvertMkvToMp4(filePath);
+                        ConvertMkvToMp4(filePath, audioFilePath);
 
                         _ = Application.Current.Dispatcher.InvokeAsync(() => {
                             if (!_isDisposed && scanRecord != null)
@@ -346,6 +350,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
                 string fileName = $"{CurrentOrderId}_{DateTime.Now:yyyyMMdd_HHmmss}_{CurrentMode}.mkv";
                 string filePath = Path.Combine(dateFolder, fileName);
+                string audioFilePath = Path.ChangeExtension(filePath, ".wav");
                 _currentVideoFilePath = filePath;
                 _stopReason = "手动";
                 _recordingOrderId = CurrentOrderId;
@@ -358,6 +363,16 @@ namespace ExpressPackingMonitoring.ViewModels
                 {
                     ShowToast("⚠ 未找到 FFmpeg，无法录制");
                     return;
+                }
+
+                if (Config.EnableAudioRecording && HasConfiguredAudioDevice())
+                {
+                    if (!StartAudioRecording(audioFilePath))
+                    {
+                        ShowToast("⚠ 麦克风录音启动失败");
+                        SpeakWarning("麦克风录音启动失败");
+                        return;
+                    }
                 }
 
                 // 3. 开启新的生产者-消费者通道
@@ -375,6 +390,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 await Task.Delay(1000); 
                 if (_writeTask.IsCompleted) 
                 {
+                    DeleteAudioTempFile(StopAudioRecording());
                     Debug.WriteLine("[MainVM] 启动检测：_writeTask 已结束，FFmpeg 启动失败");
                     // 注意：此处不应手动 IsRecording = false，BackgroundFFmpegRecordingLoop 内部会处理 UI 状态重置。
                     return; 
@@ -408,7 +424,7 @@ namespace ExpressPackingMonitoring.ViewModels
             int h = Config.FrameHeight;
             int fps = _actualCameraFps > 0 ? _actualCameraFps : Config.Fps;
             string encoder = ResolveEncoder();
-            bool hasAudio = Config.EnableAudioRecording && HasConfiguredAudioDevice();
+            bool hasAudio = false;
             string requestedEncoder = encoder;
 
             var (ok, err) = RunFFmpegPipeline(filePath, ffmpegPath, token, w, h, fps, encoder, hasAudio);
@@ -425,6 +441,7 @@ namespace ExpressPackingMonitoring.ViewModels
             // 如果失败，强制重置 UI 状态
             if (!token.IsCancellationRequested)
             {
+                DeleteAudioTempFile(StopAudioRecording());
                 try { if (File.Exists(filePath) && new FileInfo(filePath).Length == 0) File.Delete(filePath); } catch { }
                 string errMsg = string.IsNullOrEmpty(err) ? "" : $"\n{err}";
 
@@ -647,12 +664,6 @@ namespace ExpressPackingMonitoring.ViewModels
             int cqp = GetVideoCqp();
             int gop = Math.Max(1, fps * 2);
 
-            bool hasAudio = withAudio && Config.EnableAudioRecording && HasConfiguredAudioDevice();
-            if (hasAudio)
-            {
-                args += $" -thread_queue_size 256 -use_wallclock_as_timestamps 1 -f dshow -audio_buffer_size 50 -i audio=\"{EscapeDShowDeviceName(Config.AudioDeviceName)}\"";
-            }
-
             if (encoder == "h264_nvenc") args += $" -c:v h264_nvenc -pix_fmt yuv420p -preset p4 -rc vbr -cq {cqp} -b:v 0 -g {gop} -max_muxing_queue_size 1024";
             else if (encoder == "h264_amf") args += $" -c:v h264_amf -pix_fmt yuv420p -quality balanced -rc cqp -qp_i {cqp} -qp_p {cqp} -g {gop}";
             else if (encoder == "h264_qsv") args += $" -c:v h264_qsv -pix_fmt nv12 -preset medium -global_quality {cqp} -g {gop}";
@@ -669,13 +680,6 @@ namespace ExpressPackingMonitoring.ViewModels
 
             args += $" -r {fps} -fps_mode cfr";
 
-            if (hasAudio)
-            {
-                string audioFilter = BuildAudioSyncFilter();
-                // 增大实时流缓冲以防管道压力大时音频不同步或丢包
-                args += $" -af {audioFilter} -c:a aac -b:a 128k -shortest -max_muxing_queue_size 1024";
-            }
-
             args += " -muxdelay 0 -muxpreload 0";
             args += $" \"{filePath}\"";
             return args;
@@ -689,16 +693,138 @@ namespace ExpressPackingMonitoring.ViewModels
             return 8;
         }
 
-        private string BuildAudioSyncFilter()
+        private bool StartAudioRecording(string audioFilePath)
         {
-            int offsetMs = Math.Clamp(Config.AudioSyncOffsetMs, -5000, 5000);
-            if (offsetMs > 0) return $"adelay={offsetMs}:all=1,aresample=async=1:first_pts=0";
-            if (offsetMs < 0)
+            try
             {
-                double trimStartSec = Math.Abs(offsetMs) / 1000.0;
-                return $"atrim=start={trimStartSec:0.###},asetpts=PTS-STARTPTS,aresample=async=1:first_pts=0";
+                StopAudioRecording();
+
+                int deviceNumber = ResolveAudioDeviceNumber();
+                if (deviceNumber < 0)
+                {
+                    Debug.WriteLine("[Audio] 未找到可用麦克风端点");
+                    return false;
+                }
+
+                Directory.CreateDirectory(Path.GetDirectoryName(audioFilePath)!);
+
+                var capture = new WaveInEvent
+                {
+                    DeviceNumber = deviceNumber,
+                    WaveFormat = new WaveFormat(44100, 16, 1),
+                    BufferMilliseconds = 100,
+                    NumberOfBuffers = 4
+                };
+                var writer = new WaveFileWriter(audioFilePath, capture.WaveFormat);
+
+                capture.DataAvailable += (_, e) =>
+                {
+                    lock (_audioLock)
+                    {
+                        if (_audioWriter == null) return;
+                        _audioWriter.Write(e.Buffer, 0, e.BytesRecorded);
+                        _audioWriter.Flush();
+                    }
+                };
+                capture.RecordingStopped += (_, e) =>
+                {
+                    if (e.Exception != null)
+                        Debug.WriteLine($"[Audio] 录音停止异常: {e.Exception.Message}");
+                };
+
+                lock (_audioLock)
+                {
+                    _audioCapture = capture;
+                    _audioWriter = writer;
+                    _currentAudioFilePath = audioFilePath;
+                }
+
+                capture.StartRecording();
+                Debug.WriteLine($"[Audio] 开始录音: {WaveInEvent.GetCapabilities(deviceNumber).ProductName}");
+                return true;
             }
-            return "aresample=async=1:first_pts=0";
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Audio] 启动失败: {ex.Message}");
+                StopAudioRecording();
+                DeleteAudioTempFile(audioFilePath);
+                return false;
+            }
+        }
+
+        private string? StopAudioRecording()
+        {
+            WaveInEvent? capture;
+            WaveFileWriter? writer;
+            string? audioFilePath;
+
+            lock (_audioLock)
+            {
+                capture = _audioCapture;
+                writer = _audioWriter;
+                audioFilePath = _currentAudioFilePath;
+                _audioCapture = null;
+                _audioWriter = null;
+                _currentAudioFilePath = null;
+            }
+
+            try { capture?.StopRecording(); } catch { }
+            try { capture?.Dispose(); } catch { }
+
+            lock (_audioLock)
+            {
+                try { writer?.Dispose(); } catch { }
+            }
+
+            if (string.IsNullOrEmpty(audioFilePath)) return null;
+
+            try
+            {
+                if (File.Exists(audioFilePath) && new FileInfo(audioFilePath).Length > 44)
+                    return audioFilePath;
+            }
+            catch { }
+
+            DeleteAudioTempFile(audioFilePath);
+            return null;
+        }
+
+        private int ResolveAudioDeviceNumber()
+        {
+            int count = WaveInEvent.DeviceCount;
+            if (count <= 0) return -1;
+
+            if (!string.IsNullOrWhiteSpace(Config.AudioDeviceName))
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    var capabilities = WaveInEvent.GetCapabilities(i);
+                    if (AudioEndpointMatches(capabilities.ProductName, Config.AudioDeviceName))
+                        return i;
+                }
+            }
+
+            return 0;
+        }
+
+        private static bool AudioEndpointMatches(string endpointName, string configuredName)
+        {
+            if (string.IsNullOrWhiteSpace(endpointName) || string.IsNullOrWhiteSpace(configuredName))
+                return false;
+
+            return endpointName.Equals(configuredName, StringComparison.OrdinalIgnoreCase)
+                || endpointName.Contains(configuredName, StringComparison.OrdinalIgnoreCase)
+                || configuredName.Contains(endpointName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void DeleteAudioTempFile(string? audioFilePath)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(audioFilePath) && File.Exists(audioFilePath))
+                    File.Delete(audioFilePath);
+            }
+            catch { }
         }
 
         private bool HasConfiguredAudioDevice()
@@ -718,17 +844,12 @@ namespace ExpressPackingMonitoring.ViewModels
                 && string.Equals(name, Config.AudioDeviceName, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string EscapeDShowDeviceName(string deviceName)
-        {
-            return (deviceName ?? "").Replace("\"", "\\\"");
-        }
-
         private int GetVideoCqp() => Config.VideoCqp > 0 ? Config.VideoCqp : 25;
 
         /// <summary>
         /// 录制完成后自动将 MKV 无损转换为 MP4（容器转换，不重新编码）
         /// </summary>
-        private void ConvertMkvToMp4(string mkvPath)
+        private void ConvertMkvToMp4(string mkvPath, string? audioPath = null)
         {
             try
             {
@@ -747,7 +868,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 var psi = new ProcessStartInfo
                 {
                     FileName = ffmpegPath,
-                    Arguments = $"-y -i \"{mkvPath}\" -vcodec copy -acodec copy \"{mp4Path}\"",
+                    Arguments = BuildMkvToMp4Args(mkvPath, audioPath, mp4Path),
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     RedirectStandardError = true,
@@ -768,6 +889,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 {
                     // 转换成功，删除原始 MKV
                     try { File.Delete(mkvPath); } catch { }
+                    DeleteAudioTempFile(audioPath);
                     // 更新数据库中的文件路径
                     _db?.UpdateVideoFilePath(mkvPath, mp4Path);
                     Debug.WriteLine($"[MkvToMp4] 转换成功: {mp4Path}");
@@ -783,6 +905,30 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 Debug.WriteLine($"[MkvToMp4] 异常: {ex.Message}");
             }
+        }
+
+        private string BuildMkvToMp4Args(string mkvPath, string? audioPath, string mp4Path)
+        {
+            if (string.IsNullOrEmpty(audioPath) || !File.Exists(audioPath))
+                return $"-y -i \"{mkvPath}\" -vcodec copy -acodec copy \"{mp4Path}\"";
+
+            int offsetMs = Math.Clamp(Config.AudioSyncOffsetMs, -5000, 5000);
+            string audioMap = "1:a:0";
+            string filter = "";
+
+            if (offsetMs > 0)
+            {
+                filter = $" -filter_complex \"[1:a]adelay={offsetMs}:all=1[a]\"";
+                audioMap = "[a]";
+            }
+            else if (offsetMs < 0)
+            {
+                double trimStartSec = Math.Abs(offsetMs) / 1000.0;
+                filter = $" -filter_complex \"[1:a]atrim=start={trimStartSec:0.###},asetpts=PTS-STARTPTS[a]\"";
+                audioMap = "[a]";
+            }
+
+            return $"-y -i \"{mkvPath}\" -i \"{audioPath}\"{filter} -map 0:v:0 -map \"{audioMap}\" -c:v copy -c:a aac -b:a 128k -shortest \"{mp4Path}\"";
         }
 
         private static string FindFFmpeg()

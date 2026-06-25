@@ -50,6 +50,10 @@ namespace ExpressPackingMonitoring.ViewModels
         private Task _lastFinalizeTask;
         private CancellationTokenSource _writeCts;
         private int _actualCameraFps = 15; // 摄像头硬件实际帧率
+        private readonly object _audioLock = new object();
+        private NAudio.Wave.WaveInEvent _audioCapture;
+        private NAudio.Wave.WaveFileWriter _audioWriter;
+        private string _currentAudioFilePath;
 
         private Mat _previousCheckFrame = new Mat();
         private BitmapSource _videoFrame;
@@ -1582,6 +1586,7 @@ namespace ExpressPackingMonitoring.ViewModels
             _stopReason = "程序退出";
 
             string videoFileToConvert = null;
+            string audioFileToConvert = null;
             long recordId = 0;
             DateTime recordStart = DateTime.MinValue;
 
@@ -1595,6 +1600,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
                     _videoWriteQueue?.CompleteAdding();
                     _writeCts?.Cancel();
+                    audioFileToConvert = StopAudioRecording();
                     _writeTask?.Wait(5000); // 等待写入线程关闭 stdin，让 FFmpeg 正常结束
 
                     // 如果 FFmpeg 还没退出，再等一会儿让它写完尾部
@@ -1624,7 +1630,11 @@ namespace ExpressPackingMonitoring.ViewModels
                     {
                         int durSec = Math.Max(1, (int)(DateTime.Now - recordStart).TotalSeconds);
                         _db?.UpdateVideoRecordOnStop(recordId, DateTime.Now, durSec, fileSize, _stopReason, _currentVideoCodec, _currentVideoEncoder);
-                        ConvertMkvToMp4(videoFileToConvert);
+                        ConvertMkvToMp4(videoFileToConvert, audioFileToConvert);
+                    }
+                    else
+                    {
+                        DeleteAudioTempFile(audioFileToConvert);
                     }
                 }
                 catch { }
