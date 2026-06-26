@@ -2059,11 +2059,14 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private void WriteAudioDiagnostic(string message, string? explicitLogPath = null)
         {
+#if DEBUG
             if (explicitLogPath == null && message.StartsWith("Finalize ", StringComparison.Ordinal))
                 return;
             if (explicitLogPath == null
                 && (message.StartsWith("MP4 ", StringComparison.Ordinal) || message.StartsWith("WAV ", StringComparison.Ordinal)))
                 return;
+
+            Debug.WriteLine($"[AudioDiagnostic] {message}");
 
             string? logPath = explicitLogPath ?? _currentAudioLogPath;
             if (string.IsNullOrWhiteSpace(logPath)) return;
@@ -2074,6 +2077,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {message}{Environment.NewLine}");
             }
             catch { }
+#endif
         }
 
         private void ClearCurrentAudioLogPath(string? audioLogPath)
