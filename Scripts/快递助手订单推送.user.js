@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         快递助手 → 打包监控联动
 // @namespace    https://github.com/ExpressPackingMonitoring
-// @version      1.0
+// @version      1.1
 // @description  从快递助手批量打印页面提取订单信息（快递单号、买家留言、卖家备注、商品名），推送到打包监控上位机，扫码时自动语音播报。
 // @author       ExpressPackingMonitoring
 // @match        *://p4.kuaidizs.cn/*
@@ -23,19 +23,171 @@
     // ============ 配置 ============
     const DEFAULT_HOST = '127.0.0.1';
     const DEFAULT_PORT = 5280;
+    const DISCOVERY_DONE_KEY = 'monitor_auto_discovery_done';
+    const DISCOVERY_TIMEOUT = 700;
+    const DISCOVERY_BATCH_SIZE = 32;
 
     function getHost() { return GM_getValue('monitor_host', DEFAULT_HOST); }
     function getPort() { return GM_getValue('monitor_port', DEFAULT_PORT); }
-    function getApiUrl() { return `http://${getHost()}:${getPort()}/api/orderinfo`; }
+    function getApiUrl() { return `${getBaseUrl(getHost(), getPort())}/api/orderinfo`; }
+    function getStorageUrl(host, port) { return `${getBaseUrl(host, port)}/api/storage`; }
+    function getBaseUrl(host, port) {
+        const address = normalizeAddress(host, port);
+        return `http://${address.host}:${address.port}`;
+    }
+    function normalizeAddress(host, port) {
+        let value = String(host || '').trim()
+            .replace(/^https?:\/\//i, '')
+            .replace(/\/+$/g, '');
+        const parts = value.split(':');
+        return {
+            host: parts[0] || DEFAULT_HOST,
+            port: Number(parts[1] || port || DEFAULT_PORT)
+        };
+    }
+    function saveMonitorAddress(host, port) {
+        const address = normalizeAddress(host, port);
+        GM_setValue('monitor_host', address.host);
+        GM_setValue('monitor_port', address.port);
+        GM_setValue(DISCOVERY_DONE_KEY, true);
+        return address;
+    }
+
+    function gmGet(url, timeout) {
+        return new Promise(resolve => {
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url,
+                timeout,
+                onload: res => resolve(res.status >= 200 && res.status < 300),
+                onerror: () => resolve(false),
+                ontimeout: () => resolve(false)
+            });
+        });
+    }
+
+    async function canConnectMonitor(host, port) {
+        return gmGet(getStorageUrl(host, port), DISCOVERY_TIMEOUT);
+    }
+
+    function getHostPrefix(host) {
+        const match = String(host || '').match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.\d{1,3}$/);
+        return match ? `${match[1]}.${match[2]}.${match[3]}` : '';
+    }
+
+    async function getWebRtcLocalPrefixes() {
+        const PeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+        if (!PeerConnection) return [];
+
+        const prefixes = new Set();
+        const ipPattern = /\b(?:10|172\.(?:1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}\b/g;
+        const collect = text => {
+            for (const ip of String(text || '').match(ipPattern) || []) {
+                const prefix = getHostPrefix(ip);
+                if (prefix) prefixes.add(prefix);
+            }
+        };
+
+        return new Promise(resolve => {
+            const pc = new PeerConnection({ iceServers: [] });
+            const done = () => {
+                try { pc.close(); } catch (e) { /* ignore */ }
+                resolve(Array.from(prefixes));
+            };
+            pc.onicecandidate = event => {
+                if (!event.candidate) {
+                    done();
+                    return;
+                }
+                collect(event.candidate.candidate);
+            };
+            try {
+                pc.createDataChannel('monitor-discovery');
+                pc.createOffer()
+                    .then(offer => {
+                        collect(offer.sdp);
+                        return pc.setLocalDescription(offer);
+                    })
+                    .catch(done);
+            } catch (e) {
+                done();
+                return;
+            }
+            setTimeout(done, 900);
+        });
+    }
+
+    async function findMonitorAddress(showProgress) {
+        const port = getPort();
+        const saved = normalizeAddress(getHost(), port);
+        const directCandidates = [
+            saved.host,
+            '127.0.0.1',
+            'localhost'
+        ].filter((host, index, arr) => host && arr.indexOf(host) === index);
+
+        for (const host of directCandidates) {
+            if (showProgress) showNotification(`正在探测 ${host}:${port}`);
+            if (await canConnectMonitor(host, port)) {
+                const found = saveMonitorAddress(host, port);
+                return `${found.host}:${found.port}`;
+            }
+        }
+
+        const prefixes = new Set();
+        const savedPrefix = getHostPrefix(saved.host);
+        if (savedPrefix) prefixes.add(savedPrefix);
+        for (const prefix of await getWebRtcLocalPrefixes()) prefixes.add(prefix);
+        if (prefixes.size === 0) {
+            ['192.168.0', '192.168.1', '192.168.31', '10.0.0'].forEach(prefix => prefixes.add(prefix));
+        }
+
+        for (const prefix of prefixes) {
+            for (let start = 1; start <= 254; start += DISCOVERY_BATCH_SIZE) {
+                if (showProgress) showNotification(`正在查找 ${prefix}.x`);
+                const hosts = Array.from(
+                    { length: Math.min(DISCOVERY_BATCH_SIZE, 255 - start) },
+                    (_, index) => `${prefix}.${start + index}`
+                );
+                const checks = hosts.map(async host => ({ host, ok: await canConnectMonitor(host, port) }));
+                const results = await Promise.all(checks);
+                const found = results.find(item => item.ok);
+                if (found) {
+                    const address = saveMonitorAddress(found.host, port);
+                    return `${address.host}:${address.port}`;
+                }
+            }
+        }
+
+        GM_setValue(DISCOVERY_DONE_KEY, true);
+        return '';
+    }
+
+    async function ensureMonitorAddress(auto) {
+        const shouldDiscover = auto || !GM_getValue(DISCOVERY_DONE_KEY, false);
+        if (!shouldDiscover) return true;
+
+        const found = await findMonitorAddress(false);
+        if (found) {
+            showNotification(`已自动填入上位机地址：${found}`);
+            return true;
+        }
+        return false;
+    }
 
     // 注册菜单命令用于修改配置
     GM_registerMenuCommand('⚙️ 设置上位机地址', () => {
         const host = prompt('请输入打包监控上位机 IP 地址：', getHost());
-        if (host) GM_setValue('monitor_host', host.trim());
+        if (host) saveMonitorAddress(host.trim(), getPort());
     });
     GM_registerMenuCommand('⚙️ 设置上位机端口', () => {
         const port = prompt('请输入打包监控 Web 端口：', getPort());
-        if (port && !isNaN(port)) GM_setValue('monitor_port', parseInt(port));
+        if (port && !isNaN(port)) saveMonitorAddress(getHost(), parseInt(port));
+    });
+    GM_registerMenuCommand('自动探测上位机地址', async () => {
+        showNotification('正在自动探测上位机地址...');
+        const found = await findMonitorAddress(true);
+        showNotification(found ? `已自动填入：${found}` : '未找到上位机，请确认已开启 Web 服务并在同一局域网');
     });
     GM_registerMenuCommand('🔄 立即推送订单数据', () => {
         extractAndPush();
@@ -135,8 +287,9 @@
     }
 
     // ============ 推送到上位机 ============
-    function pushToMonitor(orders) {
+    async function pushToMonitor(orders) {
         if (!orders || orders.length === 0) return;
+        await ensureMonitorAddress(false);
 
         GM_xmlhttpRequest({
             method: 'POST',
@@ -164,13 +317,13 @@
         });
     }
 
-    function extractAndPush() {
+    async function extractAndPush() {
         const orders = extractOrders();
         if (orders.length === 0) {
             showNotification('📭 当前页面没有找到订单信息');
             return;
         }
-        pushToMonitor(orders);
+        await pushToMonitor(orders);
     }
 
     // ============ 页面通知 ============
@@ -250,6 +403,7 @@
         console.log('[打包监控] DOM 监听已启动, 目标:', target.tagName, target.className || '(body)');
         // 绑定操作按钮监听
         bindActionButtons();
+        ensureMonitorAddress(true);
         // 首次推送
         extractAndPush();
     }, 3000);
