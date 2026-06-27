@@ -709,8 +709,10 @@ namespace ExpressPackingMonitoring
             }
 
             string codec = (record.VideoCodec ?? "").Trim().ToLowerInvariant();
-            Log($"HandlePlay: codec='{codec}', 判定={(codec != "" && codec != "h264" ? "转码" : "直传")}");
-            if (codec != "" && codec != "h264")
+            bool compatMode = ctx.Request.QueryString["compat"] != "0";
+            bool shouldTranscode = compatMode && codec != "" && codec != "h264";
+            Log($"HandlePlay: codec='{codec}', compat={(compatMode ? "1" : "0")}, 判定={(shouldTranscode ? "转码" : "直传")}");
+            if (shouldTranscode)
             {
                 ServeTranscodedStream(ctx, record.FilePath);
             }
