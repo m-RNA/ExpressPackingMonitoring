@@ -1808,7 +1808,18 @@ namespace ExpressPackingMonitoring.ViewModels
         public MkvConversionResult ConvertRecordMkvToMp4(VideoRecord record)
         {
             if (record == null) return MkvConversionResult.Fail("录像记录不存在");
-            return ConvertMkvToMp4ForPlayback(record.FilePath);
+            string filePath = record.FilePath;
+            if (filePath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+            {
+                string mkvPath = Path.ChangeExtension(filePath, ".mkv");
+                if (File.Exists(mkvPath) && HasMuxRecoverySidecar(mkvPath))
+                {
+                    RuntimeLog.Warn("MkvToMp4", $"Record points to MP4 but MKV sidecar remains, recovering file={Path.GetFileName(mkvPath)}");
+                    filePath = mkvPath;
+                }
+            }
+
+            return ConvertMkvToMp4ForPlayback(filePath);
         }
 
         private MkvConversionResult ConvertMkvToMp4ForPlayback(string mkvPath)
@@ -1827,10 +1838,18 @@ namespace ExpressPackingMonitoring.ViewModels
 
                 if (File.Exists(mp4Path) && new FileInfo(mp4Path).Length > 0)
                 {
-                    try { File.Delete(mkvPath); } catch { }
-                    DeleteAudioTempFile(audioPath);
-                    _db?.UpdateVideoFilePath(mkvPath, mp4Path);
-                    return MkvConversionResult.Ok(mp4Path, alreadyConverted: true);
+                    if (HasMuxRecoverySidecar(audioPath, audioLogPath))
+                    {
+                        RuntimeLog.Warn("MkvToMp4", $"Existing MP4 may be incomplete, rebuilding from MKV/WAV file={Path.GetFileName(mkvPath)}");
+                        try { File.Delete(mp4Path); } catch { }
+                    }
+                    else
+                    {
+                        try { File.Delete(mkvPath); } catch { }
+                        DeleteAudioTempFile(audioPath);
+                        _db?.UpdateVideoFilePath(mkvPath, mp4Path);
+                        return MkvConversionResult.Ok(mp4Path, alreadyConverted: true);
+                    }
                 }
 
                 string ffmpegPath = FindFFmpeg();
@@ -1892,6 +1911,18 @@ namespace ExpressPackingMonitoring.ViewModels
         {
             string path = Path.ChangeExtension(mkvPath, extension);
             return File.Exists(path) ? path : null;
+        }
+
+        private static bool HasMuxRecoverySidecar(string mkvPath)
+        {
+            return File.Exists(Path.ChangeExtension(mkvPath, ".wav"))
+                || File.Exists(Path.ChangeExtension(mkvPath, ".audio.log"));
+        }
+
+        private static bool HasMuxRecoverySidecar(string? audioPath, string? audioLogPath)
+        {
+            return (!string.IsNullOrWhiteSpace(audioPath) && File.Exists(audioPath))
+                || (!string.IsNullOrWhiteSpace(audioLogPath) && File.Exists(audioLogPath));
         }
 
         internal static string BuildMkvToMp4Args(string mkvPath, string? audioPath, string mp4Path, int audioSyncOffsetMs)

@@ -863,7 +863,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 return (0, 0, 0);
             }
 
-            var mkvPaths = _db.QueryMkvFilePaths();
+            var mkvPaths = GetMkvConversionTargets();
             int success = 0, fail = 0, skip = 0;
             int total = mkvPaths.Count;
 
@@ -893,15 +893,23 @@ namespace ExpressPackingMonitoring.ViewModels
                     continue;
                 }
 
-                // 如果 MP4 已存在，直接删 MKV 并更新数据库
+                // 如果 MP4 已存在，直接删 MKV 并更新数据库；但带 WAV/audio.log 的 MKV 需要重新合并，避免误用录制中生成的半截 MP4。
                 if (File.Exists(mp4Path) && new FileInfo(mp4Path).Length > 0)
                 {
-                    try { File.Delete(mkvPath); } catch { }
-                    DeleteAudioTempFile(Path.ChangeExtension(mkvPath, ".wav"));
-                    _db.UpdateVideoFilePath(mkvPath, mp4Path);
-                    success++;
-                    progress?.Report($"[{i + 1}/{total}] MP4 已存在，已清理 MKV: {fileName}");
-                    continue;
+                    if (HasMuxRecoverySidecar(mkvPath))
+                    {
+                        RuntimeLog.Warn("MkvRecover", $"Existing MP4 ignored because MKV sidecar remains file={fileName}");
+                        progress?.Report($"[{i + 1}/{total}] 发现疑似半截 MP4，重新合并: {fileName}");
+                    }
+                    else
+                    {
+                        try { File.Delete(mkvPath); } catch { }
+                        DeleteAudioTempFile(Path.ChangeExtension(mkvPath, ".wav"));
+                        _db.UpdateVideoFilePath(mkvPath, mp4Path);
+                        success++;
+                        progress?.Report($"[{i + 1}/{total}] MP4 已存在，已清理 MKV: {fileName}");
+                        continue;
+                    }
                 }
 
                 progress?.Report($"[{i + 1}/{total}] 正在转换: {fileName}");
@@ -930,6 +938,36 @@ namespace ExpressPackingMonitoring.ViewModels
             }
 
             return (success, fail, skip);
+        }
+
+        private List<string> GetMkvConversionTargets()
+        {
+            var paths = _db?.QueryActiveVideoFilePaths() ?? [];
+            var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string path in paths)
+            {
+                if (string.IsNullOrWhiteSpace(path))
+                    continue;
+
+                if (path.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase))
+                {
+                    targets.Add(path);
+                    continue;
+                }
+
+                if (!path.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string mkvPath = Path.ChangeExtension(path, ".mkv");
+                if (File.Exists(mkvPath) && HasMuxRecoverySidecar(mkvPath))
+                {
+                    RuntimeLog.Warn("MkvRecover", $"Database points to MP4 but MKV sidecar remains, scheduling recovery file={Path.GetFileName(mkvPath)}");
+                    targets.Add(mkvPath);
+                }
+            }
+
+            return targets.ToList();
         }
 
         private void InitializeSystem()
@@ -976,7 +1014,7 @@ namespace ExpressPackingMonitoring.ViewModels
             if (!Config.EnableWebServer || _db == null) return;
             try
             {
-                _webServer = new WebServer(_db, Config.WebServerPort, Config.TranscodeCacheMaxMB, () => IsRecording, ConvertRecordMkvToMp4);
+                _webServer = new WebServer(_db, Config.WebServerPort, Config.TranscodeCacheMaxMB, () => IsRecording, ConvertRecordMkvToMp4, () => _currentVideoFilePath);
                 _webServer.EnableOrderInfoLog = Config.EnableOrderInfoLog;
                 _webServer.OrderInfoReceived += OnOrderInfoReceived;
                 _webServer.Start();

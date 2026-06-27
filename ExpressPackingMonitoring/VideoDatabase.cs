@@ -233,6 +233,25 @@ namespace ExpressPackingMonitoring
         }
 
         /// <summary>
+        /// 查询所有未删除的视频文件路径，用于恢复异常的 MKV/WAV/MP4 残留状态。
+        /// </summary>
+        public List<string> QueryActiveVideoFilePaths()
+        {
+            lock (_lock)
+            {
+                var paths = new List<string>();
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = "SELECT FilePath FROM VideoRecords WHERE IsDeleted = 0;";
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    paths.Add(reader.GetString(0));
+                }
+                return paths;
+            }
+        }
+
+        /// <summary>
         /// 标记视频为已删除并写入删除日志
         /// </summary>
         public void MarkVideoDeleted(string filePath, string reason)

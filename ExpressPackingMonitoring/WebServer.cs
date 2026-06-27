@@ -33,6 +33,7 @@ namespace ExpressPackingMonitoring
         private HttpListener _listener;
         private readonly VideoDatabase _db;
         private readonly Func<bool> _isRecordingProvider;
+        private readonly Func<string> _currentRecordingFileProvider;
         private readonly Func<VideoRecord, MkvConversionResult> _mkvConverter;
         private readonly CancellationTokenSource _cts = new();
         private Task _listenTask;
@@ -70,10 +71,11 @@ namespace ExpressPackingMonitoring
             catch { }
         }
 
-        public WebServer(VideoDatabase db, int port = 5280, int transCacheMaxMB = 1024, Func<bool> isRecordingProvider = null, Func<VideoRecord, MkvConversionResult> mkvConverter = null)
+        public WebServer(VideoDatabase db, int port = 5280, int transCacheMaxMB = 1024, Func<bool> isRecordingProvider = null, Func<VideoRecord, MkvConversionResult> mkvConverter = null, Func<string> currentRecordingFileProvider = null)
         {
             _db = db ?? throw new ArgumentNullException(nameof(db));
             _isRecordingProvider = isRecordingProvider ?? (() => false);
+            _currentRecordingFileProvider = currentRecordingFileProvider ?? (() => null);
             _mkvConverter = mkvConverter;
             Port = port;
             _transCacheMaxBytes = (long)transCacheMaxMB * 1024 * 1024;
@@ -761,6 +763,18 @@ namespace ExpressPackingMonitoring
             if (!filePath.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase))
                 return filePath;
 
+            if (IsCurrentRecordingFile(filePath))
+            {
+                Log($"EnsureMp4ContainerForPlayback: 拦截录制中文件点播 Id={record.Id}, OrderId={record.OrderId}, file={Path.GetFileName(filePath)}");
+                RuntimeLog.Warn("WebPlayback", $"Blocked current recording MKV playback id={record.Id}, file={Path.GetFileName(filePath)}");
+                SendJson(ctx, 409, new
+                {
+                    recordingInProgress = true,
+                    message = "视频正在录制，录制结束后可播放。"
+                });
+                return "";
+            }
+
             string mp4Path = Path.ChangeExtension(filePath, ".mp4");
             if (File.Exists(mp4Path) && new FileInfo(mp4Path).Length > 0)
             {
@@ -783,6 +797,30 @@ namespace ExpressPackingMonitoring
             }
 
             return result.FilePath;
+        }
+
+        private bool IsCurrentRecordingFile(string filePath)
+        {
+            if (!_isRecordingProvider())
+                return false;
+
+            string currentPath = _currentRecordingFileProvider();
+            return IsSamePath(filePath, currentPath);
+        }
+
+        private static bool IsSamePath(string left, string right)
+        {
+            if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
+                return false;
+
+            try
+            {
+                left = Path.GetFullPath(left);
+                right = Path.GetFullPath(right);
+            }
+            catch { }
+
+            return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string BuildPlayUrl(long id, bool compatMode, bool allowTranscodeWhileRecording)
