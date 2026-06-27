@@ -9,6 +9,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using ExpressPackingMonitoring.ViewModels;
 
 namespace ExpressPackingMonitoring
 {
@@ -188,6 +189,9 @@ namespace ExpressPackingMonitoring
                         break;
                     case "/api/videos":
                         HandleSearchVideos(ctx);
+                        break;
+                    case "/api/storage":
+                        HandleStorageOverview(ctx);
                         break;
                     case "/api/orderinfo":
                         if (method == "POST")
@@ -430,6 +434,236 @@ namespace ExpressPackingMonitoring
         }
 
         // ───── API: 搜索视频 ─────
+        private void HandleStorageOverview(HttpListenerContext ctx)
+        {
+            try
+            {
+                var config = LoadAppConfig();
+                var locations = config.StorageLocations?
+                    .Where(x => !string.IsNullOrWhiteSpace(x.Path))
+                    .OrderByDescending(x => x.Priority)
+                    .ToList() ?? new List<StorageLocation>();
+
+                var configuredPaths = locations.Select(BuildStoragePathInfo).ToList();
+                var records = _db.GetActiveStorageVideoFiles()
+                    .Where(x => !string.IsNullOrWhiteSpace(x.FilePath))
+                    .ToList();
+
+                var existingRecords = records.Where(x =>
+                {
+                    try { return File.Exists(x.FilePath); }
+                    catch { return false; }
+                }).ToList();
+
+                long usedBytes = existingRecords.Sum(x => GetExistingFileSize(x.FilePath, x.FileSizeBytes));
+                long totalBytes = configuredPaths.Sum(x => x.TotalBytes);
+                if (totalBytes <= 0 && usedBytes > 0)
+                    totalBytes = usedBytes;
+                long freeBytes = Math.Max(0, totalBytes - usedBytes);
+
+                DateTime? oldest = existingRecords.Count > 0 ? existingRecords.Min(x => x.StartTime) : null;
+                DateTime? latest = existingRecords.Count > 0 ? existingRecords.Max(x => x.StartTime) : null;
+                int savedDays = CalculateSavedDays(oldest, latest);
+
+                var recentRecords = existingRecords
+                    .Where(x => x.StartTime.Date >= DateTime.Today.AddDays(-9))
+                    .ToList();
+                int historyDays = recentRecords.Select(x => x.StartTime.Date).Distinct().Count();
+                long historyBytes = recentRecords.Sum(x => GetExistingFileSize(x.FilePath, x.FileSizeBytes));
+
+                string estimateBasis = "";
+                double avgGBPerDay = 0;
+                double? estimatedRetentionDays = null;
+                if (historyDays > 0 && historyBytes > 0)
+                {
+                    avgGBPerDay = BytesToGB(historyBytes) / historyDays;
+                    if (avgGBPerDay > 0 && totalBytes > 0)
+                    {
+                        estimatedRetentionDays = BytesToGB(totalBytes) / avgGBPerDay;
+                        estimateBasis = $"基于最近 {historyDays} 天录像占用 {FormatGB(historyBytes)} 估算";
+                    }
+                }
+                else if (savedDays > 0 && usedBytes > 0)
+                {
+                    avgGBPerDay = BytesToGB(usedBytes) / savedDays;
+                    if (avgGBPerDay > 0 && totalBytes > 0)
+                    {
+                        estimatedRetentionDays = BytesToGB(totalBytes) / avgGBPerDay;
+                        historyDays = savedDays;
+                        historyBytes = usedBytes;
+                        estimateBasis = "基于当前已保存录像估算，结果仅供参考";
+                    }
+                }
+
+                var pathDtos = configuredPaths.Select(path =>
+                {
+                    long pathUsed = existingRecords
+                        .Where(x => IsPathUnderDirectory(x.FilePath, path.Path))
+                        .Sum(x => GetExistingFileSize(x.FilePath, x.FileSizeBytes));
+                    long pathFree = Math.Max(0, path.TotalBytes - pathUsed);
+                    return new
+                    {
+                        path = path.DisplayPath,
+                        totalGB = Math.Round(BytesToGB(path.TotalBytes), 1),
+                        usedGB = Math.Round(BytesToGB(pathUsed), 1),
+                        freeGB = Math.Round(BytesToGB(pathFree), 1),
+                        available = path.Available
+                    };
+                }).ToList();
+
+                SendJson(ctx, 200, new
+                {
+                    totalGB = Math.Round(BytesToGB(totalBytes), 1),
+                    usedGB = Math.Round(BytesToGB(usedBytes), 1),
+                    freeGB = Math.Round(BytesToGB(freeBytes), 1),
+                    oldestVideoTime = oldest?.ToString("yyyy-MM-dd HH:mm:ss"),
+                    latestVideoTime = latest?.ToString("yyyy-MM-dd HH:mm:ss"),
+                    savedDays,
+                    historyDays,
+                    historyUsedGB = Math.Round(BytesToGB(historyBytes), 1),
+                    avgGBPerDay = Math.Round(avgGBPerDay, 2),
+                    estimatedRetentionDays = estimatedRetentionDays.HasValue ? Math.Round(estimatedRetentionDays.Value, 0) : (double?)null,
+                    estimateBasis,
+                    pathCount = configuredPaths.Count,
+                    paths = pathDtos
+                });
+            }
+            catch (Exception ex)
+            {
+                Log($"HandleStorageOverview 异常: {ex.Message}");
+                SendJson(ctx, 500, new { error = "存储信息暂不可用" });
+            }
+        }
+
+        private static AppConfig LoadAppConfig()
+        {
+            try
+            {
+                string configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
+                if (!File.Exists(configPath))
+                    return new AppConfig();
+
+                return JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(configPath)) ?? new AppConfig();
+            }
+            catch
+            {
+                return new AppConfig();
+            }
+        }
+
+        private sealed class StoragePathInfo
+        {
+            public string Path { get; init; } = "";
+            public string DisplayPath { get; init; } = "";
+            public long TotalBytes { get; init; }
+            public bool Available { get; init; }
+        }
+
+        private static StoragePathInfo BuildStoragePathInfo(StorageLocation loc)
+        {
+            string normalizedPath = NormalizeStoragePath(loc.Path);
+            long quotaBytes = loc.QuotaGB > 0 ? (long)(loc.QuotaGB * 1073741824.0) : 0;
+            bool available = false;
+            try
+            {
+                if (Directory.Exists(normalizedPath))
+                {
+                    string root = Path.GetPathRoot(Path.GetFullPath(normalizedPath));
+                    if (!string.IsNullOrEmpty(root))
+                    {
+                        var drive = new DriveInfo(root);
+                        available = drive.IsReady;
+                        if (available)
+                        {
+                            long driveUsableBytes = drive.AvailableFreeSpace + GetDirectoryVideoBytes(normalizedPath);
+                            if (quotaBytes <= 0)
+                                quotaBytes = driveUsableBytes;
+                            else
+                                quotaBytes = Math.Min(quotaBytes, driveUsableBytes);
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            return new StoragePathInfo
+            {
+                Path = normalizedPath,
+                DisplayPath = Path.GetFileName(normalizedPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
+                TotalBytes = Math.Max(0, quotaBytes),
+                Available = available
+            };
+        }
+
+        private static string NormalizeStoragePath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return "";
+            string normalized = Path.IsPathRooted(path) ? path : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, path);
+            try { return Path.GetFullPath(normalized); }
+            catch { return normalized; }
+        }
+
+        private static long GetDirectoryVideoBytes(string folderPath)
+        {
+            try
+            {
+                var dir = new DirectoryInfo(folderPath);
+                if (!dir.Exists) return 0;
+                return dir.EnumerateFiles("*.*", SearchOption.AllDirectories)
+                    .Where(x => string.Equals(x.Extension, ".mp4", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(x.Extension, ".mkv", StringComparison.OrdinalIgnoreCase))
+                    .Sum(x => x.Length);
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private static long GetExistingFileSize(string filePath, long fallbackBytes)
+        {
+            try
+            {
+                if (File.Exists(filePath))
+                    return new FileInfo(filePath).Length;
+            }
+            catch { }
+            return Math.Max(0, fallbackBytes);
+        }
+
+        private static bool IsPathUnderDirectory(string filePath, string directoryPath)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(filePath) || string.IsNullOrWhiteSpace(directoryPath))
+                    return false;
+                string fullFile = Path.GetFullPath(filePath);
+                string fullDir = Path.GetFullPath(directoryPath)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                    + Path.DirectorySeparatorChar;
+                return fullFile.StartsWith(fullDir, StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static int CalculateSavedDays(DateTime? oldest, DateTime? latest)
+        {
+            if (!oldest.HasValue || !latest.HasValue) return 0;
+            int days = (latest.Value.Date - oldest.Value.Date).Days + 1;
+            return Math.Max(1, days);
+        }
+
+        private static double BytesToGB(long bytes) => bytes / 1073741824.0;
+
+        private static string FormatGB(long bytes)
+        {
+            double gb = BytesToGB(bytes);
+            return gb >= 10 ? $"{gb:F0}GB" : $"{gb:F1}GB";
+        }
+
         private void HandleSearchVideos(HttpListenerContext ctx)
         {
             var qs = ctx.Request.QueryString;
@@ -797,198 +1031,41 @@ namespace ExpressPackingMonitoring
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>快递打包录像回放</title>
 <style>
-  :root { --bg: #f0f2f5; --card: #fff; --primary: #1677ff; --text: #1f1f1f; --text2: #666; --border: #e8e8e8; --hover: #f5f5f5; }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, "Microsoft YaHei UI", sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-
-  .header { background: linear-gradient(135deg, #1677ff 0%, #0958d9 100%); color: #fff; padding: 20px 0; text-align: center; }
-  .header h1 { font-size: 22px; font-weight: 600; }
-  .header p { font-size: 13px; opacity: .8; margin-top: 4px; }
-
-  .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
-
-  .search-bar { background: var(--card); border-radius: 12px; padding: 18px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 16px; }
-  .search-bar label { font-size: 13px; color: var(--text2); }
-  .search-bar input[type="date"], .search-bar input[type="text"] {
-    height: 36px; border: 1px solid var(--border); border-radius: 6px; padding: 0 10px; font-size: 13px; outline: none; }
-  .search-bar input:focus { border-color: var(--primary); }
-  .search-bar input[type="text"] { flex: 1; min-width: 150px; }
-  .btn { height: 36px; padding: 0 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
-  .btn-primary { background: var(--primary); color: #fff; }
-  .btn-primary:hover { background: #0958d9; }
-
-  .results-info { font-size: 13px; color: var(--text2); margin-bottom: 12px; }
-
-  .video-list { display: flex; flex-direction: column; gap: 8px; }
-  .video-item {
-    background: var(--card); border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;
-    box-shadow: 0 1px 2px rgba(0,0,0,.05); transition: box-shadow .2s; cursor: default; }
-  .video-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,.1); }
-  .video-info { flex: 1; }
-  .video-info .order { font-size: 15px; font-weight: 600; }
-  .video-info .meta { font-size: 12px; color: var(--text2); margin-top: 4px; display: flex; gap: 14px; flex-wrap: wrap; }
-  .video-info .meta span { white-space: nowrap; }
-  .video-actions { display: flex; gap: 8px; flex-shrink: 0; margin-left: 12px; }
-  .btn-sm { height: 32px; padding: 0 14px; border-radius: 6px; font-size: 12px; border: 1px solid var(--border); background: var(--card); cursor: pointer; font-weight: 500; }
-  .btn-sm:hover { background: var(--hover); }
-  .btn-sm.play { border-color: var(--primary); color: var(--primary); }
-  .btn-sm.play:hover { background: #e6f4ff; }
-  .btn-sm.disabled { opacity: .4; pointer-events: none; }
-
-  .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 20px; }
-  .pagination .btn-sm.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-
-  .player-overlay {
-    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 100;
-    justify-content: center; align-items: center; }
-  .player-overlay.active { display: flex; }
-  .player-box { background: #000; border-radius: 12px; overflow: hidden; max-width: 900px; width: 95%; position: relative; }
-  .player-box video { width: 100%; max-height: 80vh; }
-  .player-close { position: absolute; top: 10px; right: 14px; color: #fff; font-size: 28px; cursor: pointer; z-index: 2; line-height: 1; }
-  .player-title { position: absolute; top: 12px; left: 16px; color: #fff; font-size: 14px; z-index: 2; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
-
-  .empty { text-align: center; padding: 60px 0; color: var(--text2); }
-  .empty span { font-size: 48px; display: block; margin-bottom: 12px; }
-
-  @media (max-width: 600px) {
-    .video-item { flex-direction: column; align-items: flex-start; }
-    .video-actions { margin: 10px 0 0; }
-  }
+  :root{--bg:#f4f6f8;--panel:#fff;--panel2:#f8fafc;--text:#172033;--muted:#667085;--border:#dde3ea;--strong:#c8d2df;--primary:#2563eb;--primary2:#1d4ed8;--soft:#e8f0ff;--ok:#138a52;--warn:#b7791f;--bad:#c24135;--shadow:0 10px 26px rgba(27,39,63,.08)}
+  *{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:"Microsoft YaHei UI","Microsoft YaHei",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}button{cursor:pointer}.page{max-width:1240px;margin:0 auto;padding:24px 28px 36px}.topbar{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:18px}.title-block h1{margin:0;font-size:26px;line-height:1.2;font-weight:750}.title-block p{margin:8px 0 0;color:var(--muted);font-size:13px}.server-badge{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 12px;border:1px solid var(--border);border-radius:6px;color:var(--muted);background:rgba(255,255,255,.72);font-size:12px;white-space:nowrap}.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(19,138,82,.12)}
+  .overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:16px}.summary-card{min-height:132px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px;box-shadow:var(--shadow);display:flex;flex-direction:column;justify-content:space-between}.summary-head{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:13px;font-weight:650}.summary-icon{width:28px;height:28px;display:inline-grid;place-items:center;border-radius:6px;background:var(--soft);color:var(--primary);flex:0 0 auto}.summary-main{margin:12px 0 6px;font-size:26px;font-weight:760;line-height:1.18;color:var(--text)}.summary-note{min-height:18px;color:var(--muted);font-size:12px;line-height:1.45}.progress{width:100%;height:8px;border-radius:999px;background:#e7ecf2;overflow:hidden;margin-top:11px}.progress span{display:block;height:100%;width:0;background:linear-gradient(90deg,#2563eb,#22a6f2);border-radius:inherit}
+  .toolbar{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px;box-shadow:var(--shadow);margin-bottom:14px}.toolbar form{display:grid;grid-template-columns:152px 152px minmax(260px,1fr) auto;gap:12px;align-items:end}.field{display:flex;flex-direction:column;gap:6px;min-width:0}.field label{font-size:12px;color:var(--muted);font-weight:650}.field input{height:38px;border:1px solid var(--strong);border-radius:6px;padding:0 11px;color:var(--text);background:#fff;outline:none}.field input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.12)}.btn{height:38px;border:1px solid var(--strong);border-radius:6px;padding:0 14px;background:#fff;color:var(--text);display:inline-flex;align-items:center;justify-content:center;gap:7px;font-weight:650;white-space:nowrap}.btn:hover{background:var(--panel2)}.btn-primary{background:var(--primary);border-color:var(--primary);color:#fff;min-width:102px}.btn-primary:hover{background:var(--primary2)}.btn[disabled]{opacity:.45;cursor:not-allowed}.icon{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
+  .list-panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);overflow:hidden}.list-header{height:48px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--border)}.list-title{font-size:15px;font-weight:750}.results-info{color:var(--muted);font-size:12px}.video-list{display:flex;flex-direction:column}.video-item{display:grid;grid-template-columns:minmax(180px,1.25fr) minmax(320px,2.2fr) auto;gap:16px;align-items:center;padding:14px 16px;border-bottom:1px solid #edf1f5}.video-item:hover{background:#fbfdff}.video-item:last-child{border-bottom:none}.order-line{display:flex;align-items:center;gap:9px;min-width:0}.order-id{font-size:16px;font-weight:760;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mode-badge,.status-badge,.codec-badge{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}.mode-badge{background:#eef6ff;color:#1d5fae}.mode-badge.return{background:#fff4e5;color:#9a5b10}.status-badge{margin-top:8px;background:#eaf7ef;color:var(--ok);width:fit-content}.status-badge.missing{background:#fff0ed;color:var(--bad)}.meta-grid{display:grid;grid-template-columns:150px 82px 86px minmax(120px,1fr);gap:8px 16px;align-items:center;color:var(--muted);font-size:12px;min-width:0}.meta-cell{min-width:0;display:flex;align-items:center;gap:6px}.meta-cell .text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.codec-badge{background:#fff7db;color:var(--warn);border-radius:5px}.video-actions{display:flex;justify-content:flex-end;gap:8px}.btn-sm{height:32px;padding:0 11px;font-size:12px}.btn-play{color:var(--primary);border-color:#aac4ff;background:#f8fbff}.btn-play:hover{background:var(--soft)}
+  .pagination{display:flex;justify-content:center;align-items:center;gap:6px;padding:14px 16px;border-top:1px solid var(--border);min-height:60px}.page-btn{min-width:34px;padding:0 10px}.page-btn.active{background:var(--primary);border-color:var(--primary);color:#fff}.empty{padding:58px 18px;text-align:center;color:var(--muted)}.empty-title{font-size:16px;font-weight:750;color:var(--text);margin-bottom:6px}.empty-sub{font-size:13px}.player-overlay{display:none;position:fixed;inset:0;z-index:100;background:rgba(15,23,42,.72);align-items:center;justify-content:center;padding:28px}.player-overlay.active{display:flex}.player-box{width:min(1080px,96vw);background:#0b1020;border-radius:8px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.45)}.player-top{height:46px;padding:0 14px 0 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;color:#fff;background:#111827}.player-title{font-size:14px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.player-close{width:32px;height:32px;border-radius:6px;border:1px solid rgba(255,255,255,.18);background:transparent;color:#fff;font-size:22px;line-height:1}.player-close:hover{background:rgba(255,255,255,.12)}.player-box video{display:block;width:100%;max-height:calc(90vh - 46px);background:#000}
+  @media (max-width:820px){.page{padding:18px 14px 28px}.topbar{align-items:flex-start;flex-direction:column}.overview{grid-template-columns:1fr}.toolbar form{grid-template-columns:1fr}.video-item{grid-template-columns:1fr;gap:10px}.meta-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.video-actions{justify-content:flex-start;flex-wrap:wrap}}
 </style>
 </head>
 <body>
-
-<div class="header">
-  <h1>📦 快递打包录像</h1>
-  <p>局域网远程查看 · 搜索 · 下载</p>
+<div class="page">
+  <header class="topbar"><div class="title-block"><h1>快递打包录像回放</h1><p>按日期或订单号检索局域网监控端录像，支持在线播放、转码预览和文件下载。</p></div><div class="server-badge"><span class="dot"></span><span>局域网 Web 服务</span></div></header>
+  <section class="overview" aria-label="录像保留情况">
+    <article class="summary-card"><div><div class="summary-head"><span class="summary-icon" data-icon="calendar"></span><span>当前可追溯到</span></div><div class="summary-main" id="oldestValue">加载中</div></div><div class="summary-note" id="oldestNote">正在读取录像存储情况</div></article>
+    <article class="summary-card"><div><div class="summary-head"><span class="summary-icon" data-icon="clock"></span><span>预计可保留</span></div><div class="summary-main" id="retentionValue">加载中</div></div><div class="summary-note" id="retentionNote">估算值仅供参考</div></article>
+    <article class="summary-card"><div><div class="summary-head"><span class="summary-icon" data-icon="database"></span><span>存储空间</span></div><div class="summary-main" id="storageValue">加载中</div></div><div class="summary-note" id="storageNote">正在读取配置目录</div><div class="progress"><span id="storageProgress"></span></div></article>
+  </section>
+  <section class="toolbar" aria-label="搜索条件"><form onsubmit="doSearch(); return false;"><div class="field"><label for="startDate">开始日期</label><input type="date" id="startDate"></div><div class="field"><label for="endDate">结束日期</label><input type="date" id="endDate"></div><div class="field"><label for="keyword">订单号或文件名</label><input type="text" id="keyword" placeholder="输入订单号关键词搜索"></div><button type="submit" class="btn btn-primary"><span data-icon="search"></span><span>搜索</span></button></form></section>
+  <section class="list-panel" aria-label="录像列表"><div class="list-header"><div class="list-title">录像列表</div><div class="results-info" id="resultsInfo"></div></div><div class="video-list" id="videoList"></div><div class="pagination" id="pagination"></div></section>
 </div>
-
-<div class="container">
-  <form class="search-bar" onsubmit="doSearch(); return false;">
-    <label>开始</label>
-    <input type="date" id="startDate">
-    <label>结束</label>
-    <input type="date" id="endDate">
-    <input type="text" id="keyword" placeholder="输入单号搜索...">
-    <button type="submit" class="btn btn-primary">🔍 搜索</button>
-  </form>
-
-  <div class="results-info" id="resultsInfo"></div>
-  <div class="video-list" id="videoList"></div>
-  <div class="pagination" id="pagination"></div>
-
-  <div class="player-overlay" id="playerOverlay" onclick="closePlayer(event)">
-    <div class="player-box" onclick="event.stopPropagation()">
-      <span class="player-close" onclick="closePlayer()">&times;</span>
-      <span class="player-title" id="playerTitle"></span>
-      <video id="videoPlayer" controls></video>
-    </div>
-  </div>
-</div>
-
+<div class="player-overlay" id="playerOverlay" onclick="closePlayer(event)"><div class="player-box" onclick="event.stopPropagation()"><div class="player-top"><div class="player-title" id="playerTitle"></div><button class="player-close" type="button" aria-label="关闭播放器" onclick="closePlayer()">×</button></div><video id="videoPlayer" controls></video></div></div>
 <script>
-let currentPage = 1;
-
-(function init() {
-  const today = new Date();
-  const weekAgo = new Date(today);
-  weekAgo.setDate(today.getDate() - 7);
-  document.getElementById('startDate').value = fmt(weekAgo);
-  document.getElementById('endDate').value = fmt(today);
-  doSearch();
-})();
-
-function fmt(d) { return d.toISOString().slice(0, 10); }
-
-function doSearch(page) {
-  currentPage = page || 1;
-  const params = new URLSearchParams({
-    start: document.getElementById('startDate').value,
-    end: document.getElementById('endDate').value,
-    keyword: document.getElementById('keyword').value.trim(),
-    page: currentPage,
-    size: 20
-  });
-  fetch('/api/videos?' + params)
-    .then(r => r.json())
-    .then(render)
-    .catch(e => {
-      document.getElementById('videoList').innerHTML = '<div class="empty"><span>⚠️</span>请求失败: ' + e.message + '</div>';
-    });
-}
-
-function render(res) {
-  const list = document.getElementById('videoList');
-  const info = document.getElementById('resultsInfo');
-  const pagi = document.getElementById('pagination');
-
-  if (!res.data || res.data.length === 0) {
-    list.innerHTML = '<div class="empty"><span>📭</span>没有找到匹配的录像</div>';
-    info.textContent = '';
-    pagi.innerHTML = '';
-    return;
-  }
-
-  info.textContent = '共 ' + res.total + ' 条记录，第 ' + res.page + ' 页';
-
-  list.innerHTML = res.data.map(v => {
-    const badge = v.mode === '退货' ? '🔄' : '📦';
-    const sizeStr = v.sizeMB >= 1024 ? (v.sizeMB / 1024).toFixed(1) + ' GB' : v.sizeMB + ' MB';
-    const disabled = !v.exists ? 'disabled' : '';
-    const tip = !v.exists ? ' title="文件不存在"' : '';
-    return '<div class="video-item">' +
-      '<div class="video-info">' +
-        '<div class="order">' + badge + ' ' + esc(v.orderId) + '</div>' +
-        '<div class="meta">' +
-          '<span>📅 ' + v.startTime + '</span>' +
-          '<span>⏱ ' + v.duration + '</span>' +
-          '<span>💾 ' + sizeStr + '</span>' +
-          (v.videoCodec && v.videoCodec !== 'h264' ? '<span title="该编码将实时转码为H.264播放">🔄 ' + v.videoCodec.toUpperCase() + '</span>' : '') +
-          '<span>📄 ' + esc(v.fileName) + '</span>' +
-        '</div>' +
-      '</div>' +
-      '<div class="video-actions">' +
-        '<button class="btn-sm play ' + disabled + '"' + tip + ' onclick="playVideo(' + v.id + ',\'' + esc(v.orderId) + '\')">▶ 播放</button>' +
-        '<button class="btn-sm ' + disabled + '"' + tip + ' onclick="downloadVideo(' + v.id + ')">⬇ 下载</button>' +
-      '</div>' +
-    '</div>';
-  }).join('');
-
-  // 分页
-  const totalPages = Math.ceil(res.total / res.pageSize);
-  if (totalPages <= 1) { pagi.innerHTML = ''; return; }
-  let html = '';
-  for (let i = 1; i <= totalPages && i <= 10; i++) {
-    html += '<button class="btn-sm' + (i === res.page ? ' active' : '') + '" onclick="doSearch(' + i + ')">' + i + '</button>';
-  }
-  pagi.innerHTML = html;
-}
-
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-
-function playVideo(id, title) {
-  const player = document.getElementById('videoPlayer');
-  player.src = '/api/videos/' + id + '/play';
-  document.getElementById('playerTitle').textContent = title;
-  document.getElementById('playerOverlay').classList.add('active');
-  player.play();
-}
-
-function closePlayer(e) {
-  if (e && e.target !== document.getElementById('playerOverlay')) return;
-  const player = document.getElementById('videoPlayer');
-  player.pause();
-  player.src = '';
-  document.getElementById('playerOverlay').classList.remove('active');
-}
-
-function downloadVideo(id) {
-  window.open('/api/videos/' + id + '/download', '_blank');
-}
-
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closePlayer(); });
+let currentPage=1;const pageSize=20;const icons={calendar:'<svg class="icon" viewBox="0 0 24 24"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg>',clock:'<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',database:'<svg class="icon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>',search:'<svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',play:'<svg class="icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7Z"/></svg>',download:'<svg class="icon" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>',file:'<svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>',time:'<svg class="icon" viewBox="0 0 24 24"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9"/></svg>',size:'<svg class="icon" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>'};
+(function init(){mountIcons(document);const today=new Date(),weekAgo=new Date(today);weekAgo.setDate(today.getDate()-7);document.getElementById('startDate').value=fmt(weekAgo);document.getElementById('endDate').value=fmt(today);loadStorageOverview();doSearch();})();
+function mountIcons(root){root.querySelectorAll('[data-icon]').forEach(el=>{el.innerHTML=icons[el.dataset.icon]||''})}function fmt(d){return d.toISOString().slice(0,10)}function text(id,v){document.getElementById(id).textContent=v}function formatDateOnly(v){return v?String(v).slice(0,10):''}function formatGB(v){v=Number(v||0);return v.toLocaleString('zh-CN',{maximumFractionDigits:v>=10?0:1})+'GB'}function formatDuration(sec){const s=Math.max(0,Number(sec||0)),h=Math.floor(s/3600),m=Math.floor((s%3600)/60),r=Math.floor(s%60);return h>0?h+':'+String(m).padStart(2,'0')+':'+String(r).padStart(2,'0'):String(m).padStart(2,'0')+':'+String(r).padStart(2,'0')}
+function loadStorageOverview(){fetch('/api/storage').then(r=>{if(!r.ok)throw new Error();return r.json()}).then(renderStorageOverview).catch(()=>{text('oldestValue','暂不可用');text('oldestNote','存储信息接口请求失败，不影响录像搜索');text('retentionValue','暂无法估算');text('retentionNote','历史数据或存储配置暂不可用');text('storageValue','暂不可用');text('storageNote','存储信息暂不可用');document.getElementById('storageProgress').style.width='0%'})}
+function renderStorageOverview(d){if(!d||!d.oldestVideoTime){text('oldestValue','暂无录像数据');text('oldestNote','当前存储库未找到可用录像')}else{text('oldestValue',formatDateOnly(d.oldestVideoTime));text('oldestNote','已保存约 '+(d.savedDays||1)+' 天录像'+(d.latestVideoTime?'，最新 '+d.latestVideoTime:''))}if(d&&d.estimatedRetentionDays){text('retentionValue','约 '+d.estimatedRetentionDays+' 天');text('retentionNote',(d.estimateBasis||'基于当前录像占用估算')+(d.avgGBPerDay?'，平均约 '+d.avgGBPerDay+'GB / 天':''))}else{text('retentionValue','暂无法估算');text('retentionNote','历史数据不足或平均每日占用为 0')}const used=Number(d&&d.usedGB||0),total=Number(d&&d.totalGB||0),free=Number(d&&d.freeGB||0),pct=total>0?Math.max(0,Math.min(100,used/total*100)):0;text('storageValue','已用 '+formatGB(used)+' / '+formatGB(total));text('storageNote',(d&&d.pathCount>1?'共 '+d.pathCount+' 个存储目录，':'')+'剩余 '+formatGB(free));document.getElementById('storageProgress').style.width=pct.toFixed(1)+'%'}
+function doSearch(page){currentPage=page||1;const params=new URLSearchParams({start:document.getElementById('startDate').value,end:document.getElementById('endDate').value,keyword:document.getElementById('keyword').value.trim(),page:currentPage,size:pageSize});text('resultsInfo','正在搜索...');fetch('/api/videos?'+params).then(r=>r.json()).then(render).catch(e=>{text('resultsInfo','请求失败');renderEmpty('请求失败',e.message||'无法连接到 Web 服务')})}
+function render(res){const list=document.getElementById('videoList'),pagi=document.getElementById('pagination');list.innerHTML='';pagi.innerHTML='';if(!res.data||res.data.length===0){text('resultsInfo','没有找到匹配记录');renderEmpty('没有找到匹配的录像','请调整日期范围或订单号关键词');return}const totalPages=Math.max(1,Math.ceil(res.total/res.pageSize));text('resultsInfo','共 '+res.total+' 条记录，第 '+res.page+' / '+totalPages+' 页');res.data.forEach(v=>list.appendChild(createVideoItem(v)));renderPagination(res.page,totalPages)}
+function createVideoItem(v){const item=document.createElement('article');item.className='video-item';const orderCol=document.createElement('div'),line=document.createElement('div');line.className='order-line';const badge=document.createElement('span');badge.className='mode-badge'+(v.mode==='退货'?' return':'');badge.textContent=v.mode||'发货';const order=document.createElement('div');order.className='order-id';order.title=v.orderId||'';order.textContent=v.orderId||'未记录订单号';line.append(badge,order);const status=document.createElement('div');status.className='status-badge'+(v.exists?'':' missing');status.textContent=v.exists?'文件可用':'文件不存在';orderCol.append(line,status);const meta=document.createElement('div');meta.className='meta-grid';addMeta(meta,'calendar',v.startTime||'-');addMeta(meta,'time',v.duration||formatDuration(v.durationSec));addMeta(meta,'size',formatSize(v.sizeMB));addMeta(meta,'file',v.fileName||'-');if(v.videoCodec&&String(v.videoCodec).toLowerCase()!=='h264'){const codec=document.createElement('span');codec.className='codec-badge';codec.title='该编码会实时转码为 H.264 预览';codec.textContent=String(v.videoCodec).toUpperCase()+' 转码预览';meta.appendChild(codec)}const actions=document.createElement('div');actions.className='video-actions';const play=actionButton('play','播放','btn-play',()=>playVideo(v.id,v.orderId||v.fileName||'录像预览')),down=actionButton('download','下载','',()=>downloadVideo(v.id));if(!v.exists){play.disabled=true;down.disabled=true;play.title=down.title='文件不存在'}actions.append(play,down);item.append(orderCol,meta,actions);mountIcons(item);return item}
+function addMeta(parent,icon,value){const cell=document.createElement('div');cell.className='meta-cell';const i=document.createElement('span');i.dataset.icon=icon;const s=document.createElement('span');s.className='text';s.title=value;s.textContent=value;cell.append(i,s);parent.appendChild(cell)}function actionButton(icon,label,extra,onClick){const btn=document.createElement('button');btn.type='button';btn.className='btn btn-sm '+extra;btn.innerHTML=(icons[icon]||'')+'<span></span>';btn.querySelector('span:last-child').textContent=label;btn.addEventListener('click',onClick);return btn}function formatSize(sizeMB){const mb=Number(sizeMB||0);return mb>=1024?(mb/1024).toFixed(1)+'GB':mb.toFixed(mb>=10?0:1)+'MB'}
+function renderPagination(page,totalPages){const pagi=document.getElementById('pagination');if(totalPages<=1)return;const add=(label,target,active,disabled)=>{const btn=document.createElement('button');btn.type='button';btn.className='btn btn-sm page-btn'+(active?' active':'');btn.textContent=label;btn.disabled=!!disabled;btn.addEventListener('click',()=>doSearch(target));pagi.appendChild(btn)};add('上一页',Math.max(1,page-1),false,page<=1);const start=Math.max(1,Math.min(page-4,totalPages-8)),end=Math.min(totalPages,start+8);for(let i=start;i<=end;i++)add(String(i),i,i===page,false);add('下一页',Math.min(totalPages,page+1),false,page>=totalPages)}
+function renderEmpty(title,sub){const list=document.getElementById('videoList');list.innerHTML='';const box=document.createElement('div');box.className='empty';const t=document.createElement('div');t.className='empty-title';t.textContent=title;const s=document.createElement('div');s.className='empty-sub';s.textContent=sub;box.append(t,s);list.appendChild(box);document.getElementById('pagination').innerHTML=''}
+function playVideo(id,title){const player=document.getElementById('videoPlayer');player.src='/api/videos/'+encodeURIComponent(id)+'/play';document.getElementById('playerTitle').textContent=title;document.getElementById('playerOverlay').classList.add('active');player.play()}function closePlayer(e){if(e&&e.target!==document.getElementById('playerOverlay'))return;const player=document.getElementById('videoPlayer');player.pause();player.src='';document.getElementById('playerOverlay').classList.remove('active')}function downloadVideo(id){window.open('/api/videos/'+encodeURIComponent(id)+'/download','_blank')}document.addEventListener('keydown',e=>{if(e.key==='Escape')closePlayer()});
 </script>
-
 </body>
 </html>
 """;

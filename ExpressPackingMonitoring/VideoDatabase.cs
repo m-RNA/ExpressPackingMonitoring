@@ -58,6 +58,13 @@ namespace ExpressPackingMonitoring
         public List<VideoRecord> Records { get; set; } = new();
     }
 
+    public class StorageVideoFile
+    {
+        public string FilePath { get; set; } = "";
+        public long FileSizeBytes { get; set; }
+        public DateTime StartTime { get; set; }
+    }
+
     /// <summary>
     /// 本地 SQLite 视频数据库，统一管理录制记录、统计数据和删除日志。
     /// 替代原来的 daily_stats.json 和文件系统扫描。
@@ -645,6 +652,33 @@ namespace ExpressPackingMonitoring
                         FileSizeBytes = reader.IsDBNull(3) ? 0 : reader.GetInt64(3),
                         DeletedAt = DateTime.Parse(reader.GetString(4)),
                         Reason = reader.IsDBNull(5) ? "" : reader.GetString(5)
+                    });
+                }
+                return results;
+            }
+        }
+
+        public List<StorageVideoFile> GetActiveStorageVideoFiles()
+        {
+            lock (_lock)
+            {
+                var results = new List<StorageVideoFile>();
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = @"
+                    SELECT FilePath, FileSizeBytes, StartTime
+                    FROM VideoRecords
+                    WHERE IsDeleted = 0
+                      AND EndTime IS NOT NULL
+                    ORDER BY StartTime ASC;";
+
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    results.Add(new StorageVideoFile
+                    {
+                        FilePath = reader.IsDBNull(0) ? "" : reader.GetString(0),
+                        FileSizeBytes = reader.IsDBNull(1) ? 0 : reader.GetInt64(1),
+                        StartTime = DateTime.Parse(reader.GetString(2))
                     });
                 }
                 return results;
