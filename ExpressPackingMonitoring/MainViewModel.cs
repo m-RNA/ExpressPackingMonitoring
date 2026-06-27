@@ -1061,9 +1061,9 @@ namespace ExpressPackingMonitoring.ViewModels
             if (!Config.EnableWebServer || _db == null)
             {
                 MonitorAccessAddress = "";
-                WorkstationAccessText = "其他电脑访问：未启用";
+                WorkstationAccessText = "其他电脑看视频：未开启";
                 WorkstationPrintStatusText = "快递单打印工位：未连接";
-                WorkstationStatusToolTip = "其他电脑访问未启用。请在设置中开启。";
+                WorkstationStatusToolTip = "开启后，其他电脑可在浏览器输入这里显示的网址，搜索、下载和播放打包视频。";
                 return;
             }
             try
@@ -1079,7 +1079,7 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 Debug.WriteLine($"[Web] 启动失败: {ex.Message}");
                 MonitorAccessAddress = "";
-                WorkstationAccessText = "访问地址：暂时不可用";
+                WorkstationAccessText = "其他电脑看视频：暂时不可用";
                 WorkstationPrintStatusText = "快递单打印工位：Web 启动失败";
                 WorkstationStatusToolTip = $"其他电脑暂时无法连接这台摄像头监控工位。\n{ex.Message}";
                 ShowToast($"警告：局域网服务启动失败: {ex.Message}");
@@ -1092,16 +1092,16 @@ namespace ExpressPackingMonitoring.ViewModels
             if (_webServer == null)
             {
                 MonitorAccessAddress = "";
-                WorkstationAccessText = "访问地址：暂时不可用";
+                WorkstationAccessText = "其他电脑看视频：暂时不可用";
                 WorkstationPrintStatusText = "快递单打印工位：未连接";
                 WorkstationStatusToolTip = "其他电脑暂时无法连接这台摄像头监控工位。";
                 return;
             }
 
             MonitorAccessAddress = "";
-            WorkstationAccessText = "访问地址：正在确认本机地址...";
+            WorkstationAccessText = "其他电脑看视频：正在准备网址...";
             WorkstationPrintStatusText = "快递单打印工位：等待连接";
-            WorkstationStatusToolTip = "正在确认这台电脑自身可访问的局域网地址；其他电脑是否能访问，需要在快递单打印工位连接测试。";
+            WorkstationStatusToolTip = "正在准备给其他电脑浏览器使用的网址。两台电脑需要在同一局域网内。";
 
             string verifiedAddress;
             try
@@ -1117,9 +1117,9 @@ namespace ExpressPackingMonitoring.ViewModels
                 return;
 
             MonitorAccessAddress = verifiedAddress;
-            WorkstationAccessText = $"本机地址：{MonitorAccessAddress}";
+            WorkstationAccessText = $"其他电脑看视频：打开 http://{MonitorAccessAddress}";
             WorkstationPrintStatusText = "快递单打印工位：等待连接";
-            WorkstationStatusToolTip = $"这是本机确认可用的候选地址。请在快递单打印工位连接测试：{MonitorAccessAddress}";
+            WorkstationStatusToolTip = $"其他电脑在浏览器输入 http://{MonitorAccessAddress}，即可搜索、下载和播放视频。若打不开，请确认两台电脑在同一局域网，并检查防火墙。";
         }
 
         public void CopyMonitorAddress()
@@ -1186,7 +1186,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 if (string.IsNullOrWhiteSpace(MonitorAccessAddress))
                     _ = RefreshWorkstationStatusAsync();
                 else
-                    WorkstationAccessText = $"本机地址：{MonitorAccessAddress}";
+                    WorkstationAccessText = $"其他电脑看视频：打开 http://{MonitorAccessAddress}";
                 WorkstationPrintStatusText = "快递单打印工位：最近收到订单";
             }
             if (_speechService == null || !Config.EnableOrderInfoAnnounce) return;
