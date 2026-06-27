@@ -1407,7 +1407,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="条码冷却时间 (秒)" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="扫描指令条码后隐藏的秒数，防止重复扫描。"
+                                            <TextBlock Text="扫描指令条码后隐藏的秒数，也作为连续扫码切换录制的最小间隔。"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:DoubleUpDown Grid.Column="1"

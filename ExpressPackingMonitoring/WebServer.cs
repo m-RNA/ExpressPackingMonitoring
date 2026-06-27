@@ -32,6 +32,8 @@ namespace ExpressPackingMonitoring
     {
         private HttpListener _listener;
         private readonly VideoDatabase _db;
+        private readonly Func<bool> _isRecordingProvider;
+        private readonly Func<VideoRecord, MkvConversionResult> _mkvConverter;
         private readonly CancellationTokenSource _cts = new();
         private Task _listenTask;
         private bool _disposed;
@@ -68,9 +70,11 @@ namespace ExpressPackingMonitoring
             catch { }
         }
 
-        public WebServer(VideoDatabase db, int port = 5280, int transCacheMaxMB = 1024)
+        public WebServer(VideoDatabase db, int port = 5280, int transCacheMaxMB = 1024, Func<bool> isRecordingProvider = null, Func<VideoRecord, MkvConversionResult> mkvConverter = null)
         {
             _db = db ?? throw new ArgumentNullException(nameof(db));
+            _isRecordingProvider = isRecordingProvider ?? (() => false);
+            _mkvConverter = mkvConverter;
             Port = port;
             _transCacheMaxBytes = (long)transCacheMaxMB * 1024 * 1024;
             _listener = CreateListener(port);
@@ -706,18 +710,86 @@ namespace ExpressPackingMonitoring
                 return;
             }
 
+            string filePath = EnsureMp4ContainerForPlayback(ctx, record);
+            if (string.IsNullOrEmpty(filePath))
+                return;
+
             string codec = (record.VideoCodec ?? "").Trim().ToLowerInvariant();
             bool compatMode = ctx.Request.QueryString["compat"] != "0";
+            bool preflight = ctx.Request.QueryString["preflight"] == "1";
+            bool allowTranscodeWhileRecording = ctx.Request.QueryString["allowTranscodeWhileRecording"] == "1";
             bool shouldTranscode = compatMode && codec != "" && codec != "h264";
+            bool recording = _isRecordingProvider();
             Log($"HandlePlay: codec='{codec}', compat={(compatMode ? "1" : "0")}, 判定={(shouldTranscode ? "转码" : "直传")}");
+
+            if (shouldTranscode && recording && !allowTranscodeWhileRecording)
+            {
+                SendJson(ctx, 409, new
+                {
+                    requiresConfirmation = true,
+                    message = "正在录制，H.265 转 H.264 可能影响实时预览和录制稳定性。是否仍要继续转码播放？",
+                    url = BuildPlayUrl(record.Id, compatMode, allowTranscodeWhileRecording: true)
+                });
+                return;
+            }
+
+            if (preflight)
+            {
+                SendJson(ctx, 200, new
+                {
+                    ok = true,
+                    requiresConfirmation = false,
+                    url = BuildPlayUrl(record.Id, compatMode, allowTranscodeWhileRecording)
+                });
+                return;
+            }
+
             if (shouldTranscode)
             {
-                ServeTranscodedStream(ctx, record.FilePath);
+                ServeTranscodedStream(ctx, filePath);
             }
             else
             {
-                ServeFileWithRange(ctx, record.FilePath, inline: true);
+                ServeFileWithRange(ctx, filePath, inline: true);
             }
+        }
+
+        private string EnsureMp4ContainerForPlayback(HttpListenerContext ctx, VideoRecord record)
+        {
+            string filePath = record.FilePath;
+            if (!filePath.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase))
+                return filePath;
+
+            string mp4Path = Path.ChangeExtension(filePath, ".mp4");
+            if (File.Exists(mp4Path) && new FileInfo(mp4Path).Length > 0)
+            {
+                _db.UpdateVideoFilePath(filePath, mp4Path);
+                return mp4Path;
+            }
+
+            if (_mkvConverter == null)
+            {
+                SendJson(ctx, 500, new { error = "服务器未配置 MKV 转 MP4 转换器" });
+                return "";
+            }
+
+            Log($"EnsureMp4ContainerForPlayback: 优先转换 {filePath}");
+            var result = _mkvConverter(record);
+            if (!result.Success || string.IsNullOrWhiteSpace(result.FilePath) || !File.Exists(result.FilePath))
+            {
+                SendJson(ctx, 500, new { error = string.IsNullOrWhiteSpace(result.ErrorMessage) ? "MKV 转 MP4 失败" : result.ErrorMessage });
+                return "";
+            }
+
+            return result.FilePath;
+        }
+
+        private static string BuildPlayUrl(long id, bool compatMode, bool allowTranscodeWhileRecording)
+        {
+            var url = $"/api/videos/{Uri.EscapeDataString(id.ToString())}/play?compat={(compatMode ? "1" : "0")}";
+            if (allowTranscodeWhileRecording)
+                url += "&allowTranscodeWhileRecording=1";
+            return url;
         }
 
         // ───── FFmpeg 转码：命中缓存直接 Range 传输，否则边转码边推流 + 同时写缓存 ─────

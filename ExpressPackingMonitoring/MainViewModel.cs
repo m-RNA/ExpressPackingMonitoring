@@ -119,7 +119,9 @@ namespace ExpressPackingMonitoring.ViewModels
         private const double MinRestartIntervalSeconds = 3.0;
 
         private readonly SemaphoreSlim _recorderLock = new SemaphoreSlim(1, 1);
+        private readonly SemaphoreSlim _mkvConvertLock = new SemaphoreSlim(1, 1);
         private bool _isInputOnCooldown = false;
+        private string _pendingScanDuringCooldown = "";
         private Process _currentFfmpegProcess;
         private TaskCompletionSource<long> _firstRecordingFrameWritten;
         private long _recordingStartTimestamp;
@@ -527,13 +529,22 @@ namespace ExpressPackingMonitoring.ViewModels
         {
             NotifyUserActivity();
             if (IsBusy || _isDisposed) { ScanInputText = ""; return; }
-            if (_isInputOnCooldown) { ScanInputText = ""; return; }
-
             if (string.IsNullOrWhiteSpace(scanResult)) return;
             string upperResult = scanResult.ToUpper().Trim();
             
             // 立即清空扫码框，防止重复触发
             ScanInputText = ""; 
+
+            if (_isInputOnCooldown)
+            {
+                if (IsOrderScan(upperResult))
+                {
+                    _pendingScanDuringCooldown = upperResult;
+                    RuntimeLog.Info("Scan", $"Scan queued during cooldown: {upperResult}");
+                    ShowToast("扫码过快，已保留最后一个单号");
+                }
+                return;
+            }
 
             // 指令处理
             if (upperResult.Contains("CLEAR") || upperResult.Contains("清除")) { ShowToast("提示：扫码框已清除"); return; }
@@ -632,6 +643,25 @@ namespace ExpressPackingMonitoring.ViewModels
             HideBarcode2Temporarily();
             await Task.Delay((int)cooldownMs);
             _isInputOnCooldown = false;
+            string pending = _pendingScanDuringCooldown;
+            _pendingScanDuringCooldown = "";
+            if (!string.IsNullOrWhiteSpace(pending) && !_isDisposed)
+            {
+                RuntimeLog.Info("Scan", $"Processing queued scan after cooldown: {pending}");
+                HandleScan(pending);
+            }
+        }
+
+        private bool IsOrderScan(string upperResult)
+        {
+            if (string.IsNullOrWhiteSpace(upperResult)) return false;
+            if (upperResult.Contains("CLEAR") || upperResult.Contains("清除")) return false;
+            if (upperResult.Contains("SHIP") || upperResult.Contains("发货") || upperResult.Contains("FAHUO")) return false;
+            if (upperResult.Contains("BACK") || upperResult.Contains("退货") || upperResult.Contains("TUIHUO")) return false;
+            if (upperResult.Contains("START") || upperResult.Contains("开始录制")) return false;
+            if (upperResult.Contains("STOP") || upperResult.Contains("停止录制")) return false;
+            try { return System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex); }
+            catch { return false; }
         }
 
         private async Task SafeStopRecordingAsync(bool isManual = false)
@@ -850,6 +880,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 {
                     if (File.Exists(mp4Path))
                     {
+                        DeleteAudioTempFile(Path.ChangeExtension(mkvPath, ".wav"));
                         _db.UpdateVideoFilePath(mkvPath, mp4Path);
                         success++;
                         progress?.Report($"[{i + 1}/{total}] 已更新数据库: {fileName}");
@@ -866,6 +897,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 if (File.Exists(mp4Path) && new FileInfo(mp4Path).Length > 0)
                 {
                     try { File.Delete(mkvPath); } catch { }
+                    DeleteAudioTempFile(Path.ChangeExtension(mkvPath, ".wav"));
                     _db.UpdateVideoFilePath(mkvPath, mp4Path);
                     success++;
                     progress?.Report($"[{i + 1}/{total}] MP4 已存在，已清理 MKV: {fileName}");
@@ -876,25 +908,10 @@ namespace ExpressPackingMonitoring.ViewModels
 
                 bool ok = await Task.Run(() =>
                 {
-                    try
-                    {
-                        var psi = new ProcessStartInfo
-                        {
-                            FileName = ffmpegPath,
-                            Arguments = $"-y -i \"{mkvPath}\" -vcodec copy -acodec copy \"{mp4Path}\"",
-                            UseShellExecute = false,
-                            CreateNoWindow = true,
-                            RedirectStandardError = true,
-                            RedirectStandardOutput = true
-                        };
-
-                        using var process = Process.Start(psi);
-                        if (process == null) return false;
-                        process.StandardError.ReadToEnd();
-                        process.WaitForExit();
-                        return process.ExitCode == 0 && File.Exists(mp4Path) && new FileInfo(mp4Path).Length > 0;
-                    }
-                    catch { return false; }
+                    var result = ConvertMkvToMp4ForPlayback(mkvPath);
+                    if (!result.Success)
+                        RuntimeLog.Warn("MkvRecover", $"Convert failed file={fileName}, error={result.ErrorMessage}");
+                    return result.Success;
                 }, token);
 
                 if (ok)
@@ -959,7 +976,7 @@ namespace ExpressPackingMonitoring.ViewModels
             if (!Config.EnableWebServer || _db == null) return;
             try
             {
-                _webServer = new WebServer(_db, Config.WebServerPort, Config.TranscodeCacheMaxMB);
+                _webServer = new WebServer(_db, Config.WebServerPort, Config.TranscodeCacheMaxMB, () => IsRecording, ConvertRecordMkvToMp4);
                 _webServer.EnableOrderInfoLog = Config.EnableOrderInfoLog;
                 _webServer.OrderInfoReceived += OnOrderInfoReceived;
                 _webServer.Start();
@@ -1133,6 +1150,8 @@ namespace ExpressPackingMonitoring.ViewModels
                         ShowToast($"提示：摄像头已休眠（空闲{Config.CameraIdleMinutes}分钟）");
                         Speak("摄像头已休眠");
                         Debug.WriteLine($"[Idle] 摄像头休眠: 空闲{idleMinutes:F1}分钟");
+                        RuntimeLog.Info("MkvRecover", "Camera idle, start pending MKV conversion");
+                        Task.Run(RecoverOrphanedMkvAsync);
                     });
                 }
             }
@@ -1838,7 +1857,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     {
                         int durSec = Math.Max(1, (int)(DateTime.Now - recordStart).TotalSeconds);
                         _db?.UpdateVideoRecordOnStop(recordId, DateTime.Now, durSec, fileSize, _stopReason, _currentVideoCodec, _currentVideoEncoder);
-                        ConvertMkvToMp4(videoFileToConvert, audioFileToConvert, audioLogFileToUse, audioFailedForRecording, audioBytesWrittenForRecording);
+                        RuntimeLog.Info("Recording", $"Exit finalized MKV, queued for startup/web conversion: {Path.GetFileName(videoFileToConvert)}");
                     }
                     else
                     {

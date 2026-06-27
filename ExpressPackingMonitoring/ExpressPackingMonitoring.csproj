@@ -72,6 +72,7 @@
     <Compile Include="ConfirmDialog.xaml.cs" />
     <Compile Include="EncodingHelper.cs" />
     <Compile Include="GlobalKeyboardHook.cs" />
+    <Compile Include="MkvConversionResult.cs" />
     <Compile Include="RuntimeLog.cs" />
     <Compile Include="SpeechService.cs" />
     <Compile Include="MainViewModel.Cleanup.cs" />

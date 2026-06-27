@@ -145,7 +145,7 @@ namespace ExpressPackingMonitoring.ViewModels
                         _db?.UpdateVideoRecordOnStop(recordId, DateTime.Now, durSec, fileSize, stopReason, videoCodec, videoEncoder);
 
                         // 自动将 MKV 转换为 MP4（无损容器转换）
-                        ConvertMkvToMp4(filePath, audioFilePath, audioLogPath, audioFailedForThisRecording, audioBytesWrittenForThisRecording);
+                        RuntimeLog.Info("Recording", $"Recording finalized as MKV, queued for idle/web conversion: {Path.GetFileName(filePath)}");
 
                         _ = Application.Current.Dispatcher.InvokeAsync(() => {
                             if (!_isDisposed && scanRecord != null)
@@ -1803,6 +1803,95 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 Debug.WriteLine($"[MkvToMp4] 异常: {ex.Message}");
             }
+        }
+
+        public MkvConversionResult ConvertRecordMkvToMp4(VideoRecord record)
+        {
+            if (record == null) return MkvConversionResult.Fail("录像记录不存在");
+            return ConvertMkvToMp4ForPlayback(record.FilePath);
+        }
+
+        private MkvConversionResult ConvertMkvToMp4ForPlayback(string mkvPath)
+        {
+            _mkvConvertLock.Wait();
+            try
+            {
+                if (string.IsNullOrWhiteSpace(mkvPath) || !File.Exists(mkvPath))
+                    return MkvConversionResult.Fail("MKV 文件不存在", mkvPath ?? "");
+                if (!mkvPath.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase))
+                    return MkvConversionResult.Ok(mkvPath, alreadyConverted: true);
+
+                string mp4Path = Path.ChangeExtension(mkvPath, ".mp4");
+                string? audioPath = ResolveSidecarPath(mkvPath, ".wav");
+                string? audioLogPath = ResolveSidecarPath(mkvPath, ".audio.log");
+
+                if (File.Exists(mp4Path) && new FileInfo(mp4Path).Length > 0)
+                {
+                    try { File.Delete(mkvPath); } catch { }
+                    DeleteAudioTempFile(audioPath);
+                    _db?.UpdateVideoFilePath(mkvPath, mp4Path);
+                    return MkvConversionResult.Ok(mp4Path, alreadyConverted: true);
+                }
+
+                string ffmpegPath = FindFFmpeg();
+                if (string.IsNullOrEmpty(ffmpegPath))
+                    return MkvConversionResult.Fail("未找到 FFmpeg，无法转换", mkvPath);
+
+                if (!ValidateAudioCaptureForMux(audioPath, audioLogPath, 0))
+                    return MkvConversionResult.Fail("WAV 音频校验失败，已保留 MKV/WAV", mkvPath);
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = ffmpegPath,
+                    Arguments = BuildMkvToMp4Args(mkvPath, audioPath, mp4Path, Config.AudioSyncOffsetMs),
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true
+                };
+
+                using var process = Process.Start(psi);
+                if (process == null)
+                    return MkvConversionResult.Fail("FFmpeg 进程启动失败", mkvPath);
+
+                string stderr;
+                bool exited = WaitForProcessExit(process, GetMediaProcessTimeoutMs(mkvPath, audioPath), out stderr);
+                bool hasExternalAudio = !string.IsNullOrEmpty(audioPath) && File.Exists(audioPath);
+                bool ok = exited
+                    && process.ExitCode == 0
+                    && File.Exists(mp4Path)
+                    && new FileInfo(mp4Path).Length > 0
+                    && ValidateConvertedMp4(ffmpegPath, mp4Path, hasExternalAudio, audioLogPath);
+
+                if (!ok)
+                {
+                    try { if (File.Exists(mp4Path)) File.Delete(mp4Path); } catch { }
+                    WriteAudioDiagnostic($"Web/后台 MKV 转 MP4 失败: mkv={mkvPath}, wav={audioPath}, stderr={stderr}", audioLogPath);
+                    RuntimeLog.Warn("MkvToMp4", $"Convert failed file={Path.GetFileName(mkvPath)}, exited={exited}, exitCode={(exited ? process.ExitCode : -999)}, stderr={TrimForRuntimeLog(stderr)}");
+                    return MkvConversionResult.Fail(exited ? "MP4 转换或音轨校验失败" : "MP4 转换超时", mkvPath);
+                }
+
+                try { File.Delete(mkvPath); } catch { }
+                DeleteAudioTempFile(audioPath);
+                _db?.UpdateVideoFilePath(mkvPath, mp4Path);
+                RuntimeLog.Info("MkvToMp4", $"Converted file={Path.GetFileName(mkvPath)}, audio={(hasExternalAudio ? "yes" : "no")}");
+                return MkvConversionResult.Ok(mp4Path);
+            }
+            catch (Exception ex)
+            {
+                RuntimeLog.Error("MkvToMp4", $"Convert exception file={Path.GetFileName(mkvPath ?? "")}", ex);
+                return MkvConversionResult.Fail(ex.Message, mkvPath ?? "");
+            }
+            finally
+            {
+                _mkvConvertLock.Release();
+            }
+        }
+
+        private static string? ResolveSidecarPath(string mkvPath, string extension)
+        {
+            string path = Path.ChangeExtension(mkvPath, extension);
+            return File.Exists(path) ? path : null;
         }
 
         internal static string BuildMkvToMp4Args(string mkvPath, string? audioPath, string mp4Path, int audioSyncOffsetMs)
