@@ -171,7 +171,7 @@ public partial class PrintWorkstationWindow : Window
     .step h2{font-size:18px;margin:3px 0 8px}
     .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
     a.primary,button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 16px;border-radius:8px;border:0;background:#1f78ff;color:#fff;text-decoration:none;font-weight:700;cursor:pointer}
-    a.secondary{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 16px;border-radius:8px;border:1px solid #ccd6e4;color:#172033;text-decoration:none;font-weight:700;background:#fff}
+    a.secondary,button.secondary{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 16px;border-radius:8px;border:1px solid #ccd6e4;color:#172033;text-decoration:none;font-weight:700;background:#fff}
     code{font-size:18px;background:#eef4ff;border:1px solid #cdddf5;border-radius:8px;padding:10px 12px;display:inline-block;color:#0c4fb3;margin-right:10px}
     .warn{color:#a44800;background:#fff6e8;border:1px solid #f0c98e;border-radius:8px;padding:12px}
     .hint{font-size:13px;color:#6b7788;margin-top:10px}
@@ -200,19 +200,19 @@ public partial class PrintWorkstationWindow : Window
         <div class="num">2</div>
         <div>
           <h2>打开浏览器的用户脚本权限</h2>
-          <p>Chrome / Edge 新版本需要在扩展详情里打开“允许用户脚本”；如果没有这个开关，就打开右上角“开发者模式”。本地安装脚本时，也建议打开“允许访问文件网址”。</p>
+          <p>Chrome / Edge 新版本需要在扩展详情里打开“允许用户脚本”；如果没有这个开关，就打开“开发者模式”。本地安装脚本时，也建议打开“允许访问文件网址”。</p>
           <ul class="check">
             <li>打开浏览器扩展管理页面，找到 Tampermonkey / 篡改猴。</li>
             <li>进入“详情”，打开“允许用户脚本”。</li>
-            <li>如果没有“允许用户脚本”，打开扩展页右上角“开发者模式”。</li>
+            <li>如果没有“允许用户脚本”，打开“开发者模式”：Edge 一般在左下角，Chrome 一般在右上角。</li>
             <li>如果有“允许访问文件网址”，也一起打开。</li>
           </ul>
           <div class="actions">
-            <a class="secondary" href="chrome://extensions/">打开 Chrome 扩展页</a>
-            <a class="secondary" href="edge://extensions/">打开 Edge 扩展页</a>
+            <button class="secondary" onclick="copyText('chrome://extensions/','已复制 Chrome 扩展页地址')">复制 Chrome 扩展页地址</button>
+            <button class="secondary" onclick="copyText('edge://extensions/','已复制 Edge 扩展页地址')">复制 Edge 扩展页地址</button>
             <a class="secondary" href="https://www.tampermonkey.net/faq.php?locale=zh&q=Q209">查看图文说明</a>
           </div>
-          <div class="hint">如果按钮打不开，可以在浏览器地址栏手动输入 chrome://extensions/ 或 edge://extensions/。</div>
+          <div class="hint" id="copyHint">复制后粘贴到浏览器地址栏打开。浏览器通常会拦截网页直接打开 chrome:// 或 edge:// 地址。</div>
         </div>
       </div>
       <div class="step">
@@ -230,13 +230,43 @@ public partial class PrintWorkstationWindow : Window
           <h2>填写摄像头监控工位地址</h2>
           <p>程序已尝试把这个地址复制到剪贴板。脚本里要求填写地址时，直接粘贴即可。</p>
           <code id="addr">{{address}}</code>
-          <button onclick="navigator.clipboard && navigator.clipboard.writeText(document.getElementById('addr').textContent)">复制地址</button>
+          <button onclick="copyText(document.getElementById('addr').textContent,'已复制摄像头监控工位地址')">复制地址</button>
           <div class="hint">如果这里为空，请先回到打印工位窗口连接摄像头监控工位。</div>
         </div>
       </div>
     </div>
   </div>
 </main>
+<script>
+function copyText(text, message) {
+  var hint = document.getElementById('copyHint');
+  function done(ok) {
+    if (hint) hint.textContent = ok ? message + '，请粘贴到浏览器地址栏。' : '复制失败，请手动输入：' + text;
+  }
+  if (!text) {
+    done(false);
+    return;
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function(){ done(true); }, function(){ fallbackCopy(text, done); });
+    return;
+  }
+  fallbackCopy(text, done);
+}
+function fallbackCopy(text, done) {
+  var input = document.createElement('textarea');
+  input.value = text;
+  input.style.position = 'fixed';
+  input.style.opacity = '0';
+  document.body.appendChild(input);
+  input.focus();
+  input.select();
+  var ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  document.body.removeChild(input);
+  done(ok);
+}
+</script>
 </body>
 </html>
 """;
