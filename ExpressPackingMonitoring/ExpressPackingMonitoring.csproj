@@ -15,9 +15,9 @@
     <NoWarn>$(NoWarn);NU1701;MVVMTK0045;MSB3277</NoWarn>
     <DefaultItemExcludes>$(DefaultItemExcludes);bin_publish_tmp\**;obj_publish_tmp\**;publish-test\**;publish-size-*\**;bin\Release\publish\**</DefaultItemExcludes>
     
-    <!-- 发布时将 .NET 运行库和托管依赖打进主程序，减少根目录 DLL 噪音。 -->
-    <PublishSingleFile>true</PublishSingleFile>
-    <!-- 原生库由单文件宿主按需自解压，避免为了目录整洁破坏运行时加载。 -->
+    <!-- 主应用保持目录发布，保留压缩包体积优势；清爽根目录由发布脚本和启动器实现。 -->
+    <PublishSingleFile>false</PublishSingleFile>
+    <!-- 原生库保持可独立加载，优先保证 OpenCV/SQLite/LibVLC 等运行稳定性。 -->
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <!-- 只保留中文资源，去掉其他语言的卫星程序集 -->
     <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages> 

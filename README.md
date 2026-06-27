@@ -122,11 +122,11 @@ cd ExpressPackingMonitoring
 # 编译运行
 dotnet run --project ExpressPackingMonitoring
 
-# 发布为清爽目录包（主程序单文件，依赖放在子目录）
-dotnet publish ExpressPackingMonitoring -c Release -r win-x64 --self-contained true
+# 发布为清爽目录包（根目录启动器 + app 子目录，DLL 不合并进 exe）
+powershell -ExecutionPolicy Bypass -File build\Publish-CleanPackage.ps1
 
-# 发布后根目录主要保留 ExpressPackingMonitoring.exe；
-# ffmpeg.exe 会放在 tools\，Web 页面放在 Web\，LibVLC 放在 libvlc\。
+# 发布后根目录主要保留 ExpressPackingMonitoring.exe 和 app\；
+# 真实主程序、DLL、tools\ffmpeg.exe、Web 页面和 LibVLC 都在 app\ 内。
 ```
 
 ### 核心功能启用指南
