@@ -96,6 +96,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private static readonly TimeSpan PreviewFreezeRestartThreshold = TimeSpan.FromSeconds(5);
         private static readonly TimeSpan PreviewFreezeRestartCooldown = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan ResourceHealthLogInterval = TimeSpan.FromMinutes(5);
+        private static readonly TimeSpan UiHeartbeatStaleThreshold = TimeSpan.FromSeconds(2);
         private DateTime _lastPreviewFrameAt = DateTime.MinValue;
         private DateTime _lastPreviewPublishedAt = DateTime.MinValue;
         private DateTime _lastPreviewFreezeLogAt = DateTime.MinValue;
@@ -103,6 +104,8 @@ namespace ExpressPackingMonitoring.ViewModels
         private DateTime _lastRecordingQueueWarnAt = DateTime.MinValue;
         private DateTime _lastResourceHealthLogAt = DateTime.MinValue;
         private DateTime _lastPreviewConvertErrorLogAt = DateTime.MinValue;
+        private DateTime _lastUiHeartbeatAt = DateTime.Now;
+        private System.Windows.Threading.DispatcherTimer _uiHeartbeatTimer;
         private int _previewUpdatePending;
         private CancellationTokenSource _cts;
 
@@ -385,6 +388,7 @@ namespace ExpressPackingMonitoring.ViewModels
             ClearScanInputCommand = new RelayCommand(() => ScanInputText = "");
             ClearSearchCommand = new RelayCommand(() => LogSearchText = "");
             InitializeSystem();
+            StartUiHeartbeat();
             RefreshBarcodes();
             InitGlobalKeyboardHook();
         }
@@ -401,6 +405,22 @@ namespace ExpressPackingMonitoring.ViewModels
         {
             if (_isDisposed) return;
             HandleScan(barcode);
+        }
+
+        private void StartUiHeartbeat()
+        {
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher == null) return;
+
+            _lastUiHeartbeatAt = DateTime.Now;
+            _uiHeartbeatTimer = new System.Windows.Threading.DispatcherTimer(
+                System.Windows.Threading.DispatcherPriority.Background,
+                dispatcher)
+            {
+                Interval = TimeSpan.FromSeconds(1)
+            };
+            _uiHeartbeatTimer.Tick += (_, __) => _lastUiHeartbeatAt = DateTime.Now;
+            _uiHeartbeatTimer.Start();
         }
 
         private void InitDatabase()
@@ -1723,6 +1743,17 @@ namespace ExpressPackingMonitoring.ViewModels
             }
 
             if (sinceLastPreview < PreviewFreezeWarnThreshold) return;
+            TimeSpan uiHeartbeatAge = now - _lastUiHeartbeatAt;
+            if (_lastUiHeartbeatAt != DateTime.MinValue && uiHeartbeatAge > UiHeartbeatStaleThreshold)
+            {
+                if (now - _lastPreviewFreezeLogAt > PreviewFreezeWarnThreshold)
+                {
+                    _lastPreviewFreezeLogAt = now;
+                    RuntimeLog.Warn("Preview", $"Preview publish delayed because UI dispatcher is busy for {uiHeartbeatAge.TotalSeconds:F1}s, frame age={sinceLastFrame.TotalSeconds:F1}s, preview age={sinceLastPreview.TotalSeconds:F1}s, recording={IsRecording}");
+                    LogResourceHealthIfDue("preview-ui-busy", force: true);
+                }
+                return;
+            }
 
             int queueCount = -1;
             try { queueCount = _videoWriteQueue?.Count ?? -1; } catch { }
@@ -1825,6 +1856,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
             double frameAge = _lastFrameTime == DateTime.MinValue ? -1 : (DateTime.Now - _lastFrameTime).TotalSeconds;
             double previewAge = _lastPreviewPublishedAt == DateTime.MinValue ? -1 : (DateTime.Now - _lastPreviewPublishedAt).TotalSeconds;
+            double uiAge = _lastUiHeartbeatAt == DateTime.MinValue ? -1 : (DateTime.Now - _lastUiHeartbeatAt).TotalSeconds;
 
             try
             {
@@ -1832,11 +1864,11 @@ namespace ExpressPackingMonitoring.ViewModels
                 long managedMb = GC.GetTotalMemory(false) / 1024 / 1024;
                 long workingSetMb = process.WorkingSet64 / 1024 / 1024;
                 long privateMb = process.PrivateMemorySize64 / 1024 / 1024;
-                return $"ws={workingSetMb}MB, private={privateMb}MB, managed={managedMb}MB, handles={process.HandleCount}, threads={process.Threads.Count}, gc0={GC.CollectionCount(0)}, gc1={GC.CollectionCount(1)}, gc2={GC.CollectionCount(2)}, frameAge={frameAge:F1}s, previewAge={previewAge:F1}s, pending={_previewUpdatePending}, recording={IsRecording}, videoQueue={videoQueueCount}, audioQueue={audioQueueCount}";
+                return $"ws={workingSetMb}MB, private={privateMb}MB, managed={managedMb}MB, handles={process.HandleCount}, threads={process.Threads.Count}, gc0={GC.CollectionCount(0)}, gc1={GC.CollectionCount(1)}, gc2={GC.CollectionCount(2)}, frameAge={frameAge:F1}s, previewAge={previewAge:F1}s, uiAge={uiAge:F1}s, pending={_previewUpdatePending}, recording={IsRecording}, videoQueue={videoQueueCount}, audioQueue={audioQueueCount}";
             }
             catch (Exception ex)
             {
-                return $"health unavailable: {ex.Message}, frameAge={frameAge:F1}s, previewAge={previewAge:F1}s, pending={_previewUpdatePending}, recording={IsRecording}, videoQueue={videoQueueCount}, audioQueue={audioQueueCount}";
+                return $"health unavailable: {ex.Message}, frameAge={frameAge:F1}s, previewAge={previewAge:F1}s, uiAge={uiAge:F1}s, pending={_previewUpdatePending}, recording={IsRecording}, videoQueue={videoQueueCount}, audioQueue={audioQueueCount}";
             }
         }
 
@@ -1888,6 +1920,7 @@ namespace ExpressPackingMonitoring.ViewModels
             if (_isDisposed) return;
             _isDisposed = true;
             _cts?.Cancel();
+            try { _uiHeartbeatTimer?.Stop(); } catch { }
             _stopReason = "程序退出";
 
             string videoFileToConvert = null;
