@@ -93,11 +93,11 @@ namespace ExpressPackingMonitoring.ViewModels
             };
             var validated = new HashSet<string> { "libx264", "libx265" };
 
-            string ffmpegPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg.exe");
+            string ffmpegPath = AppPaths.FindFFmpeg();
             log.AppendLine($"FFmpeg 路径: {ffmpegPath}");
-            log.AppendLine($"FFmpeg 存在: {File.Exists(ffmpegPath)}");
+            log.AppendLine($"FFmpeg 存在: {!string.IsNullOrEmpty(ffmpegPath) && File.Exists(ffmpegPath)}");
 
-            if (!File.Exists(ffmpegPath))
+            if (string.IsNullOrEmpty(ffmpegPath) || !File.Exists(ffmpegPath))
             {
                 log.AppendLine("⚠ FFmpeg 不存在，跳过检测");
                 WriteEncoderLog(log);

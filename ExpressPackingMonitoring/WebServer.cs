@@ -723,8 +723,8 @@ namespace ExpressPackingMonitoring
         // ───── FFmpeg 转码：命中缓存直接 Range 传输，否则边转码边推流 + 同时写缓存 ─────
         private void ServeTranscodedStream(HttpListenerContext ctx, string filePath)
         {
-            string ffmpegPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg.exe");
-            if (!File.Exists(ffmpegPath))
+            string ffmpegPath = AppPaths.FindFFmpeg();
+            if (string.IsNullOrEmpty(ffmpegPath) || !File.Exists(ffmpegPath))
             {
                 SendJson(ctx, 500, new { error = "服务器未找到 ffmpeg.exe，无法转码播放" });
                 return;

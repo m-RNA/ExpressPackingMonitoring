@@ -122,8 +122,11 @@ cd ExpressPackingMonitoring
 # 编译运行
 dotnet run --project ExpressPackingMonitoring
 
-# 发布为目录包（体积更小，适合压缩为 zip 分发）
-dotnet publish ExpressPackingMonitoring -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false
+# 发布为清爽目录包（主程序单文件，依赖放在子目录）
+dotnet publish ExpressPackingMonitoring -c Release -r win-x64 --self-contained true
+
+# 发布后根目录主要保留 ExpressPackingMonitoring.exe；
+# ffmpeg.exe 会放在 tools\，Web 页面放在 Web\，LibVLC 放在 libvlc\。
 ```
 
 ### 核心功能启用指南

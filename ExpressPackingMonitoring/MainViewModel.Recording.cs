@@ -2088,8 +2088,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private static string FindFFmpeg()
         {
-            string appDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg.exe");
-            return File.Exists(appDir) ? appDir : null!;
+            return AppPaths.FindFFmpeg();
         }
 
         private string ResolveEncoder()

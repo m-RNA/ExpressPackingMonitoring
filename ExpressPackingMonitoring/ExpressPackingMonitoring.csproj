@@ -15,9 +15,9 @@
     <NoWarn>$(NoWarn);NU1701;MVVMTK0045;MSB3277</NoWarn>
     <DefaultItemExcludes>$(DefaultItemExcludes);bin_publish_tmp\**;obj_publish_tmp\**;publish-test\**;publish-size-*\**;bin\Release\publish\**</DefaultItemExcludes>
     
-    <!-- 原生依赖较多，单文件会显著增大体积；发布目录打包为 zip 更小 -->
-    <PublishSingleFile>false</PublishSingleFile>
-    <!-- 对于包含原生库的项目，设为 false 可以将 C++ dll 解压，以防止DllNotFoundException -->
+    <!-- 发布时将 .NET 运行库和托管依赖打进主程序，减少根目录 DLL 噪音。 -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <!-- 原生库由单文件宿主按需自解压，避免为了目录整洁破坏运行时加载。 -->
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <!-- 只保留中文资源，去掉其他语言的卫星程序集 -->
     <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages> 
@@ -65,6 +65,7 @@
 
   <ItemGroup>
     <Compile Include="App.xaml.cs" />
+    <Compile Include="AppPaths.cs" />
     <Compile Include="AppConfig.cs" />
     <Compile Include="AudioProbe.cs" />
     <Compile Include="BarcodeHelper.cs" />
@@ -112,10 +113,12 @@
     </ItemGroup>
   </Target>
 
-  <!-- ffmpeg.exe 放在项目根目录，构建/发布时自动复制到输出目录（不打入单文件） -->
+  <!-- ffmpeg.exe 作为独立进程保留，但发布到 tools 子目录，避免根目录混杂依赖文件。 -->
   <ItemGroup>
     <Content Include="ffmpeg.exe" Condition="Exists('ffmpeg.exe')">
+      <TargetPath>tools\ffmpeg.exe</TargetPath>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
   </ItemGroup>

@@ -545,14 +545,7 @@ namespace ExpressPackingMonitoring
 
         private static string? FindFFmpeg()
         {
-            string local = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg.exe");
-            if (File.Exists(local)) return local;
-
-            string projectLocal = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "ffmpeg.exe");
-            string fullProjectLocal = Path.GetFullPath(projectLocal);
-            if (File.Exists(fullProjectLocal)) return fullProjectLocal;
-
-            return null;
+            return AppPaths.FindFFmpeg();
         }
 
         private static (bool Exited, int ExitCode, string Stderr) RunProcess(string fileName, string arguments, int timeoutMs)
