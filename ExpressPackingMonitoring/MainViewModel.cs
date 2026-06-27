@@ -173,6 +173,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private bool _maxDurationWarned = false;
         private bool _pendingCameraRestart = false; // 录制中修改了摄像头配置，录制结束后重启
         private bool _isEncoderDetectRunning = true; // 是否正在进行 GPU 编码器检测
+        private readonly string _activeWorkstationRole = WorkstationRoles.CameraMonitor;
         private string _workstationAccessText = "其他电脑暂时无法连接";
         private string _workstationPrintStatusText = "快递单打印工位：未连接";
         private string _workstationStatusToolTip = "";
@@ -793,7 +794,7 @@ namespace ExpressPackingMonitoring.ViewModels
                         || Config.Fps != clonedConfig.Fps;
                     bool themeChanged = Config.Theme != clonedConfig.Theme;
                     bool globalKeyChanged = Config.EnableGlobalKeyboard != clonedConfig.EnableGlobalKeyboard;
-                    bool workstationChanged = Config.WorkstationRole != clonedConfig.WorkstationRole;
+                    bool workstationChanged = !string.Equals(_activeWorkstationRole, clonedConfig.WorkstationRole, StringComparison.OrdinalIgnoreCase);
                     bool aiTtsChanged = Config.EnableAiTts != clonedConfig.EnableAiTts
                         || Config.AiTtsEngine != clonedConfig.AiTtsEngine;
 
@@ -1140,9 +1141,14 @@ namespace ExpressPackingMonitoring.ViewModels
             var selector = new WorkstationSelectionWindow { Owner = Application.Current?.MainWindow };
             if (selector.ShowDialog() == true && !string.IsNullOrWhiteSpace(selector.SelectedRole))
             {
-                if (string.Equals(Config.WorkstationRole, selector.SelectedRole, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(_activeWorkstationRole, selector.SelectedRole, StringComparison.OrdinalIgnoreCase))
                 {
-                    ShowToast($"当前已经是{WorkstationRoles.GetDisplayName(Config.WorkstationRole)}");
+                    if (!string.Equals(Config.WorkstationRole, _activeWorkstationRole, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Config.WorkstationRole = _activeWorkstationRole;
+                        SaveConfig();
+                    }
+                    ShowToast($"当前已经是{WorkstationRoles.GetDisplayName(_activeWorkstationRole)}");
                     return;
                 }
 

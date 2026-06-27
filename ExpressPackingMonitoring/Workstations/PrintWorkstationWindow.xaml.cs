@@ -7,6 +7,7 @@ namespace ExpressPackingMonitoring;
 public partial class PrintWorkstationWindow : Window
 {
     private readonly AppConfig _config;
+    private readonly string _activeWorkstationRole = WorkstationRoles.PrintStation;
     private CancellationTokenSource? _findCts;
 
     public PrintWorkstationWindow(AppConfig config)
@@ -135,9 +136,14 @@ public partial class PrintWorkstationWindow : Window
         var win = new WorkstationSelectionWindow { Owner = this };
         if (win.ShowDialog() == true && !string.IsNullOrWhiteSpace(win.SelectedRole))
         {
-            if (string.Equals(_config.WorkstationRole, win.SelectedRole, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(_activeWorkstationRole, win.SelectedRole, StringComparison.OrdinalIgnoreCase))
             {
-                SetStatus($"当前已经是{WorkstationRoles.GetDisplayName(_config.WorkstationRole)}", "无需重启或切换。");
+                if (!string.Equals(_config.WorkstationRole, _activeWorkstationRole, StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.WorkstationRole = _activeWorkstationRole;
+                    WorkstationConfigStore.Save(_config);
+                }
+                SetStatus($"当前已经是{WorkstationRoles.GetDisplayName(_activeWorkstationRole)}", "无需重启或切换。");
                 return;
             }
 
