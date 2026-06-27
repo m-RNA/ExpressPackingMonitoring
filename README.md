@@ -125,8 +125,10 @@ dotnet run --project ExpressPackingMonitoring
 # 发布为清爽目录包（根目录启动器 + app 子目录，DLL 不合并进 exe）
 powershell -ExecutionPolicy Bypass -File build\Publish-CleanPackage.ps1
 
+# 脚本会生成目录包，并在旁边生成同名 .zip；
 # 发布后根目录主要保留 ExpressPackingMonitoring.exe 和 app\；
 # 真实主程序、DLL、tools\ffmpeg.exe、Web 页面和 LibVLC 都在 app\ 内。
+# zip 内不会包含 config.json、videos.db、缓存、日志或录像文件。
 ```
 
 ### 核心功能启用指南
