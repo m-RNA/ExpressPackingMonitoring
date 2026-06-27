@@ -10,6 +10,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Threading;
 using System.IO;
+using System.Diagnostics;
 using ExpressPackingMonitoring.Services;
 using NAudio.CoreAudioApi;
 
@@ -726,6 +727,28 @@ namespace ExpressPackingMonitoring
                 return key?.GetValue(appName) != null;
             }
             catch { return false; }
+        }
+
+        private void OpenRepository_Click(object sender, RoutedEventArgs e)
+        {
+            OpenExternalUrl("https://github.com/m-RNA/ExpressPackingMonitoring");
+        }
+
+        private void OpenLicense_Click(object sender, RoutedEventArgs e)
+        {
+            OpenExternalUrl("https://github.com/m-RNA/ExpressPackingMonitoring/blob/main/LICENSE");
+        }
+
+        private static void OpenExternalUrl(string url)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"无法打开链接：{ex.Message}", "打开链接失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         private void BtnCancel_Click(object sender, RoutedEventArgs e)

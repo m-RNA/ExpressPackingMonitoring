@@ -1465,6 +1465,63 @@
                                     </Grid>
                                 </StackPanel>
                             </Border>
+
+                            <Border Style="{StaticResource SectionCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Text="关于与开源许可" Style="{StaticResource SectionTitleStyle}"/>
+                                    <TextBlock Text="查看项目源码、许可证和开源使用说明。"
+                                               Style="{StaticResource SectionHintStyle}"/>
+                                    <Border Height="1" Background="{DynamicResource BorderLight}" Margin="0,12,0,12"/>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="230"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="项目仓库" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="打开 GitHub 仓库，查看源码、发布记录和问题反馈。"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <WrapPanel Grid.Column="1">
+                                            <Button Content="打开仓库"
+                                                    Click="OpenRepository_Click"
+                                                    Style="{StaticResource SecondaryActionButtonStyle}"
+                                                    Height="32"
+                                                    Padding="12,0"
+                                                    Margin="0,0,8,8"/>
+                                            <Button Content="查看许可证"
+                                                    Click="OpenLicense_Click"
+                                                    Style="{StaticResource SecondaryActionButtonStyle}"
+                                                    Height="32"
+                                                    Padding="12,0"
+                                                    Margin="0,0,0,8"/>
+                                        </WrapPanel>
+                                    </Grid>
+
+                                    <Border Background="{DynamicResource ControlBackground}"
+                                            BorderBrush="{DynamicResource BorderDefault}"
+                                            BorderThickness="1"
+                                            CornerRadius="6"
+                                            Padding="12">
+                                        <TextBlock TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource TextSecondary}"
+                                                   FontSize="12"
+                                                   LineHeight="19">
+                                            <Run Text="本项目使用 AGPL-3.0 License 开源。"/>
+                                            <LineBreak/>
+                                            <LineBreak/>
+                                            <Run Text="个人学习、自家店铺自用可以免费使用。"/>
+                                            <LineBreak/>
+                                            <Run Text="修改后对外分发或提供网络服务时，需要遵守 AGPL-3.0 的开源义务。"/>
+                                            <LineBreak/>
+                                            <Run Text="二次修改分发时请保留原作者署名、版权声明和许可证信息。"/>
+                                            <LineBreak/>
+                                            <Run Text="使用前请自行确认你的使用方式是否满足 AGPL-3.0 要求。"/>
+                                        </TextBlock>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
                 </Border>
