@@ -1310,6 +1310,9 @@
                         <StackPanel>
                             <Border Style="{StaticResource SectionCardStyle}">
                                 <StackPanel>
+                                    <TextBlock Text="最大容量表示该目录最多保存多少 GB 录像；使用顺序数字越小越优先写入，普通用户保持默认即可"
+                                               Style="{StaticResource FieldHintStyle}"
+                                               Margin="0,0,0,10"/>
                                     <Border BorderBrush="{DynamicResource BorderLight}"
                                             BorderThickness="1"
                                             CornerRadius="8"
