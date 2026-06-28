@@ -133,9 +133,9 @@ namespace ExpressPackingMonitoring
 
         private void ThemeComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
-            if (ThemeComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem item && item.Content != null)
+            if (ThemeComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem item && item.Tag != null)
             {
-                string t = item.Content.ToString();
+                string t = item.Tag.ToString();
                 if (Enum.TryParse<ExpressPackingMonitoring.Themes.AppTheme>(t, out var themeEnum))
                 {
                     ExpressPackingMonitoring.Themes.ThemeManager.ApplyTheme(themeEnum);

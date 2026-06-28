@@ -792,8 +792,20 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 var clonedConfig = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(Config)) ?? new AppConfig();
                 var settingsWin = new SettingsWindow(this, clonedConfig, DiskUsagePercent, DiskUsageText, IsRecording);
-                if (Application.Current?.MainWindow != null) settingsWin.Owner = Application.Current.MainWindow;
-                if (settingsWin.ShowDialog() == true) { 
+                var mainWindow = Application.Current?.MainWindow as MainWindow;
+                if (mainWindow != null) settingsWin.Owner = mainWindow;
+                mainWindow?.SuspendCapsLockForModalWindow();
+                bool settingsAccepted;
+                try
+                {
+                    settingsAccepted = settingsWin.ShowDialog() == true;
+                }
+                finally
+                {
+                    mainWindow?.ResumeCapsLockAfterModalWindow();
+                }
+
+                if (settingsAccepted) {
                     // 判断摄像头相关配置是否变更
                     bool cameraChanged = Config.CameraIndex != clonedConfig.CameraIndex
                         || Config.FrameWidth != clonedConfig.FrameWidth

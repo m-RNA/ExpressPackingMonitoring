@@ -2,7 +2,8 @@ param(
     [string]$Configuration = "Release",
     [string]$Runtime = "win-x64",
     [string]$OutputDir = "",
-    [string]$ZipPath = ""
+    [string]$ZipPath = "",
+    [string]$Version = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,6 +42,24 @@ function Invoke-DotNetPublish {
     if ($LASTEXITCODE -ne 0) {
         throw "dotnet publish failed with exit code $LASTEXITCODE"
     }
+}
+
+function Get-PackageVersion {
+    if (-not [string]::IsNullOrWhiteSpace($Version)) {
+        return $Version.Trim()
+    }
+
+    $tag = (& git -C $repoRoot describe --tags --exact-match HEAD 2>$null)
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($tag)) {
+        return $tag.Trim()
+    }
+
+    $description = (& git -C $repoRoot describe --tags --always --dirty 2>$null)
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($description)) {
+        return $description.Trim()
+    }
+
+    return "0.0.0-local"
 }
 
 function Remove-PackageRuntimeState {
@@ -105,11 +124,13 @@ $appBaseOutput = Join-Path $repoRoot "ExpressPackingMonitoring\bin_publish_tmp\c
 $appBaseIntermediate = Join-Path $repoRoot "ExpressPackingMonitoring\obj_publish_tmp\clean-package-app\"
 $launcherBaseOutput = Join-Path $repoRoot "ExpressPackingMonitoring.Launcher\bin_publish_tmp\clean-package-launcher\"
 $launcherBaseIntermediate = Join-Path $repoRoot "ExpressPackingMonitoring.Launcher\obj_publish_tmp\clean-package-launcher\"
+$packageVersion = Get-PackageVersion
 
 Invoke-DotNetPublish $appProject `
     -c $Configuration `
     -r $Runtime `
     --self-contained true `
+    -p:InformationalVersion=$packageVersion `
     -p:PublishSingleFile=false `
     -p:BaseOutputPath=$appBaseOutput `
     -p:BaseIntermediateOutputPath=$appBaseIntermediate `

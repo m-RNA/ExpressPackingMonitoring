@@ -767,7 +767,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="工位用途" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="选择这台电脑负责录像还是打印。"
+                                            <TextBlock Text="选择这台电脑负责录像还是打印"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <ComboBox Grid.Column="2"
@@ -797,18 +797,18 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="外观主题" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="可跟随系统，或固定为浅色 / 深色主题。"
+                                            <TextBlock Text="可跟随系统，或固定为浅色 / 深色主题"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <ComboBox x:Name="ThemeComboBox"
                                                   Grid.Column="2"
                                                   SelectedValue="{Binding Config.Theme}"
-                                                  SelectedValuePath="Content"
+                                                  SelectedValuePath="Tag"
                                                   Cursor="Hand"
                                                   SelectionChanged="ThemeComboBox_SelectionChanged">
-                                            <ComboBoxItem Content="Auto"/>
-                                            <ComboBoxItem Content="Light"/>
-                                            <ComboBoxItem Content="Dark"/>
+                                            <ComboBoxItem Content="跟随系统" Tag="Auto"/>
+                                            <ComboBoxItem Content="浅色主题" Tag="Light"/>
+                                            <ComboBoxItem Content="深色主题" Tag="Dark"/>
                                         </ComboBox>
                                     </Grid>
 
@@ -820,7 +820,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="摄像头" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="选择拍摄打包过程的摄像头。"
+                                            <TextBlock Text="选择拍摄打包过程的摄像头"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <ComboBox x:Name="CameraComboBox"
@@ -839,7 +839,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="录制声音" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="需要保留现场声音时开启。"
+                                            <TextBlock Text="需要保留现场声音时开启"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <CheckBox x:Name="AudioRecordCheckBox"
@@ -859,7 +859,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="麦克风" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="选择录制声音使用的麦克风。"
+                                            <TextBlock Text="选择录制声音使用的麦克风"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <ComboBox x:Name="MicComboBox"
@@ -882,7 +882,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="视频编码格式" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="影响录像体积和播放兼容性。"
+                                            <TextBlock Text="影响录像体积和播放兼容性"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <ComboBox x:Name="VideoCodecComboBox"
@@ -901,7 +901,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="硬件加速" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="用显卡帮忙录像，降低电脑占用。"
+                                            <TextBlock Text="用显卡帮忙录像，降低电脑占用"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <ComboBox x:Name="GpuEncoderComboBox"
@@ -919,7 +919,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="分辨率" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="越高越清晰，文件也越大。"
+                                            <TextBlock Text="越高越清晰，文件也越大"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <ComboBox x:Name="ResComboBox"
@@ -936,7 +936,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="画面流畅度" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="越高越流畅，也更占空间。"
+                                            <TextBlock Text="越高越流畅，也更占空间"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <ComboBox x:Name="FpsComboBox" Grid.Column="2"
@@ -952,8 +952,8 @@
                                             <ColumnDefinition Width="260"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
-                                            <TextBlock Text="录像清晰度" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="数值越小越清晰，文件越大。普通用户建议保持默认。"
+                                            <TextBlock Text="录像画质" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="数值越小画质越好，文件越大，普通用户建议保持默认"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:IntegerUpDown Grid.Column="2"
@@ -973,7 +973,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="声音同步微调" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="只有声音和画面不同步时再调整。"
+                                            <TextBlock Text="只有声音和画面不同步时再调整"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:IntegerUpDown Grid.Column="2"
@@ -1005,7 +1005,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="启用面单放大" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="录制开始时先放大中心画面，停留一会儿后再恢复。"
+                                            <TextBlock Text="录制开始时先放大中心画面，停留一会儿后再恢复"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <CheckBox x:Name="SmartZoomCheckBox"
@@ -1029,7 +1029,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="放大倍数" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="倍率越高，面单越清楚，但画面范围越小。"
+                                            <TextBlock Text="倍率越高，面单越清楚，但画面范围越小"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <ComboBox x:Name="ZoomScaleComboBox"
@@ -1047,7 +1047,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="放大前等待" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="开始录制后等待多久再放大。"
+                                            <TextBlock Text="开始录制后等待多久再放大"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:DoubleUpDown Grid.Column="2"
@@ -1066,7 +1066,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="放大停留时间" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="放大画面保持多久后恢复。"
+                                            <TextBlock Text="放大画面保持多久后恢复"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:DoubleUpDown Grid.Column="2"
@@ -1087,7 +1087,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="平滑过渡" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="开启后放大和恢复时会有平滑动画。"
+                                            <TextBlock Text="开启后放大和恢复时会有平滑动画"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <CheckBox x:Name="ZoomAnimationCheckBox"
@@ -1107,7 +1107,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="过渡时长" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="动画持续时间。"
+                                            <TextBlock Text="动画持续时间"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:DoubleUpDown Grid.Column="2"
@@ -1139,7 +1139,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="画面没变化时自动结束录像" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="打包结束后画面不动，就自动停止录像。"
+                                            <TextBlock Text="打包结束后画面不动，就自动停止录像"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <CheckBox x:Name="AutoStopCheckBox"
@@ -1160,7 +1160,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="静止超时" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="画面不动超过这个时间后停止录像。"
+                                            <TextBlock Text="画面不动超过这个时间后停止录像"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:DoubleUpDown Grid.Column="2"
@@ -1172,7 +1172,7 @@
                                                            Increment="0.5"/>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,14">
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,0">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="24"/>
@@ -1180,7 +1180,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="提前提醒时间" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="快要自动停止录像前，提前多久提醒。"
+                                            <TextBlock Text="快要自动停止录像前，提前多久提醒"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:DoubleUpDown Grid.Column="2"
@@ -1192,6 +1192,8 @@
                                                            Increment="1"/>
                                     </Grid>
 
+                                    <Border Style="{StaticResource SectionDividerStyle}"/>
+
                                     <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,14">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -1200,7 +1202,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="限制录像时长" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="防止单个录像录得太久。"
+                                            <TextBlock Text="防止单个录像录得太久"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <CheckBox x:Name="MaxDurationCheckBox"
@@ -1221,7 +1223,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="最大时长" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="单个录像超过这个时间就自动停止。"
+                                            <TextBlock Text="单个录像超过这个时间就自动停止"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:DoubleUpDown Grid.Column="2"
@@ -1243,7 +1245,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="太短的视频自动丢弃" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="少于这个时长的视频不保存。"
+                                            <TextBlock Text="少于这个时长的视频不保存"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:DoubleUpDown Grid.Column="2"
@@ -1265,7 +1267,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="长时间不用时关闭摄像头" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="空闲时省资源，有操作时再恢复。"
+                                            <TextBlock Text="空闲时省资源，有操作时再恢复"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <CheckBox x:Name="CameraIdleCheckBox"
@@ -1285,7 +1287,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="空闲超时" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="空闲超过这个时间后关闭摄像头。"
+                                            <TextBlock Text="空闲超过这个时间后关闭摄像头"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:DoubleUpDown Grid.Column="2"
@@ -1438,7 +1440,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="显示已清理记录" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="视频文件被清理后，列表里仍显示这条记录。"
+                                            <TextBlock Text="视频文件被清理后，列表里仍显示这条记录"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <CheckBox Grid.Column="2"
@@ -1465,7 +1467,7 @@
                                             <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
                                                 <TextBlock Text="旧录像转 MP4" Style="{StaticResource FieldLabelStyle}"/>
                                                 <TextBlock x:Name="MigrationStatusText"
-                                                           Text="需要整理旧录像时再使用。"
+                                                           Text="需要整理旧录像时再使用"
                                                            Style="{StaticResource FieldHintStyle}"/>
                                             </StackPanel>
                                             <Button x:Name="BtnMigrateMkv"
@@ -1505,7 +1507,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="语音提醒" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="开启后，超时、停录和订单信息会用语音提醒。"
+                                            <TextBlock Text="开启后，超时、停录和订单信息会用语音提醒"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <CheckBox x:Name="SoundPromptCheckBox"
@@ -1526,7 +1528,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="语音引擎" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="选择提醒声音使用系统语音、联网语音还是离线语音。"
+                                            <TextBlock Text="选择提醒声音使用系统语音、联网语音还是离线语音"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <ComboBox x:Name="VoiceEngineComboBox"
@@ -1571,7 +1573,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="语速" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="调整播报快慢。"
+                                            <TextBlock Text="调整播报快慢"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:DoubleUpDown Grid.Column="2"
@@ -1626,7 +1628,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="普通播报声线" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="用于正常订单提示。"
+                                            <TextBlock Text="用于正常订单提示"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:IntegerUpDown Grid.Column="2"
@@ -1655,7 +1657,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="警告播报声线" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="用于重复单号、非法单号等提醒。"
+                                            <TextBlock Text="用于重复单号、非法单号等提醒"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:IntegerUpDown Grid.Column="2"
@@ -1684,7 +1686,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="在线普通声音" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="使用在线语音时的普通提示声音。"
+                                            <TextBlock Text="使用在线语音时的普通提示声音"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <ComboBox Grid.Column="2"
@@ -1716,7 +1718,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="在线警告声音" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="使用在线语音时的警告提示声音。"
+                                            <TextBlock Text="使用在线语音时的警告提示声音"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <ComboBox Grid.Column="2"
@@ -1762,7 +1764,7 @@
                                         </Grid.RowDefinitions>
                                         <StackPanel Grid.Row="0" Margin="0,0,0,10">
                                             <TextBlock Text="语音预览" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="输入一段文字，试听当前播报效果。"
+                                            <TextBlock Text="输入一段文字，试听当前播报效果"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <TextBox x:Name="TtsPreviewTextBox" Grid.Row="1" Height="60"
@@ -1774,6 +1776,7 @@
                                                     Style="{StaticResource PrimaryActionButtonStyle}"
                                                     Width="70" Margin="0,0,8,0"/>
                                             <Button Content="停止" x:Name="BtnTtsStop" Click="BtnTtsStop_Click"
+                                                    Style="{StaticResource SecondaryActionButtonStyle}"
                                                     Width="70" Margin="0,0,8,0" Height="34"/>
                                             <TextBlock x:Name="TtsPreviewStatus" VerticalAlignment="Center"
                                                        Foreground="{DynamicResource TextSecondary}" FontSize="12"/>
@@ -1787,7 +1790,7 @@
                                         </Grid.RowDefinitions>
                                         <StackPanel Grid.Row="0" Margin="0,0,0,10">
                                             <TextBlock Text="断句关键词" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="商品名太长时，用这些词自动停顿。"
+                                            <TextBlock Text="商品名太长时，用这些词自动停顿"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <TextBox x:Name="TtsBreakWordsTextBox" Grid.Row="1" Height="100"
@@ -1815,7 +1818,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="启用局域网查看" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="同一网络里的电脑或手机可以用浏览器查看录像。"
+                                            <TextBlock Text="同一网络里的电脑或手机可以用浏览器查看录像"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <CheckBox Grid.Column="2"
@@ -1834,7 +1837,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="网页访问端口" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="浏览器访问用的端口，改完需重启。"
+                                            <TextBlock Text="浏览器访问用的端口，改完需重启"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:IntegerUpDown Grid.Column="2"
@@ -1854,7 +1857,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="在线播放缓存上限" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="在线播放部分视频时产生的临时缓存。"
+                                            <TextBlock Text="在线播放部分视频时产生的临时缓存"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:IntegerUpDown Grid.Column="2"
@@ -1879,7 +1882,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="订单信息播报" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="扫码打包时，自动播报订单备注、留言和商品信息。"
+                                            <TextBlock Text="扫码打包时，自动播报订单备注、留言和商品信息"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <CheckBox Grid.Column="2"
@@ -1897,7 +1900,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="安装联动助手" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="让快递助手页面把订单信息发送到监控工位。"
+                                            <TextBlock Text="让快递助手页面把订单信息发送到监控工位"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <Button Grid.Column="2"
@@ -1988,7 +1991,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="启用录像水印" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="方便事后确认这段录像对应哪个订单。"
+                                            <TextBlock Text="方便事后确认这段录像对应哪个订单"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <CheckBox Grid.Column="2"
@@ -2010,7 +2013,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="开机自启动" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="电脑开机后自动启动本程序。"
+                                            <TextBlock Text="电脑开机后自动启动本程序"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <CheckBox x:Name="AutoStartCheckBox"
@@ -2029,7 +2032,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="全局键盘监听" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="程序不在前台时也能接收扫码枪输入。"
+                                            <TextBlock Text="程序不在前台时也能接收扫码枪输入"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <CheckBox Grid.Column="2"
@@ -2048,7 +2051,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="单号判断规则" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="用于判断扫码内容是不是有效单号。"
+                                            <TextBlock Text="用于判断扫码内容是不是有效单号"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <TextBox Grid.Column="2"
@@ -2065,7 +2068,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="扫码间隔保护" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="防止扫码枪连续触发太快。"
+                                            <TextBlock Text="防止扫码枪连续触发太快"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <xctk:DoubleUpDown Grid.Column="2"
@@ -2090,7 +2093,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="重置编码器检测" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="录像编码异常时，用它重新检测电脑能力。"
+                                            <TextBlock Text="录像编码异常时，用它重新检测电脑能力"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <Button Grid.Column="2" Content="立即重新检测"
@@ -2155,7 +2158,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="项目仓库" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="打开 GitHub 仓库，查看源码、发布记录和问题反馈。"
+                                            <TextBlock Text="打开 GitHub 仓库，查看源码、发布记录和问题反馈"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <WrapPanel Grid.Column="2">

@@ -18,18 +18,24 @@ namespace ExpressPackingMonitoring
         private DispatcherTimer _capsCheckTimer;
         private bool _capsLockStateBeforeFocus;
         private bool _capsLockOverridden;
+        private bool _capsLockSuspended;
         private DateTime _lastMouseActivityNotifyAt = DateTime.MinValue;
         private const int WM_ENTERSIZEMOVE = 0x0231;
         private const int WM_EXITSIZEMOVE = 0x0232;
 
         private bool IsCapsLockOn() => (GetKeyState(VK_CAPITAL) & 1) != 0;
 
+        private void ToggleCapsLock()
+        {
+            keybd_event((byte)VK_CAPITAL, 0x45, 0, UIntPtr.Zero);
+            keybd_event((byte)VK_CAPITAL, 0x45, 2, UIntPtr.Zero);
+        }
+
         private void EnsureCapsLockOn()
         {
             if (!IsCapsLockOn())
             {
-                keybd_event((byte)VK_CAPITAL, 0x45, 0, UIntPtr.Zero);
-                keybd_event((byte)VK_CAPITAL, 0x45, 2, UIntPtr.Zero);
+                ToggleCapsLock();
                 _capsLockOverridden = true;
             }
         }
@@ -38,10 +44,55 @@ namespace ExpressPackingMonitoring
         {
             if (_capsLockOverridden && !_capsLockStateBeforeFocus && IsCapsLockOn())
             {
-                keybd_event((byte)VK_CAPITAL, 0x45, 0, UIntPtr.Zero);
-                keybd_event((byte)VK_CAPITAL, 0x45, 2, UIntPtr.Zero);
+                ToggleCapsLock();
             }
             _capsLockOverridden = false;
+        }
+
+        private bool ShouldForceCapsLock()
+        {
+            return !_capsLockSuspended &&
+                   IsActive &&
+                   WindowState != WindowState.Minimized &&
+                   ScanInputTextBox?.IsFocused == true;
+        }
+
+        private void ApplyCapsLockForScanInput()
+        {
+            if (!ShouldForceCapsLock())
+            {
+                _capsCheckTimer.Stop();
+                return;
+            }
+
+            if (!_capsLockOverridden)
+            {
+                _capsLockStateBeforeFocus = IsCapsLockOn();
+            }
+
+            EnsureCapsLockOn();
+            if (string.IsNullOrEmpty(ScanInputTextBox.Text))
+                _capsCheckTimer.Start();
+        }
+
+        public void SuspendCapsLockForModalWindow()
+        {
+            _capsLockSuspended = true;
+            _capsCheckTimer.Stop();
+            RestoreCapsLockState();
+        }
+
+        public void ResumeCapsLockAfterModalWindow()
+        {
+            _capsLockSuspended = false;
+            Dispatcher.BeginInvoke(new System.Action(() =>
+            {
+                if (IsActive && WindowState != WindowState.Minimized)
+                {
+                    ScanInputTextBox.Focus();
+                    ApplyCapsLockForScanInput();
+                }
+            }));
         }
 
         public MainWindow()
@@ -54,8 +105,8 @@ namespace ExpressPackingMonitoring
             _capsCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _capsCheckTimer.Tick += (s, e) =>
             {
-                if (IsActive && ScanInputTextBox.IsFocused && string.IsNullOrEmpty(ScanInputTextBox.Text))
-                    EnsureCapsLockOn();
+                if (string.IsNullOrEmpty(ScanInputTextBox.Text))
+                    ApplyCapsLockForScanInput();
                 else
                     _capsCheckTimer.Stop();
             };
@@ -63,17 +114,25 @@ namespace ExpressPackingMonitoring
             {
                 _capsLockStateBeforeFocus = IsCapsLockOn();
                 _capsLockOverridden = false;
-                if (ScanInputTextBox.IsFocused)
-                {
-                    EnsureCapsLockOn();
-                    if (string.IsNullOrEmpty(ScanInputTextBox.Text)) _capsCheckTimer.Start();
-                }
+                ApplyCapsLockForScanInput();
                 (DataContext as MainViewModel)?.NotifyUserActivity();
             };
             Deactivated += (s, e) =>
             {
                 _capsCheckTimer.Stop();
                 RestoreCapsLockState();
+            };
+            StateChanged += (s, e) =>
+            {
+                if (WindowState == WindowState.Minimized)
+                {
+                    _capsCheckTimer.Stop();
+                    RestoreCapsLockState();
+                }
+                else
+                {
+                    ApplyCapsLockForScanInput();
+                }
             };
             // 全局鼠标/键盘活跃检测，用于摄像头空闲休眠唤醒
             PreviewMouseMove += (s, e) =>
@@ -222,14 +281,12 @@ namespace ExpressPackingMonitoring
         {
             _capsCheckTimer.Stop();
             // 延迟检查 IsActive，避免在 Deactivated 之前抢先 re-focus 导致 CapsLock 恢复失败
-            Dispatcher.BeginInvoke(new System.Action(() => { if (this.IsActive) ScanInputTextBox.Focus(); }));
+            Dispatcher.BeginInvoke(new System.Action(() => { if (!_capsLockSuspended && this.IsActive) ScanInputTextBox.Focus(); }));
         }
 
         private void ScanInputTextBox_GotFocus(object sender, RoutedEventArgs e)
         {
-            if (!_capsLockOverridden) _capsLockStateBeforeFocus = IsCapsLockOn();
-            EnsureCapsLockOn();
-            if (string.IsNullOrEmpty(ScanInputTextBox.Text)) _capsCheckTimer.Start();
+            ApplyCapsLockForScanInput();
             Dispatcher.BeginInvoke(new System.Action(() => ScanInputTextBox.SelectAll()));
         }
 
@@ -257,6 +314,8 @@ namespace ExpressPackingMonitoring
             }
 
             // 2. 执行到这里说明：要么没在录制，要么用户点击了确定退出
+            _capsCheckTimer.Stop();
+            RestoreCapsLockState();
             
             // 调用 Dispose 确保资源释放（内部会触发 StopRecording 保存视频）
             if (vm is System.IDisposable disposable) 
