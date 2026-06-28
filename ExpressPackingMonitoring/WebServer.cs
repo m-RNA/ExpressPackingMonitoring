@@ -455,7 +455,7 @@ namespace ExpressPackingMonitoring
                 var config = LoadAppConfig();
                 var locations = config.StorageLocations?
                     .Where(x => !string.IsNullOrWhiteSpace(x.Path))
-                    .OrderByDescending(x => x.Priority)
+                    .OrderBy(x => x.Priority)
                     .ToList() ?? new List<StorageLocation>();
 
                 var configuredPaths = locations.Select(BuildStoragePathInfo).ToList();

@@ -190,6 +190,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
             if (Config.StorageLocations == null || Config.StorageLocations.Count == 0)
             {
+                RuntimeLog.Warn("Storage", $"No storage locations configured, fallback default path={defaultPath}");
                 EnsureDirectoryWritable(defaultPath);
                 return defaultPath;
             }
@@ -201,53 +202,178 @@ namespace ExpressPackingMonitoring.ViewModels
 
             if (orderedLocations.Count == 0)
             {
+                RuntimeLog.Warn("Storage", $"No valid storage location paths configured, fallback default path={defaultPath}");
                 EnsureDirectoryWritable(defaultPath);
                 return defaultPath;
             }
 
             foreach (var loc in orderedLocations)
             {
+                var result = TryEvaluateStorageLocation(loc);
+                if (result.CanUse)
+                {
+                    RuntimeLog.Info("Storage", $"Selected storage path={result.Path}, priority={loc.Priority}, free={FormatBytesForLog(result.AvailableBytes)}, reserve={FormatBytesForLog(result.ReserveBytes)}, used={FormatBytesForLog(result.UsedBytes)}, quota={FormatBytesForLog(result.QuotaBytes)}, remaining={FormatBytesForLog(result.RemainingBytes)}");
+                    return result.Path;
+                }
+
+                RuntimeLog.Warn("Storage", $"Skip storage path={result.Path}, priority={loc.Priority}, reason={result.Reason}");
+            }
+
+            RuntimeLog.Warn("Storage", $"No configured storage path is safe for recording, fallback default path={defaultPath}");
+            EnsureDirectoryWritable(defaultPath);
+            return defaultPath;
+        }
+
+        private StorageLocationEvaluation TryEvaluateStorageLocation(StorageLocation loc)
+        {
+            string normalizedPath = NormalizeStoragePath(loc.Path);
+            try
+            {
+                if (!Directory.Exists(normalizedPath))
+                    Directory.CreateDirectory(normalizedPath);
+
+                if (!IsDirectoryWritable(normalizedPath))
+                    return StorageLocationEvaluation.Skip(normalizedPath, "not writable");
+
+                string? root = Path.GetPathRoot(Path.GetFullPath(normalizedPath));
+                if (string.IsNullOrEmpty(root))
+                    return StorageLocationEvaluation.Skip(normalizedPath, "missing drive root");
+
+                var drive = new DriveInfo(root);
+                if (!drive.IsReady)
+                    return StorageLocationEvaluation.Skip(normalizedPath, "drive not ready");
+
+                long reserveBytes = CalculateStorageReserveBytes(drive);
+                long availableBytes = drive.AvailableFreeSpace;
+                if (availableBytes <= reserveBytes)
+                {
+                    return StorageLocationEvaluation.Skip(
+                        normalizedPath,
+                        $"below reserve free={FormatBytesForLog(availableBytes)}, reserve={FormatBytesForLog(reserveBytes)}");
+                }
+
+                long usedBytes = GetVideoBytes(normalizedPath);
+                long quotaBytes = loc.QuotaGB > 0 ? (long)(loc.QuotaGB * BytesPerGiB) : 0;
+                long writableBytes = Math.Max(0, availableBytes - reserveBytes);
+                long physicalCapacityBytes = usedBytes + writableBytes;
+                long effectiveCapacityBytes = quotaBytes > 0
+                    ? Math.Min(quotaBytes, physicalCapacityBytes)
+                    : physicalCapacityBytes;
+                long remainingBytes = effectiveCapacityBytes - usedBytes;
+
+                if (remainingBytes <= 0)
+                {
+                    return StorageLocationEvaluation.Skip(
+                        normalizedPath,
+                        $"quota exceeded used={FormatBytesForLog(usedBytes)}, quota={FormatBytesForLog(quotaBytes)}, physicalCapacity={FormatBytesForLog(physicalCapacityBytes)}");
+                }
+
+                return StorageLocationEvaluation.Use(
+                    normalizedPath,
+                    availableBytes,
+                    reserveBytes,
+                    usedBytes,
+                    quotaBytes,
+                    remainingBytes);
+            }
+            catch (Exception ex)
+            {
+                return StorageLocationEvaluation.Skip(normalizedPath, $"exception={ex.Message}");
+            }
+        }
+
+        private static string NormalizeStoragePath(string path)
+        {
+            return Path.IsPathRooted(path)
+                ? path
+                : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, path);
+        }
+
+        private static long CalculateStorageReserveBytes(DriveInfo drive)
+        {
+            bool isSystemDrive = IsSystemDrive(drive.RootDirectory.FullName);
+            long minimumBytes = (isSystemDrive ? 30L : 20L) * BytesPerGiB;
+            long percentBytes = (long)(drive.TotalSize * (isSystemDrive ? 0.10 : 0.05));
+            return Math.Max(minimumBytes, percentBytes);
+        }
+
+        private static bool IsSystemDrive(string driveRoot)
+        {
+            string systemRoot = Path.GetPathRoot(Environment.GetFolderPath(Environment.SpecialFolder.Windows)) ?? "";
+            return string.Equals(
+                Path.GetFullPath(driveRoot).TrimEnd(Path.DirectorySeparatorChar),
+                systemRoot.TrimEnd(Path.DirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static long GetVideoBytes(string folderPath)
+        {
+            long totalBytes = 0;
+            foreach (var file in EnumerateVideoFiles(folderPath))
+            {
                 try
                 {
-                    string normalizedPath = Path.IsPathRooted(loc.Path)
-                        ? loc.Path
-                        : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, loc.Path);
-
-                    if (!Directory.Exists(normalizedPath))
-                        Directory.CreateDirectory(normalizedPath);
-
-                    // 检查写入权限
-                    if (!IsDirectoryWritable(normalizedPath)) continue;
-
-                    string? root = Path.GetPathRoot(Path.GetFullPath(normalizedPath));
-                    if (string.IsNullOrEmpty(root)) continue;
-
-                    var drive = new DriveInfo(root);
-                    if (!drive.IsReady) continue;
-
-                    // 5% 预留或 2GB
-                    long safeBuffer = (long)Math.Max(2147483648, drive.TotalSize * 0.05);
-
-                    if (drive.AvailableFreeSpace > safeBuffer)
-                    {
-                        return normalizedPath;
-                    }
+                    totalBytes += file.Length;
                 }
                 catch
                 {
-                    continue;
+                    // A file may disappear while cleanup or conversion is running.
                 }
             }
 
-            // 如果都没有找到合适的（配额已满或剩余空间不足），尝试第一个能写的路径
-            foreach (var loc in orderedLocations)
+            return totalBytes;
+        }
+
+        private static string FormatBytesForLog(long bytes)
+        {
+            if (bytes <= 0) return "0GB";
+            return $"{bytes / (double)BytesPerGiB:F1}GB";
+        }
+
+        private const long BytesPerGiB = 1024L * 1024L * 1024L;
+
+        private readonly struct StorageLocationEvaluation
+        {
+            private StorageLocationEvaluation(
+                bool canUse,
+                string path,
+                string reason,
+                long availableBytes,
+                long reserveBytes,
+                long usedBytes,
+                long quotaBytes,
+                long remainingBytes)
             {
-                string path = Path.IsPathRooted(loc.Path) ? loc.Path : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, loc.Path);
-                if (IsDirectoryWritable(path)) return path;
+                CanUse = canUse;
+                Path = path;
+                Reason = reason;
+                AvailableBytes = availableBytes;
+                ReserveBytes = reserveBytes;
+                UsedBytes = usedBytes;
+                QuotaBytes = quotaBytes;
+                RemainingBytes = remainingBytes;
             }
 
-            EnsureDirectoryWritable(defaultPath);
-            return defaultPath;
+            public bool CanUse { get; }
+            public string Path { get; }
+            public string Reason { get; }
+            public long AvailableBytes { get; }
+            public long ReserveBytes { get; }
+            public long UsedBytes { get; }
+            public long QuotaBytes { get; }
+            public long RemainingBytes { get; }
+
+            public static StorageLocationEvaluation Use(
+                string path,
+                long availableBytes,
+                long reserveBytes,
+                long usedBytes,
+                long quotaBytes,
+                long remainingBytes) =>
+                new(true, path, "", availableBytes, reserveBytes, usedBytes, quotaBytes, remainingBytes);
+
+            public static StorageLocationEvaluation Skip(string path, string reason) =>
+                new(false, path, reason, 0, 0, 0, 0, 0);
         }
 
         private bool IsDirectoryWritable(string dirPath)

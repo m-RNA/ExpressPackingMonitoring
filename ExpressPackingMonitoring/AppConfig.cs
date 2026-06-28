@@ -34,7 +34,7 @@ namespace ExpressPackingMonitoring.ViewModels
     {
         public string Path { get; set; } = "D:\\快递打包视频";
         public double QuotaGB { get; set; } = 500.0;
-        public int Priority { get; set; } = 1; // 越大越优先
+        public int Priority { get; set; } = 1; // 数字越小越优先
     }
 
     // 摄像头独立配置模型
