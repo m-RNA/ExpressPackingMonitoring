@@ -361,6 +361,11 @@ namespace ExpressPackingMonitoring
             {
                 disposable.Dispose();
             }
+
+            // 录像收尾已经在 SaveRecordingsBeforeShutdownAsync 中等待完成。
+            // 这里保留显式退出兜底，避免 Web/语音/驱动回调等后台资源让进程残留。
+            try { Application.Current?.Shutdown(0); } catch { }
+            Environment.Exit(0);
         }
     }
 }
