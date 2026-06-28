@@ -10,6 +10,7 @@ ExpressPackingMonitoring.Launcher/obj/
 ExpressPackingMonitoring.Launcher/bin_publish_tmp/
 ExpressPackingMonitoring.Launcher/obj_publish_tmp/
 ExpressPackingMonitoring/bin/Release/package/
+ExpressPackingMonitoring/package/
 ExpressPackingMonitoring/publish-test/
 ExpressPackingMonitoring/publish-size-*/
 ExpressPackingMonitoring/ffmpeg.exe

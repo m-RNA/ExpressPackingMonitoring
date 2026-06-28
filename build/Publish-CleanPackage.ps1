@@ -64,7 +64,7 @@ $packageVersion = Get-PackageVersion
 $packageName = ConvertTo-SafePathName "ExpressPackingMonitoring+$packageVersion"
 
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
-    $OutputDir = Join-Path $repoRoot "ExpressPackingMonitoring\bin\Release\package\$packageName"
+    $OutputDir = Join-Path $repoRoot "ExpressPackingMonitoring\package\$packageName"
 }
 
 $outputFullPath = [System.IO.Path]::GetFullPath($OutputDir)
