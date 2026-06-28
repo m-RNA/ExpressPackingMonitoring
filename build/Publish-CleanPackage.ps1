@@ -49,9 +49,12 @@ function Get-PackageVersion {
         return $Version.Trim()
     }
 
-    $tag = (& git -C $repoRoot describe --tags --exact-match HEAD 2>$null)
-    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($tag)) {
-        return $tag.Trim()
+    $tagsAtHead = @(& git -C $repoRoot tag --points-at HEAD)
+    if ($LASTEXITCODE -eq 0) {
+        $tag = $tagsAtHead | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1
+        if (-not [string]::IsNullOrWhiteSpace($tag)) {
+            return $tag.Trim()
+        }
     }
 
     $description = (& git -C $repoRoot describe --tags --always --dirty 2>$null)
