@@ -12,31 +12,6 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $appProject = Join-Path $repoRoot "ExpressPackingMonitoring\ExpressPackingMonitoring.csproj"
 $launcherProject = Join-Path $repoRoot "ExpressPackingMonitoring.Launcher\ExpressPackingMonitoring.Launcher.csproj"
 
-if ([string]::IsNullOrWhiteSpace($OutputDir)) {
-    $OutputDir = Join-Path $repoRoot "ExpressPackingMonitoring\bin\Release\package\$Runtime"
-}
-
-$outputFullPath = [System.IO.Path]::GetFullPath($OutputDir)
-$zipFullPath = if ([string]::IsNullOrWhiteSpace($ZipPath)) {
-    [System.IO.Path]::GetFullPath("$outputFullPath.zip")
-} else {
-    [System.IO.Path]::GetFullPath($ZipPath)
-}
-$repoFullPath = [System.IO.Path]::GetFullPath($repoRoot)
-if (-not $outputFullPath.StartsWith($repoFullPath, [System.StringComparison]::OrdinalIgnoreCase)) {
-    throw "OutputDir must be inside the repository: $outputFullPath"
-}
-if (-not $zipFullPath.StartsWith($repoFullPath, [System.StringComparison]::OrdinalIgnoreCase)) {
-    throw "ZipPath must be inside the repository: $zipFullPath"
-}
-
-if (Test-Path $outputFullPath) {
-    Remove-Item -LiteralPath $outputFullPath -Recurse -Force
-}
-if (Test-Path $zipFullPath) {
-    Remove-Item -LiteralPath $zipFullPath -Force
-}
-
 function Invoke-DotNetPublish {
     dotnet publish @args
     if ($LASTEXITCODE -ne 0) {
@@ -72,6 +47,45 @@ function Get-GitCommitId {
     }
 
     return ""
+}
+
+function ConvertTo-SafePathName {
+    param([string]$Name)
+
+    $safeName = $Name
+    foreach ($char in [System.IO.Path]::GetInvalidFileNameChars()) {
+        $safeName = $safeName.Replace($char, "_")
+    }
+
+    return $safeName
+}
+
+$packageVersion = Get-PackageVersion
+$packageName = ConvertTo-SafePathName "ExpressPackingMonitoring+$packageVersion"
+
+if ([string]::IsNullOrWhiteSpace($OutputDir)) {
+    $OutputDir = Join-Path $repoRoot "ExpressPackingMonitoring\bin\Release\package\$packageName"
+}
+
+$outputFullPath = [System.IO.Path]::GetFullPath($OutputDir)
+$zipFullPath = if ([string]::IsNullOrWhiteSpace($ZipPath)) {
+    [System.IO.Path]::GetFullPath("$outputFullPath.zip")
+} else {
+    [System.IO.Path]::GetFullPath($ZipPath)
+}
+$repoFullPath = [System.IO.Path]::GetFullPath($repoRoot)
+if (-not $outputFullPath.StartsWith($repoFullPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "OutputDir must be inside the repository: $outputFullPath"
+}
+if (-not $zipFullPath.StartsWith($repoFullPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "ZipPath must be inside the repository: $zipFullPath"
+}
+
+if (Test-Path $outputFullPath) {
+    Remove-Item -LiteralPath $outputFullPath -Recurse -Force
+}
+if (Test-Path $zipFullPath) {
+    Remove-Item -LiteralPath $zipFullPath -Force
 }
 
 function Remove-PackageRuntimeState {
@@ -136,7 +150,6 @@ $appBaseOutput = Join-Path $repoRoot "ExpressPackingMonitoring\bin_publish_tmp\c
 $appBaseIntermediate = Join-Path $repoRoot "ExpressPackingMonitoring\obj_publish_tmp\clean-package-app\"
 $launcherBaseOutput = Join-Path $repoRoot "ExpressPackingMonitoring.Launcher\bin_publish_tmp\clean-package-launcher\"
 $launcherBaseIntermediate = Join-Path $repoRoot "ExpressPackingMonitoring.Launcher\obj_publish_tmp\clean-package-launcher\"
-$packageVersion = Get-PackageVersion
 $gitCommitId = Get-GitCommitId
 
 Invoke-DotNetPublish $appProject `
