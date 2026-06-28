@@ -1874,8 +1874,9 @@ namespace ExpressPackingMonitoring.ViewModels
                             }
                         }
 
-                        // 无帧时降低循环频率，避免空转 CPU
-                        await Task.Delay(200, token);
+                        // 摄像头休眠后无需高频轮询；用户活动仍会通过 NotifyUserActivity 立即 StartCamera。
+                        int idleDelayMs = _isCameraSleeping ? 1000 : 200;
+                        await Task.Delay(idleDelayMs, token);
                         frameTickCounter++;
                         continue;
                     }
