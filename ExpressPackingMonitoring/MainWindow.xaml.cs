@@ -349,7 +349,18 @@ namespace ExpressPackingMonitoring
             }
 
             _shutdownConfirmed = true;
-            Close();
+            _ = Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try
+                {
+                    Close();
+                }
+                catch (InvalidOperationException ex)
+                {
+                    RuntimeLog.Warn("Shutdown", $"Confirmed close failed, force shutdown: {ex.Message}");
+                    FinishShutdown(vm);
+                }
+            }), DispatcherPriority.Background);
         }
 
         private void FinishShutdown(MainViewModel? vm)
