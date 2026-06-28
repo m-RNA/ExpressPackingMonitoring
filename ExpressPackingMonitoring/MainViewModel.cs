@@ -180,7 +180,6 @@ namespace ExpressPackingMonitoring.ViewModels
         private string _workstationPrintStatusText = "快递单打印工位：未连接";
         private string _workstationStatusToolTip = "";
         private string _monitorAccessAddress = "";
-        private string _recentTestOrderText = "";
         private int _workstationAddressRefreshVersion;
 
         private int _totalPieces;
@@ -225,7 +224,6 @@ namespace ExpressPackingMonitoring.ViewModels
         public string WorkstationPrintStatusText { get => _workstationPrintStatusText; set => SetProperty(ref _workstationPrintStatusText, value); }
         public string WorkstationStatusToolTip { get => _workstationStatusToolTip; set => SetProperty(ref _workstationStatusToolTip, value); }
         public string MonitorAccessAddress { get => _monitorAccessAddress; set => SetProperty(ref _monitorAccessAddress, value); }
-        public string RecentTestOrderText { get => _recentTestOrderText; set => SetProperty(ref _recentTestOrderText, value); }
 
         // 条形码（自动计算）
         private string _barcode1Label;
@@ -1286,8 +1284,8 @@ namespace ExpressPackingMonitoring.ViewModels
                 else
                     WorkstationAccessText = $"其他电脑查视频：{MonitorAccessAddress}";
                 WorkstationPrintStatusText = orders.Any(x => x.IsTest)
-                    ? "快递单打印工位：最近收到测试订单"
-                    : "快递单打印工位：最近收到订单";
+                    ? $"快递单打印工位：{DateTime.Now:HH:mm} 收到测试订单"
+                    : $"快递单打印工位：{DateTime.Now:HH:mm} 收到订单";
             }
 
             bool hasTestOrder = orders.Any(x => x.IsTest);
@@ -1295,7 +1293,6 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    RecentTestOrderText = $"最近收到测试订单：{DateTime.Now:HH:mm}";
                     ShowToast("已收到测试订单");
                 });
                 SpeakWithRemarkTone("收到测试订单", cancelPrevious: false);

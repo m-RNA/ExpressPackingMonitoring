@@ -470,18 +470,6 @@
                             <StackPanel Grid.Column="0">
                                 <TextBlock Text="{Binding WorkstationAccessText}" Foreground="{DynamicResource TextSecondary}" FontSize="12" TextTrimming="CharacterEllipsis"/>
                                 <TextBlock Text="{Binding WorkstationPrintStatusText}" Foreground="{DynamicResource TextMuted}" FontSize="12" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Text="{Binding RecentTestOrderText}" Foreground="{DynamicResource TextMuted}" FontSize="12" Margin="0,3,0,0" TextTrimming="CharacterEllipsis">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding RecentTestOrderText}" Value="">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
                             </StackPanel>
                             <Button x:Name="BtnSwitchWorkstation" Grid.Column="1" Width="26" Height="28" Margin="2,0,0,0" Background="#01000000" BorderThickness="0" ToolTip="切换工位" Cursor="Hand" Focusable="False">
                                 <Path Data="{StaticResource FluentArrowSwapIcon}" Width="15" Height="15" Stretch="Uniform" Fill="{DynamicResource TextSecondary}" IsHitTestVisible="False"/>
