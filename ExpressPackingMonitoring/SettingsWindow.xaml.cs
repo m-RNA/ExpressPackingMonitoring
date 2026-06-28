@@ -583,6 +583,26 @@ namespace ExpressPackingMonitoring
             }
         }
 
+        private void InstallTool_Click(object sender, RoutedEventArgs e)
+        {
+            int port = Config?.WebServerPort > 0 ? Config.WebServerPort : 5280;
+            string address = WorkstationNetwork.NormalizeAddress(MainVM?.MonitorAccessAddress ?? "", port);
+            if (string.IsNullOrWhiteSpace(address))
+            {
+                address = WorkstationNetwork.NormalizeAddress($"127.0.0.1:{port}", port);
+            }
+
+            string guidePath = PrintToolInstallGuide.CreateLocalGuide(address);
+            try { Clipboard.SetDataObject(address, true); } catch { }
+
+            Process.Start(new ProcessStartInfo(new Uri(guidePath).AbsoluteUri) { UseShellExecute = true });
+            MessageBox.Show(this,
+                $"已打开联动助手安装向导，并复制监控工位地址：{address}",
+                "安装联动助手",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+
         private void SelectMicByConfig(List<MicInfo> mics)
         {
             var micMatch = mics.FirstOrDefault(m => !string.IsNullOrEmpty(Config.AudioDeviceMoniker)
