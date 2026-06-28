@@ -247,6 +247,12 @@ namespace ExpressPackingMonitoring.Services
                             ? string.Join("，", Enumerable.Repeat(req.Text, req.RepeatCount))
                             : req.Text;
 
+                        if (req.IsWarning)
+                        {
+                            PlayWarningAlertToneBlocking();
+                            if (_speechCancelRequested || _isDisposed) continue;
+                        }
+
                         if (EnableAiTts)
                         {
                             SpeakWithAiTts(fullText, req.IsWarning, req.PreferImmediateAiGeneration);
@@ -894,6 +900,66 @@ namespace ExpressPackingMonitoring.Services
             }
             return wav;
         }
+
+        private void PlayWarningAlertToneBlocking()
+        {
+            try
+            {
+                PlayWavBlocking(GetWarningAlertToneWav());
+            }
+            catch (Exception ex)
+            {
+                // Warning tone failure must not block the following voice prompt.
+                Debug.WriteLine($"[SpeechService] Warning tone playback error: {ex.Message}");
+            }
+        }
+
+        private static byte[] GetWarningAlertToneWav()
+        {
+            return _warningAlertToneWav ??= BuildWarningAlertToneWav();
+        }
+
+        private static byte[] BuildWarningAlertToneWav()
+        {
+            const int sampleRate = 22050;
+            const int toneMs = 90;
+            const int gapMs = 35;
+            const float volume = 0.72f;
+
+            int[] tones = [880, 660, 880, 660];
+            int toneSamples = sampleRate * toneMs / 1000;
+            int gapSamples = sampleRate * gapMs / 1000;
+            var samples = new float[tones.Length * toneSamples + (tones.Length - 1) * gapSamples];
+            int offset = 0;
+
+            foreach (int frequency in tones)
+            {
+                for (int i = 0; i < toneSamples; i++)
+                {
+                    double t = i / (double)sampleRate;
+                    double envelope = BuildToneEnvelope(i, toneSamples);
+                    samples[offset + i] = (float)(Math.Sin(2.0 * Math.PI * frequency * t) * volume * envelope);
+                }
+
+                offset += toneSamples;
+                if (offset < samples.Length)
+                    offset += gapSamples;
+            }
+
+            return BuildWav16(samples, sampleRate);
+        }
+
+        private static double BuildToneEnvelope(int sampleIndex, int totalSamples)
+        {
+            int edgeSamples = Math.Max(1, totalSamples / 10);
+            if (sampleIndex < edgeSamples)
+                return sampleIndex / (double)edgeSamples;
+            if (sampleIndex >= totalSamples - edgeSamples)
+                return (totalSamples - sampleIndex - 1) / (double)edgeSamples;
+            return 1.0;
+        }
+
+        private static byte[]? _warningAlertToneWav;
 
         private void PlayWavBlocking(byte[] wavData)
         {
