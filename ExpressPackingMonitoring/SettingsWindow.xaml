@@ -481,6 +481,114 @@
             <Setter Property="IsSnapToTickEnabled" Value="True"/>
             <Setter Property="AutoToolTipPlacement" Value="TopLeft"/>
             <Setter Property="Foreground" Value="{DynamicResource AccentBlue}"/>
+            <Setter Property="Background" Value="{DynamicResource ControlBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid Height="{TemplateBinding Height}" VerticalAlignment="Center">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Track x:Name="PART_Track"
+                                   Grid.Row="0"
+                                   Height="18"
+                                   VerticalAlignment="Center">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="Slider.DecreaseLarge"
+                                                  Focusable="False"
+                                                  IsTabStop="False">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border x:Name="TrackFill"
+                                                        Height="6"
+                                                        Background="{DynamicResource AccentBlue}"
+                                                        CornerRadius="3"
+                                                        VerticalAlignment="Center"/>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="TrackFill" Property="Opacity" Value="0.9"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsPressed" Value="True">
+                                                        <Setter TargetName="TrackFill" Property="Opacity" Value="1"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="Slider.IncreaseLarge"
+                                                  Focusable="False"
+                                                  IsTabStop="False">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border x:Name="TrackRest"
+                                                        Height="6"
+                                                        Background="{DynamicResource ControlBackground}"
+                                                        BorderBrush="{DynamicResource BorderStrong}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="3"
+                                                        VerticalAlignment="Center"/>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="TrackRest" Property="BorderBrush" Value="{DynamicResource AccentBlue}"/>
+                                                        <Setter TargetName="TrackRest" Property="Opacity" Value="0.9"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb x:Name="SliderThumb"
+                                           Width="16"
+                                           Height="16"
+                                           Cursor="Hand">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Grid>
+                                                    <Ellipse x:Name="ThumbGlow"
+                                                             Width="22"
+                                                             Height="22"
+                                                             Fill="{DynamicResource AccentBlue}"
+                                                             Opacity="0"
+                                                             HorizontalAlignment="Center"
+                                                             VerticalAlignment="Center"/>
+                                                    <Ellipse x:Name="ThumbChrome"
+                                                             Width="16"
+                                                             Height="16"
+                                                             Fill="{DynamicResource ControlBackground}"
+                                                             Stroke="{DynamicResource AccentBlue}"
+                                                             StrokeThickness="2"
+                                                             HorizontalAlignment="Center"
+                                                             VerticalAlignment="Center"/>
+                                                </Grid>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="ThumbGlow" Property="Opacity" Value="0.12"/>
+                                                        <Setter TargetName="ThumbChrome" Property="Fill" Value="{DynamicResource ControlBackground}"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsDragging" Value="True">
+                                                        <Setter TargetName="ThumbGlow" Property="Opacity" Value="0.2"/>
+                                                        <Setter TargetName="ThumbChrome" Property="Fill" Value="{DynamicResource AccentBlue}"/>
+                                                        <Setter TargetName="ThumbChrome" Property="Stroke" Value="{DynamicResource AccentBlue}"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.58"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style x:Key="SliderValueTextStyle" TargetType="TextBlock">
