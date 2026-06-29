@@ -336,7 +336,8 @@ namespace ExpressPackingMonitoring
                 {
                     vm.BusyText = msg;
                     vm.IsBusy = true;
-                    vm.ShowToast(msg);
+                    if (!IsRoutineShutdownProgressMessage(msg))
+                        vm.ShowToast(msg);
                 });
                 saved = await vm.SaveRecordingsBeforeShutdownAsync(progress);
             }
@@ -361,6 +362,12 @@ namespace ExpressPackingMonitoring
                     FinishShutdown(vm);
                 }
             }), DispatcherPriority.Background);
+        }
+
+        private static bool IsRoutineShutdownProgressMessage(string message)
+        {
+            return !string.IsNullOrWhiteSpace(message)
+                && message.Contains("文件不存在，跳过", StringComparison.Ordinal);
         }
 
         private void FinishShutdown(MainViewModel? vm)
