@@ -98,6 +98,13 @@ namespace ExpressPackingMonitoring.ViewModels
             var scanRecord = _currentScanRecord;
             var recordId = _currentRecordId; 
             var audioLogPath = _currentAudioLogPath;
+            if (Config.EnableAudioRecording
+                && HasConfiguredAudioDevice()
+                && (audioFailedForThisRecording || string.IsNullOrWhiteSpace(audioFilePath)))
+            {
+                stopReason = string.IsNullOrWhiteSpace(stopReason) ? "音频异常" : $"{stopReason}（音频异常）";
+                RuntimeLog.Warn("Audio", $"Recording audio unavailable id={recordId}, file={Path.GetFileName(filePath ?? "")}, failed={audioFailedForThisRecording}, bytes={audioBytesWrittenForThisRecording}");
+            }
             RuntimeLog.Info("Recording", $"Stop requested id={recordId}, reason={stopReason}, file={Path.GetFileName(filePath ?? "")}");
 
             _recordStartTime = DateTime.MinValue;
@@ -1185,6 +1192,7 @@ namespace ExpressPackingMonitoring.ViewModels
             if (writeFailed)
             {
                 _audioFailedForCurrentRecording = true;
+                PersistAudioFailureDiagnostic(audioFilePath, "WAV 写入失败、队列满或停止超时，已放弃本次音频");
                 DeleteAudioTempFile(audioFilePath);
                 return null;
             }
@@ -1196,6 +1204,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     if (_audioCaptureUnstable)
                     {
                         _audioFailedForCurrentRecording = true;
+                        PersistAudioFailureDiagnostic(audioFilePath, $"WAV 采集不稳定: gaps={_audioGapCount}, maxGapMs={_audioMaxGapMs:F0}, paddedBytes={_audioGapPaddingBytes}");
                         WriteAudioDiagnostic($"WAV 采集不稳定，跳过 MP4 合成并保留诊断文件: gaps={_audioGapCount}, maxGapMs={_audioMaxGapMs:F0}, paddedBytes={_audioGapPaddingBytes}");
                     }
                     return audioFilePath;
@@ -1204,8 +1213,24 @@ namespace ExpressPackingMonitoring.ViewModels
             catch { }
 
             _audioFailedForCurrentRecording = true;
+            PersistAudioFailureDiagnostic(audioFilePath, "WAV 文件不可用或完整性校验失败，已放弃本次音频");
             DeleteAudioTempFile(audioFilePath);
             return null;
+        }
+
+        private static void PersistAudioFailureDiagnostic(string audioFilePath, string reason)
+        {
+            try
+            {
+                string logPath = Path.ChangeExtension(audioFilePath, ".audio.log");
+                Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+                File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {reason}{Environment.NewLine}");
+                RuntimeLog.Warn("Audio", $"{reason}, file={Path.GetFileName(audioFilePath)}");
+            }
+            catch (Exception ex)
+            {
+                RuntimeLog.Warn("Audio", $"Failed to persist audio diagnostic for {Path.GetFileName(audioFilePath)}: {ex.Message}");
+            }
         }
 
         private bool IsCompletedAudioFileUsable(string audioFilePath)
@@ -2038,6 +2063,12 @@ namespace ExpressPackingMonitoring.ViewModels
                 string mp4Path = Path.ChangeExtension(mkvPath, ".mp4");
                 string? audioPath = ResolveSidecarPath(mkvPath, ".wav");
                 string? audioLogPath = ResolveSidecarPath(mkvPath, ".audio.log");
+
+                if (audioPath == null && audioLogPath != null)
+                {
+                    RuntimeLog.Warn("MkvToMp4", $"Audio failure sidecar exists without WAV, keeping MKV to avoid silent MP4 file={Path.GetFileName(mkvPath)}");
+                    return MkvConversionResult.Fail("音频录制失败，已保留 MKV，避免生成无声 MP4", mkvPath);
+                }
 
                 if (File.Exists(mp4Path) && new FileInfo(mp4Path).Length > 0)
                 {

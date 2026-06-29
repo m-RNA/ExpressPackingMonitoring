@@ -1129,9 +1129,8 @@ namespace ExpressPackingMonitoring.ViewModels
 
                 if (result.fail > 0)
                 {
-                    ShowToast("录像保存失败，请检查日志");
-                    RuntimeLog.Warn("Shutdown", $"Save before shutdown failed, failedConversions={result.fail}");
-                    return false;
+                    ShowToast("部分历史录像转换失败，已保留原文件");
+                    RuntimeLog.Warn("Shutdown", $"Save before shutdown has failed historical conversions, allowing exit. failedConversions={result.fail}");
                 }
 
                 return true;
@@ -1347,7 +1346,10 @@ namespace ExpressPackingMonitoring.ViewModels
                 RuntimeLog.Warn("Camera", $"RestartCameraWithRecordingStop start recording={IsRecording}, failures={_consecutiveRestartFailures}");
                 if (IsRecording)
                 {
-                    // 录制中：先尝试不停止录制的重连
+                    _stopReason = "摄像头重连";
+                    RuntimeLog.Warn("Camera", "Camera reconnect requested while recording, stopping current recording before restart");
+                    await SafeStopRecordingAsync();
+
                     StopCamera();
                     StartCamera();
                     _lastRestartAttempt = DateTime.Now;
@@ -1355,8 +1357,8 @@ namespace ExpressPackingMonitoring.ViewModels
                     if (_videoSource != null && _videoSource.IsRunning)
                     {
                         _consecutiveRestartFailures = 0;
-                        RuntimeLog.Info("Camera", "Camera reconnected while recording, recording continues");
-                        ShowToast("成功：摄像头已重连，录制继续");
+                        RuntimeLog.Info("Camera", "Camera reconnected after stopping interrupted recording");
+                        ShowToast("摄像头已重连，当前录像已保存，请重新扫码继续");
                         Speak("摄像头已连接");
                     }
                     else
@@ -1364,10 +1366,7 @@ namespace ExpressPackingMonitoring.ViewModels
                         _consecutiveRestartFailures++;
                         if (_consecutiveRestartFailures >= MaxConsecutiveRestartFailures)
                         {
-                            // 多次重连失败，停止录制
-                            _stopReason = "摄像头断连";
-                            RuntimeLog.Warn("Camera", $"Camera reconnect failed {_consecutiveRestartFailures} times while recording, stopping recording");
-                            await SafeStopRecordingAsync();
+                            RuntimeLog.Warn("Camera", $"Camera reconnect failed {_consecutiveRestartFailures} times after interrupted recording");
                             ShowToast($"警告：摄像头连续 {MaxConsecutiveRestartFailures} 次重连失败，录制已停止。请重新插拔后在设置中手动重启。");
                             SpeakWarning("请重新连接摄像头", 3);
                             Debug.WriteLine($"[Camera] 录制中连续 {_consecutiveRestartFailures} 次重连失败，停止录制和自动重连");
