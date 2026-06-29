@@ -1682,7 +1682,7 @@
                                             <Slider x:Name="MinVideoFileSizeSlider"
                                                     Style="{StaticResource SettingsSliderStyle}"
                                                     Minimum="0"
-                                                    Maximum="1048576"
+                                                    Maximum="20480"
                                                     TickFrequency="1024"
                                                     Value="{Binding Config.MinVideoFileSizeKB, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource IntSliderValueConverter}}"/>
                                         </StackPanel>
@@ -1848,7 +1848,6 @@
                                                     Maximum="2.0"
                                                     TickFrequency="0.1"
                                                     Value="{Binding Config.AiTtsSpeed, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                                            <TextBlock Text="推荐：1.0 倍" Style="{StaticResource SliderRecommendedTextStyle}" HorizontalAlignment="Center"/>
                                         </StackPanel>
                                     </Grid>
                                 </StackPanel>
@@ -2138,7 +2137,7 @@
                                             <Slider x:Name="TranscodeCacheSlider"
                                                     Style="{StaticResource SettingsSliderStyle}"
                                                     Minimum="128"
-                                                    Maximum="10240"
+                                                    Maximum="2048"
                                                     TickFrequency="256"
                                                     Value="{Binding Config.TranscodeCacheMaxMB, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource IntSliderValueConverter}}"/>
                                         </StackPanel>
