@@ -213,6 +213,8 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private volatile bool _suppressVideoPreviewUpdates;
         public bool SuppressVideoPreviewUpdates { get => _suppressVideoPreviewUpdates; set => _suppressVideoPreviewUpdates = value; }
+        private bool _isPreviewEnabled = true;
+        public bool IsPreviewEnabled { get => _isPreviewEnabled; set => SetProperty(ref _isPreviewEnabled, value); }
         public BitmapSource VideoFrame { get => _videoFrame; set => SetProperty(ref _videoFrame, value); }
         public string CurrentMode { get => _currentMode; set { if (SetProperty(ref _currentMode, value)) ScheduleRefreshBarcodes(); } }
         public string CurrentOrderId { get => _currentOrderId; set => SetProperty(ref _currentOrderId, value); }
@@ -341,6 +343,7 @@ namespace ExpressPackingMonitoring.ViewModels
         public ICommand OpenPlaybackCommand { get; }
         public ICommand ToggleModeCommand { get; }
         public ICommand ToggleRecordingCommand { get; }
+        public ICommand TogglePreviewCommand { get; }
         public ICommand OpenStatsCommand { get; } // 打开统计面板
         public ICommand ResetEncoderDetectCommand { get; } // 重置编码器检测
         public ICommand CopyMonitorAddressCommand { get; }
@@ -356,6 +359,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 OpenPlaybackCommand = new RelayCommand(() => { });
                 ToggleModeCommand = new RelayCommand(() => { });
                 ToggleRecordingCommand = new RelayCommand(() => { });
+                TogglePreviewCommand = new RelayCommand(() => { });
                 OpenStatsCommand = new RelayCommand(() => { });
                 CopyMonitorAddressCommand = new RelayCommand(() => { });
                 SwitchWorkstationCommand = new RelayCommand(() => { });
@@ -408,6 +412,7 @@ namespace ExpressPackingMonitoring.ViewModels
             OpenPlaybackCommand = new RelayCommand(OpenPlaybackWindow);
             ToggleModeCommand = new RelayCommand(ToggleMode);
             ToggleRecordingCommand = new RelayCommand(ToggleRecording);
+            TogglePreviewCommand = new RelayCommand(TogglePreview);
             OpenStatsCommand = new RelayCommand(OpenStatsWindow);
             ResetEncoderDetectCommand = new RelayCommand(ResetEncoderDetect);
             CopyMonitorAddressCommand = new RelayCommand(CopyMonitorAddress);
@@ -484,6 +489,23 @@ namespace ExpressPackingMonitoring.ViewModels
         }
 
         private void ToggleMode() { CurrentMode = CurrentMode == "发货" ? "退货" : "发货"; ShowToast($"已切换为: {CurrentMode}"); Speak(CurrentMode == "发货" ? "切换发货" : "切换退货"); }
+
+        private void TogglePreview()
+        {
+            IsPreviewEnabled = !IsPreviewEnabled;
+            if (!IsPreviewEnabled)
+            {
+                VideoFrame = null;
+                LastZoomRect = System.Windows.Rect.Empty;
+                Interlocked.Exchange(ref _previewUpdatePending, 0);
+            }
+            else
+            {
+                _lastPreviewFrameAt = DateTime.MinValue;
+                _lastPreviewPublishedAt = DateTime.Now;
+            }
+            ShowToast(IsPreviewEnabled ? "摄像头预览已开启" : "摄像头预览已关闭");
+        }
 
         private void PauseSpeechForRecording() => _speechService?.PauseForRecording();
 
@@ -608,6 +630,42 @@ namespace ExpressPackingMonitoring.ViewModels
 
             Debug.WriteLine($"[Zoom] 扫码事件触发: ID={upperResult}, ZoomEnabled={Config.EnableSmartZoom}, Delay={Config.ZoomDelaySeconds}");
             StartInputCooldown();
+
+            if (IsRecording && Config.StartStopSameBarcode)
+            {
+                string recordingOrderId = (_recordingOrderId ?? CurrentOrderId ?? "").ToUpper().Trim();
+                if (upperResult != recordingOrderId)
+                {
+                    ShowToast($"警告：单号不一致：{upperResult}");
+                    SpeakWarning("单号不一致");
+                    return;
+                }
+
+                if (!await _recorderLock.WaitAsync(0)) return;
+                try
+                {
+                    _stopReason = "扫码匹配停止";
+                    PauseSpeechForRecording();
+                    await InternalStopRecordingAsync();
+                    CurrentOrderId = "";
+                    ScanInputText = "";
+                    ShowToast("单号匹配，已停止录制");
+                    Speak("停止录制", cancelPrevious: false);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[HandleScan] 匹配停录异常: {ex.Message}");
+                    RuntimeLog.Error("Scan", "Matched barcode stop failed", ex);
+                }
+                finally
+                {
+                    if (!IsRecording)
+                        ResumeSpeechWhenCameraIdle();
+                    _recorderLock.Release();
+                }
+                return;
+            }
+
             CurrentOrderId = upperResult;
             if (IsRecording) _stopReason = "扫码切换";
 
@@ -1972,7 +2030,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private void CheckPreviewWatchdog()
         {
-            if (_isDisposed || _isCameraSleeping || SuppressVideoPreviewUpdates) return;
+            if (_isDisposed || _isCameraSleeping || SuppressVideoPreviewUpdates || !IsPreviewEnabled) return;
             if (_videoSource == null || !_videoSource.IsRunning || !_cameraEverConnected) return;
             if (_lastFrameTime == DateTime.MinValue || _lastPreviewPublishedAt == DateTime.MinValue) return;
 
@@ -2026,6 +2084,7 @@ namespace ExpressPackingMonitoring.ViewModels
             _ = Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 if (_isDisposed || _isCameraSleeping || SuppressVideoPreviewUpdates) return;
+                if (!IsPreviewEnabled) return;
                 ShowToast("警告：预览画面卡住，正在重连摄像头...");
                 RestartCameraWithRecordingStop();
             });
@@ -2039,7 +2098,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private void PublishPreviewFrameIfDue(Mat frame)
         {
-            if (SuppressVideoPreviewUpdates || _isDisposed) return;
+            if (SuppressVideoPreviewUpdates || _isDisposed || !IsPreviewEnabled) return;
 
             DateTime now = DateTime.UtcNow;
             if (now - _lastPreviewFrameAt < PreviewFrameInterval) return;
@@ -2063,7 +2122,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 {
                     try
                     {
-                        if (!_isDisposed && !SuppressVideoPreviewUpdates)
+                        if (!_isDisposed && !SuppressVideoPreviewUpdates && IsPreviewEnabled)
                         {
                             VideoFrame = bitmap;
                             _lastPreviewPublishedAt = DateTime.Now;
