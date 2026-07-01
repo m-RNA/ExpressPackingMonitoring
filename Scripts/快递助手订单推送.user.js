@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         订单备注播报插件
 // @namespace    https://github.com/ExpressPackingMonitoring
-// @version      1.2
-// @description  从快递助手批量打印页面提取买家留言和卖家备注，发送到监控工位，打包时自动播报。v1.2 增加测试订单发送功能。
+// @version      1.3
+// @description  从快递助手批量打印页面提取买家留言和卖家备注，发送到监控工位，打包时自动播报。v1.3 合并地址端口设置并统一回环地址。
 // @author       ExpressPackingMonitoring
 // @match        *://p4.kuaidizs.cn/*
 // @match        *://kuaidizs.cn/*
@@ -23,14 +23,13 @@
     // ============ 配置 ============
     const DEFAULT_HOST = '127.0.0.1';
     const DEFAULT_PORT = 5280;
+    const DEFAULT_ADDRESS = `${DEFAULT_HOST}:${DEFAULT_PORT}`;
     const DISCOVERY_DONE_KEY = 'monitor_auto_discovery_done';
     const DISCOVERY_TIMEOUT = 700;
     const DISCOVERY_BATCH_SIZE = 32;
-    const CHANGELOG = 'v1.2：增加测试订单发送功能，用于确认快递助手订单备注能否成功发送到监控工位';
+    const CHANGELOG = 'v1.3：合并上位机地址和端口设置，统一 127.x 回环地址为 127.0.0.1';
 
-    function getHost() { return GM_getValue('monitor_host', DEFAULT_HOST); }
-    function getPort() { return GM_getValue('monitor_port', DEFAULT_PORT); }
-    function getApiUrl() { return `${getBaseUrl(getHost(), getPort())}/api/orderinfo`; }
+    function getApiUrl() { return `${getBaseUrl(getMonitorAddressText())}/api/orderinfo`; }
     function getStorageUrl(host, port) { return `${getBaseUrl(host, port)}/api/storage`; }
     function getBaseUrl(host, port) {
         const address = normalizeAddress(host, port);
@@ -41,13 +40,36 @@
             .replace(/^https?:\/\//i, '')
             .replace(/\/+$/g, '');
         const parts = value.split(':');
+        let normalizedHost = parts[0] || DEFAULT_HOST;
+        if (/^127(?:\.\d{1,3}){3}$/.test(normalizedHost)) {
+            normalizedHost = DEFAULT_HOST;
+        }
+        const parsedPort = Number(parts[1] || port || DEFAULT_PORT);
         return {
-            host: parts[0] || DEFAULT_HOST,
-            port: Number(parts[1] || port || DEFAULT_PORT)
+            host: normalizedHost,
+            port: Number.isInteger(parsedPort) && parsedPort > 0 && parsedPort <= 65535 ? parsedPort : DEFAULT_PORT
         };
+    }
+    function formatAddress(address) {
+        const normalized = normalizeAddress(address.host, address.port);
+        return `${normalized.host}:${normalized.port}`;
+    }
+    function getMonitorAddressText() {
+        const storedAddress = GM_getValue('monitor_address', '');
+        if (storedAddress) return formatAddress(normalizeAddress(storedAddress, DEFAULT_PORT));
+
+        const legacyHost = GM_getValue('monitor_host', '');
+        const legacyPort = GM_getValue('monitor_port', '');
+        if (legacyHost || legacyPort) return formatAddress(normalizeAddress(legacyHost || DEFAULT_HOST, legacyPort || DEFAULT_PORT));
+
+        return DEFAULT_ADDRESS;
+    }
+    function getMonitorAddress() {
+        return normalizeAddress(getMonitorAddressText(), DEFAULT_PORT);
     }
     function saveMonitorAddress(host, port) {
         const address = normalizeAddress(host, port);
+        GM_setValue('monitor_address', formatAddress(address));
         GM_setValue('monitor_host', address.host);
         GM_setValue('monitor_port', address.port);
         GM_setValue(DISCOVERY_DONE_KEY, true);
@@ -119,8 +141,8 @@
     }
 
     async function findMonitorAddress(showProgress) {
-        const port = getPort();
-        const saved = normalizeAddress(getHost(), port);
+        const saved = getMonitorAddress();
+        const port = saved.port;
         const directCandidates = [
             saved.host,
             '127.0.0.1',
@@ -178,12 +200,11 @@
 
     // 注册菜单命令用于修改配置
     GM_registerMenuCommand('⚙️ 设置上位机地址', () => {
-        const host = prompt('请输入打包监控上位机 IP 地址：', getHost());
-        if (host) saveMonitorAddress(host.trim(), getPort());
-    });
-    GM_registerMenuCommand('⚙️ 设置上位机端口', () => {
-        const port = prompt('请输入打包监控 Web 端口：', getPort());
-        if (port && !isNaN(port)) saveMonitorAddress(getHost(), parseInt(port));
+        const input = prompt('请输入打包监控上位机地址（IP:端口 或 http://IP:端口）：', getMonitorAddressText());
+        if (input) {
+            const address = saveMonitorAddress(input.trim(), DEFAULT_PORT);
+            showNotification(`已设置上位机地址：${formatAddress(address)}`);
+        }
     });
     GM_registerMenuCommand('自动探测上位机地址', async () => {
         showNotification('正在自动探测上位机地址...');
