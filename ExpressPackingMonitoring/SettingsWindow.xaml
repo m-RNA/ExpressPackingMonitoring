@@ -1443,6 +1443,26 @@
                                                     Value="{Binding Config.MaxDurationMinutes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                         </StackPanel>
                                     </Grid>
+                                    <Border Style="{StaticResource SectionDividerStyle}"/>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}" Margin="0,0,0,14">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="24"/>
+                                            <ColumnDefinition Width="260"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="开始停止同条码" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="录制中再次扫描同一单号才停止录像，扫描其他单号提醒但不停止录像"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <CheckBox Grid.Column="2"
+                                                  IsChecked="{Binding Config.StartStopSameBarcode}"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left"
+                                                  Style="{StaticResource ToggleSwitchStyle}"/>
+                                    </Grid>
+                                    
 
                                     <Border Style="{StaticResource SectionDividerStyle}"/>
 
@@ -1699,6 +1719,8 @@
                                                     Value="{Binding Config.MinVideoFileSizeKB, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource IntSliderValueConverter}}"/>
                                         </StackPanel>
                                     </Grid>
+
+                                    <Border Style="{StaticResource SectionDividerStyle}"/>
 
                                     <Grid Style="{StaticResource SettingRowStyle}" Margin="0">
                                         <Grid.ColumnDefinitions>
