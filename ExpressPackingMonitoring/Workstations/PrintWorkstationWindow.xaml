@@ -27,54 +27,7 @@
             <Setter Property="Effect" Value="{StaticResource CardShadow}"/>
         </Style>
 
-        <Style x:Key="PrimaryButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="42"/>
-            <Setter Property="MinWidth" Value="116"/>
-            <Setter Property="Padding" Value="15,0"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Background" Value="{DynamicResource AccentBlue}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource AccentBlue}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Root"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="10">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Root" Property="Opacity" Value="0.92"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Root" Property="Opacity" Value="0.82"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Root" Property="Opacity" Value="0.45"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
-            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
-            <Setter Property="Background" Value="{DynamicResource ControlBackground}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderDefault}"/>
-        </Style>
-
         <Style x:Key="ActionButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
-            <Setter Property="Height" Value="40"/>
-            <Setter Property="MinWidth" Value="126"/>
             <Setter Property="Margin" Value="8,0,0,8"/>
         </Style>
 
@@ -151,9 +104,6 @@
 
                     <Button Grid.Column="3"
                             Style="{StaticResource SecondaryButtonStyle}"
-                            MinWidth="108"
-                            Height="34"
-                            Padding="12,0"
                             VerticalAlignment="Top"
                             Click="SwitchWorkstation_Click">
                         <StackPanel Orientation="Horizontal">
@@ -196,7 +146,6 @@
                                     Orientation="Horizontal"
                                     VerticalAlignment="Top">
                             <Button Style="{StaticResource SecondaryButtonStyle}"
-                                    MinWidth="110"
                                     Margin="0,0,10,0"
                                     Click="FindMonitor_Click">
                                 <StackPanel Orientation="Horizontal">
@@ -211,7 +160,6 @@
                             </Button>
 
                             <Button Style="{StaticResource PrimaryButtonStyle}"
-                                    MinWidth="96"
                                     Click="Reconnect_Click">
                                 <StackPanel Orientation="Horizontal">
                                     <Path Data="{StaticResource FluentLinkIcon}"
@@ -287,7 +235,6 @@
                                VerticalAlignment="Top"
                                HorizontalAlignment="Right">
                         <Button Style="{StaticResource ActionButtonStyle}"
-                                MinWidth="132"
                                 Click="InstallTool_Click">
                             <StackPanel Orientation="Horizontal">
                                 <Path Data="{StaticResource FluentPrinterIcon}"
@@ -301,7 +248,6 @@
                         </Button>
 
                         <Button Style="{StaticResource ActionButtonStyle}"
-                                MinWidth="116"
                                 Click="TestSend_Click">
                             <StackPanel Orientation="Horizontal">
                                 <Path Data="{StaticResource FluentCheckIcon}"

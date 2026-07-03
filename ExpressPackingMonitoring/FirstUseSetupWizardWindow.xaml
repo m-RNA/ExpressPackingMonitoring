@@ -32,7 +32,7 @@
                                 </Grid.ColumnDefinitions>
                                 <Grid Width="18"
                                       Height="18"
-                                      HorizontalAlignment="Left"
+                                      HorizontalAlignment="Center"
                                       VerticalAlignment="Center">
                                     <Ellipse x:Name="Outer"
                                              Stroke="{DynamicResource BorderStrong}"
@@ -63,45 +63,6 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
-        </Style>
-
-        <Style x:Key="WizardButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="38"/>
-            <Setter Property="MinWidth" Value="96"/>
-            <Setter Property="Padding" Value="16,0"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}"/>
-            <Setter Property="Background" Value="{DynamicResource PanelBackground}"/>
-            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Root"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource AccentBlue}"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Root" Property="Opacity" Value="0.55"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="PrimaryWizardButtonStyle" TargetType="Button" BasedOn="{StaticResource WizardButtonStyle}">
-            <Setter Property="Background" Value="{DynamicResource AccentBlue}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource AccentBlue}"/>
-            <Setter Property="Foreground" Value="White"/>
         </Style>
 
         <Style x:Key="StepTextStyle" TargetType="TextBlock">
@@ -402,18 +363,18 @@
             <Grid>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                     <Button Content="跳过"
-                            Style="{StaticResource WizardButtonStyle}"
+                            Style="{StaticResource SecondaryButtonStyle}"
                             Click="SkipButton_Click"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button x:Name="BackButton"
                             Content="上一步"
-                            Style="{StaticResource WizardButtonStyle}"
+                            Style="{StaticResource SecondaryButtonStyle}"
                             Margin="0,0,10,0"
                             Click="BackButton_Click"/>
                     <Button x:Name="NextButton"
                             Content="下一步"
-                            Style="{StaticResource PrimaryWizardButtonStyle}"
+                            Style="{StaticResource PrimaryButtonStyle}"
                             Click="NextButton_Click"/>
                 </StackPanel>
             </Grid>

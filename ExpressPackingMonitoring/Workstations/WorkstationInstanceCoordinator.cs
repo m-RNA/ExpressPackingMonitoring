@@ -180,46 +180,60 @@ public sealed class DuplicateInstanceDialog : Window
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         ResizeMode = ResizeMode.NoResize;
-        Background = Brushes.White;
+        SetResourceReference(BackgroundProperty, "WindowBackground");
 
-        var root = new StackPanel { Margin = new Thickness(22) };
-        Content = root;
+        var root = new StackPanel();
+        var frame = new Border
+        {
+            Margin = new Thickness(16),
+            Padding = new Thickness(22),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12),
+            Child = root
+        };
+        frame.SetResourceReference(Border.BackgroundProperty, "PanelBackground");
+        frame.SetResourceReference(Border.BorderBrushProperty, "BorderLight");
+        Content = frame;
 
-        root.Children.Add(new TextBlock
+        var titleText = new TextBlock
         {
             Text = "程序已经在运行",
             FontSize = 20,
             FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(23, 32, 51)),
             Margin = new Thickness(0, 0, 0, 14)
-        });
+        };
+        titleText.SetResourceReference(TextBlock.ForegroundProperty, "TextPrimary");
+        root.Children.Add(titleText);
 
-        root.Children.Add(new TextBlock
+        var roleText = new TextBlock
         {
             Text = $"当前已打开：{WorkstationRoles.GetDisplayName(runningRole)}",
             FontSize = 14,
-            Foreground = new SolidColorBrush(Color.FromRgb(45, 55, 72)),
             Margin = new Thickness(0, 0, 0, 10)
-        });
+        };
+        roleText.SetResourceReference(TextBlock.ForegroundProperty, "TextPrimary");
+        root.Children.Add(roleText);
 
-        root.Children.Add(new TextBlock
+        var bodyText = new TextBlock
         {
             Text = "通常不建议重复打开同一种工位，否则可能抢占摄像头、麦克风、Web 端口或数据库。",
             TextWrapping = TextWrapping.Wrap,
             LineHeight = 20,
             FontSize = 13,
-            Foreground = new SolidColorBrush(Color.FromRgb(82, 96, 113)),
             Margin = new Thickness(0, 0, 0, 14)
-        });
+        };
+        bodyText.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondary");
+        root.Children.Add(bodyText);
 
-        root.Children.Add(new TextBlock
+        var questionText = new TextBlock
         {
             Text = "你想怎么做？",
             FontSize = 13,
             FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(45, 55, 72)),
             Margin = new Thickness(0, 0, 0, 18)
-        });
+        };
+        questionText.SetResourceReference(TextBlock.ForegroundProperty, "TextPrimary");
+        root.Children.Add(questionText);
 
         var actions = new StackPanel
         {
@@ -274,26 +288,11 @@ public sealed class DuplicateInstanceDialog : Window
         var button = new Button
         {
             Content = text,
-            MinWidth = isPrimary ? 132 : 92,
-            Height = 34,
             Margin = new Thickness(8, 0, 0, 0),
-            Padding = new Thickness(14, 0, 14, 0),
-            BorderThickness = new Thickness(1),
             Cursor = Cursors.Hand
         };
 
-        if (isPrimary)
-        {
-            button.Background = new SolidColorBrush(Color.FromRgb(31, 120, 255));
-            button.BorderBrush = new SolidColorBrush(Color.FromRgb(31, 120, 255));
-            button.Foreground = Brushes.White;
-        }
-        else
-        {
-            button.Background = Brushes.White;
-            button.BorderBrush = new SolidColorBrush(Color.FromRgb(204, 214, 228));
-            button.Foreground = new SolidColorBrush(Color.FromRgb(23, 32, 51));
-        }
+        button.SetResourceReference(FrameworkElement.StyleProperty, isPrimary ? "PrimaryButtonStyle" : "SecondaryButtonStyle");
 
         return button;
     }
