@@ -1173,9 +1173,57 @@ namespace ExpressPackingMonitoring.ViewModels
             Task.Run(CheckDiskAndCleanup);
             Task.Run(CameraIdleWatchdog);
             StartWebServer();
+            StartAutoUpdateCheck();
 
             // 启动时自动将上次断电残留的 MKV 转换为 MP4
             _mkvRecoveryTask = Task.Run(RecoverOrphanedMkvAsync);
+        }
+
+        private void StartAutoUpdateCheck()
+        {
+            if (!Config.EnableAutoCheckUpdate) return;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(5), _cts.Token);
+                    var service = new UpdateCheckService();
+                    var result = await service.CheckAsync(_cts.Token);
+                    if (!result.HasUpdate || _isDisposed) return;
+
+                    await Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        if (_isDisposed) return;
+
+                        var owner = Application.Current.MainWindow;
+                        var dialog = new UpdateAvailableDialog(result)
+                        {
+                            Owner = owner
+                        };
+
+                        if (dialog.ShowDialog() == true)
+                        {
+                            try
+                            {
+                                UpdateCheckService.OpenDownloadPage(dialog.DownloadUrl);
+                            }
+                            catch (Exception ex)
+                            {
+                                RuntimeLog.Error("Update", "Open download page failed", ex);
+                                ShowToast("打开下载页面失败");
+                            }
+                        }
+                    });
+                }
+                catch (OperationCanceledException)
+                {
+                }
+                catch (Exception ex)
+                {
+                    RuntimeLog.Error("Update", "Auto update check failed", ex);
+                }
+            });
         }
 
         private async Task RecoverOrphanedMkvAsync()

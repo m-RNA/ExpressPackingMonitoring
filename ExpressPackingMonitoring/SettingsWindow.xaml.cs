@@ -11,7 +11,6 @@ using System.Windows.Input;
 using System.Threading;
 using System.IO;
 using System.Diagnostics;
-using System.Reflection;
 using System.Globalization;
 using System.Windows.Data;
 using System.Windows.Media;
@@ -83,7 +82,7 @@ namespace ExpressPackingMonitoring
         public AppConfig Config { get; set; }
         public double CurrentDiskUsagePercent { get; set; }
         public string CurrentDiskUsageText { get; set; }
-        public string AppVersion { get; } = GetAppVersion();
+        public string AppVersion { get; } = ExpressPackingMonitoring.AppVersion.Current;
         public ImageSource AppIconImage { get; } = GetLargestAppIconImage();
         public List<EdgeVoiceOption> EdgeVoiceOptions { get; } = new()
         {
@@ -899,19 +898,6 @@ namespace ExpressPackingMonitoring
             }
         }
 
-        private static string GetAppVersion()
-        {
-            var assembly = Assembly.GetExecutingAssembly();
-            var infoVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-            if (!string.IsNullOrWhiteSpace(infoVersion))
-            {
-                return infoVersion;
-            }
-
-            Version version = assembly.GetName().Version;
-            return version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "未知版本";
-        }
-
         private static ImageSource GetLargestAppIconImage()
         {
             var decoder = BitmapDecoder.Create(
@@ -934,6 +920,57 @@ namespace ExpressPackingMonitoring
             catch (Exception ex)
             {
                 MessageBox.Show($"无法打开链接：{ex.Message}", "打开链接失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private async void CheckUpdate_Click(object sender, RoutedEventArgs e)
+        {
+            CheckUpdateButton.IsEnabled = false;
+            string oldContent = CheckUpdateButton.Content?.ToString() ?? "检查更新";
+            CheckUpdateButton.Content = "正在检查...";
+
+            try
+            {
+                var service = new UpdateCheckService();
+                var result = await service.CheckAsync();
+                if (!result.HasUpdate)
+                {
+                    MainVM.ShowToast("当前已是最新版本");
+                    return;
+                }
+
+                ShowUpdateDialog(result);
+            }
+            catch (Exception ex)
+            {
+                RuntimeLog.Error("Update", "Manual update check failed", ex);
+                MainVM.ShowToast("检查更新失败，请稍后再试");
+            }
+            finally
+            {
+                CheckUpdateButton.Content = oldContent;
+                CheckUpdateButton.IsEnabled = true;
+            }
+        }
+
+        private void ShowUpdateDialog(UpdateCheckResult result)
+        {
+            var dialog = new UpdateAvailableDialog(result)
+            {
+                Owner = this
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                try
+                {
+                    UpdateCheckService.OpenDownloadPage(dialog.DownloadUrl);
+                }
+                catch (Exception ex)
+                {
+                    RuntimeLog.Error("Update", "Open download page failed", ex);
+                    MainVM.ShowToast("打开下载页面失败");
+                }
             }
         }
 

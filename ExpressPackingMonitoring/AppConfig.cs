@@ -95,6 +95,7 @@ namespace ExpressPackingMonitoring.ViewModels
         public string Theme { get; set; } = "Auto";
         public bool ShowDeletedVideos { get; set; } = true;
         public bool AutoStartOnBoot { get; set; } = false;
+        public bool EnableAutoCheckUpdate { get; set; } = true;
         public bool EnableAudioRecording { get; set; } = true;
         public string AudioDeviceName { get; set; } = "";
         public string AudioDeviceMoniker { get; set; } = "";

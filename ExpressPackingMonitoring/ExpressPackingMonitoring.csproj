@@ -85,6 +85,7 @@
     <Compile Include="App.xaml.cs" />
     <Compile Include="AppPaths.cs" />
     <Compile Include="AppConfig.cs" />
+    <Compile Include="AppVersion.cs" />
     <Compile Include="AudioProbe.cs" />
     <Compile Include="BarcodeHelper.cs" />
     <Compile Include="ConfirmDialog.xaml.cs" />
@@ -94,6 +95,8 @@
     <Compile Include="MkvConversionResult.cs" />
     <Compile Include="RuntimeLog.cs" />
     <Compile Include="SpeechService.cs" />
+    <Compile Include="Services\UpdateCheckOptions.cs" />
+    <Compile Include="Services\UpdateCheckService.cs" />
     <Compile Include="MainViewModel.Cleanup.cs" />
     <Compile Include="MainViewModel.cs" />
     <Compile Include="MainViewModel.Encoder.cs" />
@@ -102,6 +105,7 @@
     <Compile Include="PlaybackWindow.xaml.cs" />
     <Compile Include="SettingsWindow.xaml.cs" />
     <Compile Include="StatisticsWindow.xaml.cs" />
+    <Compile Include="UpdateAvailableDialog.xaml.cs" />
     <Compile Include="Themes\ThemeManager.cs" />
     <Compile Include="VideoDatabase.cs" />
     <Compile Include="WebServer.cs" />

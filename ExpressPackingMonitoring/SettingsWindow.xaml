@@ -2325,6 +2325,24 @@
                                             <ColumnDefinition Width="260"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="自动检查更新" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="打开软件后后台检查，有新版本时提示下载"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <CheckBox Grid.Column="2"
+                                                  IsChecked="{Binding Config.EnableAutoCheckUpdate}"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left"
+                                                  Style="{StaticResource ToggleSwitchStyle}"/>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="24"/>
+                                            <ColumnDefinition Width="260"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="全局键盘监听" Style="{StaticResource FieldLabelStyle}"/>
                                             <TextBlock Text="程序不在前台时也能接收扫码枪输入"
                                                        Style="{StaticResource FieldHintStyle}"/>
@@ -2464,14 +2482,15 @@
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <WrapPanel Grid.Column="2">
+                                            <Button x:Name="CheckUpdateButton"
+                                                    Content="检查更新"
+                                                    Click="CheckUpdate_Click"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"/>
                                             <Button Content="打开仓库"
                                                     Click="OpenRepository_Click"
                                                     Style="{StaticResource SecondaryButtonStyle}"
                                                     Margin="0,0,8,8"/>
-                                            <Button Content="查看许可证"
-                                                    Click="OpenLicense_Click"
-                                                    Style="{StaticResource SecondaryButtonStyle}"
-                                                    Margin="0,0,0,8"/>
                                         </WrapPanel>
                                     </Grid>
 
