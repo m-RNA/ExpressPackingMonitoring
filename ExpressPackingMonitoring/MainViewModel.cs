@@ -105,6 +105,8 @@ namespace ExpressPackingMonitoring.ViewModels
         private DateTime _lastRecordingQueueWarnAt = DateTime.MinValue;
         private DateTime _lastResourceHealthLogAt = DateTime.MinValue;
         private DateTime _lastPreviewConvertErrorLogAt = DateTime.MinValue;
+        private DateTime _lastVideoFrameErrorLogAt = DateTime.MinValue;
+        private DateTime _lastCameraStateErrorLogAt = DateTime.MinValue;
         private DateTime _lastUiHeartbeatAt = DateTime.Now;
         private System.Windows.Threading.DispatcherTimer _uiHeartbeatTimer;
         private int _previewUpdatePending;
@@ -1937,8 +1939,8 @@ namespace ExpressPackingMonitoring.ViewModels
                             catch { }
                         }
 
+                        if (frameTickCounter % 30 == 0) TryPerformMotionDetection(currentFrame);
                         PublishPreviewFrameIfDue(processedFrame);
-                        if (frameTickCounter % 30 == 0) PerformMotionDetection(currentFrame);
 
                         bool handedToRecorder = IsRecording && TryEnqueueFrameForRecording(processedFrame);
                         if (processedFrame != currentFrame)
@@ -1969,7 +1971,7 @@ namespace ExpressPackingMonitoring.ViewModels
                         {
                         }
                         // 摄像头掉线检测：使用时间差（避免 200ms 循环间隔导致帧计数不准）
-                        else if (_videoSource != null && _videoSource.IsRunning)
+                        else if (IsVideoSourceRunning())
                         {
                             double noFrameSeconds = (DateTime.Now - _lastFrameTime).TotalSeconds;
                             if (noFrameSeconds > 1.5)
@@ -2089,15 +2091,22 @@ namespace ExpressPackingMonitoring.ViewModels
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                RuntimeLog.Error("VideoProcess", "VideoProcessLoop crashed", ex);
-                throw;
+                RuntimeLog.Error("VideoProcess", "VideoProcessLoop crashed, restarting", ex);
+                if (!token.IsCancellationRequested && !_isDisposed)
+                {
+                    try { await Task.Delay(500, token); } catch (OperationCanceledException) { return; }
+                    if (!token.IsCancellationRequested && !_isDisposed)
+                    {
+                        _videoTask = Task.Run(() => VideoProcessLoop(token), token);
+                    }
+                }
             }
         }
 
         private void CheckPreviewWatchdog()
         {
             if (_isDisposed || _isCameraSleeping || SuppressVideoPreviewUpdates) return;
-            if (_videoSource == null || !_videoSource.IsRunning || !_cameraEverConnected) return;
+            if (!IsVideoSourceRunning() || !_cameraEverConnected) return;
             if (_lastFrameTime == DateTime.MinValue || _lastPreviewPublishedAt == DateTime.MinValue) return;
 
             DateTime now = DateTime.Now;
@@ -2242,6 +2251,43 @@ namespace ExpressPackingMonitoring.ViewModels
             catch (Exception ex)
             {
                 return $"health unavailable: {ex.Message}, frameAge={frameAge:F1}s, previewAge={previewAge:F1}s, uiAge={uiAge:F1}s, pending={_previewUpdatePending}, recording={IsRecording}, videoQueue={videoQueueCount}, audioQueue={audioQueueCount}";
+            }
+        }
+
+        private bool IsVideoSourceRunning()
+        {
+            var source = _videoSource;
+            if (source == null) return false;
+
+            try
+            {
+                return source.IsRunning;
+            }
+            catch (Exception ex) when (ex is ThreadStateException || ex is InvalidOperationException || ex is ObjectDisposedException)
+            {
+                if (DateTime.Now - _lastCameraStateErrorLogAt > TimeSpan.FromSeconds(30))
+                {
+                    _lastCameraStateErrorLogAt = DateTime.Now;
+                    RuntimeLog.Warn("Camera", $"Read camera running state failed: {ex.GetType().Name}: {ex.Message}");
+                }
+                return false;
+            }
+        }
+
+        private void TryPerformMotionDetection(Mat currentFrame)
+        {
+            try
+            {
+                if (currentFrame == null || currentFrame.IsDisposed || currentFrame.Empty()) return;
+                PerformMotionDetection(currentFrame);
+            }
+            catch (Exception ex) when (ex is ObjectDisposedException || ex is OpenCvSharpException || ex is AccessViolationException)
+            {
+                if (DateTime.Now - _lastVideoFrameErrorLogAt > TimeSpan.FromSeconds(30))
+                {
+                    _lastVideoFrameErrorLogAt = DateTime.Now;
+                    RuntimeLog.Warn("VideoProcess", $"Motion detection skipped one frame: {ex.GetType().Name}: {ex.Message}");
+                }
             }
         }
 
