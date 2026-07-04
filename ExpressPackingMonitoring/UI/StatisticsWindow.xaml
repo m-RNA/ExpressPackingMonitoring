@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="打包数据深度分析" Height="720" Width="1100"
         WindowStartupLocation="CenterOwner" Background="#F8FAFC"
-        Icon="app.ico" FontFamily="Microsoft YaHei UI">
+        Icon="/app.ico" FontFamily="Microsoft YaHei UI">
 
     <Window.Resources>
         <!-- 新增：维度切换按钮样式 -->

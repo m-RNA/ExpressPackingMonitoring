@@ -4,7 +4,7 @@
     xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
         Title="历史录像检索与回放" Height="700" Width="1100"
         WindowStartupLocation="CenterOwner" Background="{DynamicResource WindowBackground}"
-        Icon="app.ico"
+        Icon="/app.ico"
         Closing="Window_Closing">
     <Window.Resources>
         <Style TargetType="TextBox">

@@ -8,7 +8,7 @@
         MinWidth="860"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        Icon="app.ico"
+        Icon="/app.ico"
         Background="{DynamicResource WindowBackground}"
         FontFamily="Microsoft YaHei UI, Segoe UI">
     <Window.Resources>
