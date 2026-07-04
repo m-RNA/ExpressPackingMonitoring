@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -44,7 +45,7 @@ namespace ExpressPackingMonitoring.Services
                 return cached;
             }
 
-            return await CheckAndCacheAsync(cancellationToken);
+            return await CheckAndCacheAsync(cache, cancellationToken);
         }
 
         public async Task<UpdateCheckResult> CheckAutomaticAsync(CancellationToken cancellationToken = default)
@@ -56,19 +57,27 @@ namespace ExpressPackingMonitoring.Services
                 return cached;
             }
 
-            return await CheckAndCacheAsync(cancellationToken);
+            return await CheckAndCacheAsync(cache, cancellationToken);
         }
 
         public async Task<UpdateCheckResult> CheckAsync(CancellationToken cancellationToken = default)
         {
-            return await CheckAndCacheAsync(cancellationToken);
+            return await CheckAndCacheAsync(LoadCache(), cancellationToken);
         }
 
-        private async Task<UpdateCheckResult> CheckAndCacheAsync(CancellationToken cancellationToken)
+        private async Task<UpdateCheckResult> CheckAndCacheAsync(UpdateCheckCache? cache, CancellationToken cancellationToken)
         {
-            UpdateCheckResult result = await FetchLatestReleaseAsync(cancellationToken);
-            SaveCache(result);
-            return result;
+            try
+            {
+                UpdateCheckResult result = await FetchLatestReleaseAsync(cancellationToken);
+                SaveCache(result);
+                return result;
+            }
+            catch (Exception ex) when (IsRateLimitException(ex) && TryGetCachedResult(cache, out UpdateCheckResult cached))
+            {
+                RuntimeLog.Warn("Update", $"Update check rate limited, using cached success result: {ex.Message}");
+                return cached;
+            }
         }
 
         private async Task<UpdateCheckResult> FetchLatestReleaseAsync(CancellationToken cancellationToken)
@@ -120,14 +129,33 @@ namespace ExpressPackingMonitoring.Services
         private static bool TryGetCachedResult(UpdateCheckCache? cache, TimeSpan maxAge, out UpdateCheckResult result)
         {
             result = default!;
+            if (!TryGetCachedResult(cache, out UpdateCheckResult cached)) return false;
+
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+            if (now - cache!.LastSuccessUtc > maxAge) return false;
+
+            result = cached;
+            return true;
+        }
+
+        private static bool TryGetCachedResult(UpdateCheckCache? cache, out UpdateCheckResult result)
+        {
+            result = default!;
             if (cache?.Result == null) return false;
             if (!string.Equals(cache.CurrentVersion, AppVersion.Current, StringComparison.OrdinalIgnoreCase)) return false;
 
-            DateTimeOffset now = DateTimeOffset.UtcNow;
-            if (now - cache.LastSuccessUtc > maxAge) return false;
-
             result = cache.Result;
             return true;
+        }
+
+        private static bool IsRateLimitException(Exception ex)
+        {
+            if (ex is HttpRequestException { StatusCode: HttpStatusCode.Forbidden })
+                return true;
+
+            string message = ex.Message ?? "";
+            return message.Contains("rate limit", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("rate limit exceeded", StringComparison.OrdinalIgnoreCase);
         }
 
         private static UpdateCheckCache? LoadCache()
