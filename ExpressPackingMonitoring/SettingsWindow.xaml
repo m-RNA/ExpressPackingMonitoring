@@ -1654,7 +1654,7 @@
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
 
-                                                <DataGridTemplateColumn Header="最大容量" Width="150">
+                                                <DataGridTemplateColumn Header="使用容量" Width="150">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
                                                             <xctk:DoubleUpDown ToolTip="最多允许这个目录保存多少 GB 录像。" Tag="GB" Value="{Binding QuotaGB, UpdateSourceTrigger=PropertyChanged}"
@@ -1673,7 +1673,7 @@
                                             </DataGrid.Columns>
                                         </DataGrid>
                                     </Border>
-                                    <TextBlock Text="录像会按照列表顺序依次存储；越靠上的磁盘越优先使用。磁盘达到最大容量后，会自动使用下一个磁盘。"
+                                    <TextBlock Text="录像会按照列表顺序依次存储；越靠上的磁盘越优先使用。磁盘达到使用容量后，会自动使用下一个磁盘。"
                                                Style="{StaticResource FieldHintStyle}"
                                                Margin="0,10,0,0"/>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="{StaticResource SettingInlineTopMargin}">
