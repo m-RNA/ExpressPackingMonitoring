@@ -459,27 +459,80 @@ namespace ExpressPackingMonitoring
         {
             EnsurePrimaryStorageLocationExists();
             var primary = Config.StorageLocations[0];
-            var initialDir = !string.IsNullOrWhiteSpace(primary.Path) ? primary.Path : AppDomain.CurrentDomain.BaseDirectory;
 
-            var dialog = new Microsoft.Win32.OpenFolderDialog
-            {
-                Title = "选择视频存储位置",
-                InitialDirectory = initialDir,
-                Multiselect = false
-            };
+            string selectedPath = SelectDefaultStoragePathFromDrive();
+            if (string.IsNullOrWhiteSpace(selectedPath)) return;
 
-            if (dialog.ShowDialog(this) == true)
+            if (!TryPrepareStoragePath(selectedPath, out string errorMessage))
             {
-                if (!IsPathWritable(dialog.FolderName))
-                {
-                    MessageBox.Show("所选路径不可写，请检查权限或磁盘状态。", "存储错误", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-                primary.Path = dialog.FolderName;
+                MessageBox.Show($"无法创建或写入目录：\n{selectedPath}\n\n原因：{errorMessage}", "存储错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
             }
+
+            primary.Path = selectedPath;
         }
 
         private bool IsPathWritable(string path)
+        {
+            return TryPrepareStoragePath(path, out _);
+        }
+
+        private void BtnAddStorage_Click(object sender, RoutedEventArgs e)
+        {
+            string selectedPath = SelectDefaultStoragePathFromDrive();
+            if (string.IsNullOrWhiteSpace(selectedPath)) return;
+
+            if (Config.StorageLocations.Any(x => string.Equals(x.Path, selectedPath, StringComparison.OrdinalIgnoreCase)))
+            {
+                MessageBox.Show("该路径已在列表中。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            string selectedRoot = GetStorageRoot(selectedPath);
+            StorageLocation sameDisk = Config.StorageLocations.FirstOrDefault(x =>
+                !string.IsNullOrWhiteSpace(x.Path) &&
+                string.Equals(GetStorageRoot(x.Path), selectedRoot, StringComparison.OrdinalIgnoreCase));
+            if (sameDisk != null)
+            {
+                MessageBox.Show(
+                    $"同一个磁盘已经添加过：\n{sameDisk.Path}\n\n请换一个磁盘，或直接调整已有路径的容量和使用顺序。",
+                    "磁盘已存在",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
+            }
+
+            if (!TryPrepareStoragePath(selectedPath, out string errorMessage))
+            {
+                MessageBox.Show($"无法创建或写入目录：\n{selectedPath}\n\n原因：{errorMessage}", "存储错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            int nextPriority = Config.StorageLocations.Count > 0 ? Config.StorageLocations.Max(x => x.Priority) + 1 : 0;
+            Config.StorageLocations.Add(new StorageLocation
+            {
+                Path = selectedPath,
+                QuotaGB = 500.0,
+                Priority = nextPriority
+            });
+
+            StorageDataGrid.Items.Refresh();
+        }
+
+        private string SelectDefaultStoragePathFromDrive()
+        {
+            var dialog = new DriveSelectionDialog
+            {
+                Owner = this
+            };
+
+            if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.SelectedRootPath))
+                return "";
+
+            return Path.Combine(dialog.SelectedRootPath, "快递打包视频");
+        }
+
+        private bool TryPrepareStoragePath(string path, out string errorMessage)
         {
             try
             {
@@ -487,55 +540,13 @@ namespace ExpressPackingMonitoring
                 string testFile = Path.Combine(path, ".write_test_" + Guid.NewGuid().ToString("N"));
                 File.WriteAllText(testFile, "test");
                 File.Delete(testFile);
+                errorMessage = "";
                 return true;
             }
-            catch { return false; }
-        }
-
-        private void BtnAddStorage_Click(object sender, RoutedEventArgs e)
-        {
-            var dialog = new Microsoft.Win32.OpenFolderDialog
+            catch (Exception ex)
             {
-                Title = "选择新的视频存储位置",
-                Multiselect = false
-            };
-
-            if (dialog.ShowDialog(this) == true)
-            {
-                string selectedPath = dialog.FolderName;
-                if (Config.StorageLocations.Any(x => string.Equals(x.Path, selectedPath, StringComparison.OrdinalIgnoreCase)))
-                {
-                    MessageBox.Show("该路径已在列表中。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-                    return;
-                }
-                string selectedRoot = GetStorageRoot(selectedPath);
-                StorageLocation sameDisk = Config.StorageLocations.FirstOrDefault(x =>
-                    !string.IsNullOrWhiteSpace(x.Path) &&
-                    string.Equals(GetStorageRoot(x.Path), selectedRoot, StringComparison.OrdinalIgnoreCase));
-                if (sameDisk != null)
-                {
-                    MessageBox.Show(
-                        $"同一个磁盘已经添加过：\n{sameDisk.Path}\n\n请换一个磁盘，或直接调整已有路径的容量和使用顺序。",
-                        "磁盘已存在",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information);
-                    return;
-                }
-                if (!IsPathWritable(selectedPath))
-                {
-                    MessageBox.Show("所选路径不可写，请检查权限或磁盘状态。", "存储错误", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                int nextPriority = Config.StorageLocations.Count > 0 ? Config.StorageLocations.Max(x => x.Priority) + 1 : 0;
-                Config.StorageLocations.Add(new StorageLocation
-                {
-                    Path = selectedPath,
-                    QuotaGB = 500.0,
-                    Priority = nextPriority
-                });
-
-                StorageDataGrid.Items.Refresh();
+                errorMessage = ex.Message;
+                return false;
             }
         }
 

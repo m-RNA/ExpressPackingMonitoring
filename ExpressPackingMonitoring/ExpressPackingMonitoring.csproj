@@ -89,6 +89,7 @@
     <Compile Include="AudioProbe.cs" />
     <Compile Include="BarcodeHelper.cs" />
     <Compile Include="ConfirmDialog.xaml.cs" />
+    <Compile Include="DriveSelectionDialog.cs" />
     <Compile Include="EncodingHelper.cs" />
     <Compile Include="FirstUseSetupWizardWindow.xaml.cs" />
     <Compile Include="GlobalKeyboardHook.cs" />
