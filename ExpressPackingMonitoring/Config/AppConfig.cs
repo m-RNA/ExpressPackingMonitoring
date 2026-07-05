@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace ExpressPackingMonitoring.Config
 {
@@ -33,8 +34,15 @@ namespace ExpressPackingMonitoring.Config
     public class StorageLocation
     {
         public string Path { get; set; } = "D:\\快递打包视频";
-        public double QuotaGB { get; set; } = 500.0;
+        public double ReserveGB { get; set; } = 0.0;
         public int Priority { get; set; } = 1; // 数字越小越优先
+
+        [JsonIgnore]
+        public double EffectiveReserveGB
+        {
+            get => StorageSpacePolicy.GetEffectiveReserveGB(this);
+            set => ReserveGB = StorageSpacePolicy.NormalizeReserveGB(Path, value);
+        }
     }
 
     // 摄像头独立配置模型

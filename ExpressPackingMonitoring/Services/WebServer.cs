@@ -617,7 +617,7 @@ namespace ExpressPackingMonitoring.Services
         private static StoragePathInfo BuildStoragePathInfo(StorageLocation loc)
         {
             string normalizedPath = NormalizeStoragePath(loc.Path);
-            long quotaBytes = loc.QuotaGB > 0 ? (long)(loc.QuotaGB * 1073741824.0) : 0;
+            long capacityBytes = 0;
             bool available = false;
             try
             {
@@ -630,11 +630,9 @@ namespace ExpressPackingMonitoring.Services
                         available = drive.IsReady;
                         if (available)
                         {
-                            long driveUsableBytes = drive.AvailableFreeSpace + GetDirectoryVideoBytes(normalizedPath);
-                            if (quotaBytes <= 0)
-                                quotaBytes = driveUsableBytes;
-                            else
-                                quotaBytes = Math.Min(quotaBytes, driveUsableBytes);
+                            long reserveBytes = StorageSpacePolicy.GetEffectiveReserveBytes(loc, drive);
+                            capacityBytes = Math.Max(0, drive.AvailableFreeSpace - reserveBytes)
+                                + GetDirectoryVideoBytes(normalizedPath);
                         }
                     }
                 }
@@ -645,7 +643,7 @@ namespace ExpressPackingMonitoring.Services
             {
                 Path = normalizedPath,
                 DisplayPath = Path.GetFileName(normalizedPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
-                TotalBytes = Math.Max(0, quotaBytes),
+                TotalBytes = Math.Max(0, capacityBytes),
                 Available = available
             };
         }

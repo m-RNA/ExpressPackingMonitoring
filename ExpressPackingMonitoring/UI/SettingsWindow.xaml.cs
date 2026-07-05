@@ -519,7 +519,7 @@ namespace ExpressPackingMonitoring.UI
             Config.StorageLocations.Add(new StorageLocation
             {
                 Path = selectedPath,
-                QuotaGB = 500.0,
+                ReserveGB = StorageSpacePolicy.GetMinimumReserveGB(selectedPath),
                 Priority = Config.StorageLocations.Count
             });
 
@@ -594,6 +594,15 @@ namespace ExpressPackingMonitoring.UI
         private void StorageDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             UpdateStorageButtonStates();
+        }
+
+        private void StorageReserveEditor_LostFocus(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement { DataContext: StorageLocation location })
+            {
+                location.EffectiveReserveGB = location.EffectiveReserveGB;
+                StorageDataGrid.Items.Refresh();
+            }
         }
 
         private void BtnMoveStorageUp_Click(object sender, RoutedEventArgs e)

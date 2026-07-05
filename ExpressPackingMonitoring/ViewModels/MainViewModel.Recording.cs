@@ -239,7 +239,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 var result = TryEvaluateStorageLocation(loc);
                 if (result.CanUse)
                 {
-                    RuntimeLog.Info("Storage", $"Selected storage path={result.Path}, priority={loc.Priority}, free={FormatBytesForLog(result.AvailableBytes)}, reserve={FormatBytesForLog(result.ReserveBytes)}, used={FormatBytesForLog(result.UsedBytes)}, quota={FormatBytesForLog(result.QuotaBytes)}, remaining={FormatBytesForLog(result.RemainingBytes)}");
+                    RuntimeLog.Info("Storage", $"Selected storage path={result.Path}, priority={loc.Priority}, free={FormatBytesForLog(result.AvailableBytes)}, reserve={FormatBytesForLog(result.ReserveBytes)}, used={FormatBytesForLog(result.UsedBytes)}, capacity={FormatBytesForLog(result.CapacityBytes)}, remaining={FormatBytesForLog(result.RemainingBytes)}");
                     return result.Path;
                 }
 
@@ -270,7 +270,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 if (!drive.IsReady)
                     return StorageLocationEvaluation.Skip(normalizedPath, "drive not ready");
 
-                long reserveBytes = CalculateStorageReserveBytes(drive);
+                long reserveBytes = StorageSpacePolicy.GetEffectiveReserveBytes(loc, drive);
                 long availableBytes = drive.AvailableFreeSpace;
                 if (availableBytes <= reserveBytes)
                 {
@@ -280,19 +280,15 @@ namespace ExpressPackingMonitoring.ViewModels
                 }
 
                 long usedBytes = GetVideoBytes(normalizedPath);
-                long quotaBytes = loc.QuotaGB > 0 ? (long)(loc.QuotaGB * BytesPerGiB) : 0;
                 long writableBytes = Math.Max(0, availableBytes - reserveBytes);
-                long physicalCapacityBytes = usedBytes + writableBytes;
-                long effectiveCapacityBytes = quotaBytes > 0
-                    ? Math.Min(quotaBytes, physicalCapacityBytes)
-                    : physicalCapacityBytes;
+                long effectiveCapacityBytes = usedBytes + writableBytes;
                 long remainingBytes = effectiveCapacityBytes - usedBytes;
 
                 if (remainingBytes <= 0)
                 {
                     return StorageLocationEvaluation.Skip(
                         normalizedPath,
-                        $"quota exceeded used={FormatBytesForLog(usedBytes)}, quota={FormatBytesForLog(quotaBytes)}, physicalCapacity={FormatBytesForLog(physicalCapacityBytes)}");
+                        $"reserved space reached used={FormatBytesForLog(usedBytes)}, reserve={FormatBytesForLog(reserveBytes)}, available={FormatBytesForLog(availableBytes)}");
                 }
 
                 return StorageLocationEvaluation.Use(
@@ -300,7 +296,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     availableBytes,
                     reserveBytes,
                     usedBytes,
-                    quotaBytes,
+                    effectiveCapacityBytes,
                     remainingBytes);
             }
             catch (Exception ex)
@@ -314,23 +310,6 @@ namespace ExpressPackingMonitoring.ViewModels
             return Path.IsPathRooted(path)
                 ? path
                 : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, path);
-        }
-
-        private static long CalculateStorageReserveBytes(DriveInfo drive)
-        {
-            bool isSystemDrive = IsSystemDrive(drive.RootDirectory.FullName);
-            long minimumBytes = (isSystemDrive ? 30L : 20L) * BytesPerGiB;
-            long percentBytes = (long)(drive.TotalSize * (isSystemDrive ? 0.10 : 0.05));
-            return Math.Max(minimumBytes, percentBytes);
-        }
-
-        private static bool IsSystemDrive(string driveRoot)
-        {
-            string systemRoot = Path.GetPathRoot(Environment.GetFolderPath(Environment.SpecialFolder.Windows)) ?? "";
-            return string.Equals(
-                Path.GetFullPath(driveRoot).TrimEnd(Path.DirectorySeparatorChar),
-                systemRoot.TrimEnd(Path.DirectorySeparatorChar),
-                StringComparison.OrdinalIgnoreCase);
         }
 
         private static long GetVideoBytes(string folderPath)
@@ -357,7 +336,7 @@ namespace ExpressPackingMonitoring.ViewModels
             return $"{bytes / (double)BytesPerGiB:F1}GB";
         }
 
-        private const long BytesPerGiB = 1024L * 1024L * 1024L;
+        private const long BytesPerGiB = StorageSpacePolicy.BytesPerGiB;
 
         private readonly struct StorageLocationEvaluation
         {
@@ -368,7 +347,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 long availableBytes,
                 long reserveBytes,
                 long usedBytes,
-                long quotaBytes,
+                long capacityBytes,
                 long remainingBytes)
             {
                 CanUse = canUse;
@@ -377,7 +356,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 AvailableBytes = availableBytes;
                 ReserveBytes = reserveBytes;
                 UsedBytes = usedBytes;
-                QuotaBytes = quotaBytes;
+                CapacityBytes = capacityBytes;
                 RemainingBytes = remainingBytes;
             }
 
@@ -387,7 +366,7 @@ namespace ExpressPackingMonitoring.ViewModels
             public long AvailableBytes { get; }
             public long ReserveBytes { get; }
             public long UsedBytes { get; }
-            public long QuotaBytes { get; }
+            public long CapacityBytes { get; }
             public long RemainingBytes { get; }
 
             public static StorageLocationEvaluation Use(
@@ -395,9 +374,9 @@ namespace ExpressPackingMonitoring.ViewModels
                 long availableBytes,
                 long reserveBytes,
                 long usedBytes,
-                long quotaBytes,
+                long capacityBytes,
                 long remainingBytes) =>
-                new(true, path, "", availableBytes, reserveBytes, usedBytes, quotaBytes, remainingBytes);
+                new(true, path, "", availableBytes, reserveBytes, usedBytes, capacityBytes, remainingBytes);
 
             public static StorageLocationEvaluation Skip(string path, string reason) =>
                 new(false, path, reason, 0, 0, 0, 0, 0);

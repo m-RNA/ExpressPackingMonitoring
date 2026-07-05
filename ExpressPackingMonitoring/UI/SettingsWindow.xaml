@@ -1487,7 +1487,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="录像保存位置" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="配置录像保存磁盘和容量，录像会优先保存到列表靠上的磁盘。"
+                                            <TextBlock Text="配置录像保存位置，以及每个磁盘要留给系统和其他软件的空间。"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                     </Grid>
@@ -1578,10 +1578,15 @@
                                                     </DataGridTemplateColumn.CellTemplate>
                                                 </DataGridTemplateColumn>
 
-                                                <DataGridTemplateColumn Header="使用容量" Width="150">
+                                                <DataGridTemplateColumn Header="预留空间" Width="150">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
-                                                            <xctk:DoubleUpDown ToolTip="最多允许这个目录保存多少 GB 录像。" Tag="GB" Value="{Binding QuotaGB, UpdateSourceTrigger=PropertyChanged}"
+                                                            <xctk:DoubleUpDown ToolTip="磁盘至少保留多少 GB 不给录像使用。低于安全值时会自动恢复，避免系统或其他软件没空间。"
+                                                                               Tag="GB"
+                                                                               Value="{Binding EffectiveReserveGB, UpdateSourceTrigger=PropertyChanged}"
+                                                                               LostFocus="StorageReserveEditor_LostFocus"
+                                                                               Increment="1"
+                                                                               FormatString="F0"
                                                                                Minimum="1"
                                                                                Maximum="10000"
                                                                                Margin="5"
@@ -1597,7 +1602,7 @@
                                             </DataGrid.Columns>
                                         </DataGrid>
                                     </Border>
-                                    <TextBlock Text="录像会按照列表顺序依次存储；越靠上的磁盘越优先使用。磁盘达到使用容量后，会自动使用下一个磁盘。"
+                                    <TextBlock Text="录像会按列表顺序保存。某个磁盘只剩下预留空间时，会自动换到下一个磁盘；系统盘默认至少预留 30GB 或 10%，其他磁盘至少预留 20GB 或 5%，以较大值为准。"
                                                Style="{StaticResource FieldHintStyle}"
                                                Margin="0,10,0,0"/>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="{StaticResource SettingInlineTopMargin}">

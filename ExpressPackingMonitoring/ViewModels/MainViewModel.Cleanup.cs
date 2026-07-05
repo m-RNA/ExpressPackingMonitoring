@@ -30,7 +30,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private int _diskCleanupRunning;
         private DateTime _lastFullDiskCleanup = DateTime.MinValue;
         private long _lastKnownDiskTotalBytes;
-        private long _lastKnownDiskQuotaBytes;
+        private long _lastKnownDiskCapacityBytes;
 
         private void RunDiskCleanupCore(bool forceFullScan)
         {
@@ -44,7 +44,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     || (DateTime.Now - _lastFullDiskCleanup).TotalSeconds >= (IsRecording ? 60 : 180);
 
                 long totalCurrentBytes = fullScan ? 0 : _lastKnownDiskTotalBytes;
-                long totalConfigQuotaBytes = fullScan ? 0 : _lastKnownDiskQuotaBytes;
+                long totalCapacityBytes = fullScan ? 0 : _lastKnownDiskCapacityBytes;
 
                 if (fullScan)
                 {
@@ -59,7 +59,7 @@ namespace ExpressPackingMonitoring.ViewModels
                             locVideoBytes += fi.Length;
                         totalCurrentBytes += locVideoBytes;
 
-                        long configQuota = (long)(loc.QuotaGB * 1073741824.0);
+                        long storageCapacity = 0;
                         try
                         {
                             var driveRoot = Path.GetPathRoot(Path.GetFullPath(normalizedPath));
@@ -68,18 +68,18 @@ namespace ExpressPackingMonitoring.ViewModels
                                 var driveInfo = new DriveInfo(driveRoot);
                                 if (driveInfo.IsReady)
                                 {
-                                    long realCapacity = driveInfo.AvailableFreeSpace + locVideoBytes;
-                                    configQuota = Math.Min(configQuota, realCapacity);
+                                    long reserveBytes = StorageSpacePolicy.GetEffectiveReserveBytes(loc, driveInfo);
+                                    storageCapacity = Math.Max(0, driveInfo.AvailableFreeSpace - reserveBytes) + locVideoBytes;
                                 }
                             }
                         }
                         catch { }
-                        totalConfigQuotaBytes += configQuota;
+                        totalCapacityBytes += storageCapacity;
                     }
 
                     _lastFullDiskCleanup = DateTime.Now;
                     _lastKnownDiskTotalBytes = totalCurrentBytes;
-                    _lastKnownDiskQuotaBytes = totalConfigQuotaBytes;
+                    _lastKnownDiskCapacityBytes = totalCapacityBytes;
                 }
 
                 if (IsRecording && !string.IsNullOrEmpty(_currentVideoFilePath))
@@ -92,10 +92,10 @@ namespace ExpressPackingMonitoring.ViewModels
                     catch { }
                 }
 
-                if (fullScan && totalConfigQuotaBytes > 0 && totalCurrentBytes > totalConfigQuotaBytes)
-                    CleanupOldVideos(totalCurrentBytes, totalConfigQuotaBytes);
+                if (fullScan && totalCapacityBytes > 0 && totalCurrentBytes > totalCapacityBytes)
+                    CleanupOldVideos(totalCurrentBytes, totalCapacityBytes);
 
-                UpdateDiskUsageText(totalCurrentBytes, totalConfigQuotaBytes);
+                UpdateDiskUsageText(totalCurrentBytes, totalCapacityBytes);
             }
             catch { }
             finally
@@ -104,9 +104,9 @@ namespace ExpressPackingMonitoring.ViewModels
             }
         }
 
-        private void CleanupOldVideos(long totalCurrentBytes, long totalConfigQuotaBytes)
+        private void CleanupOldVideos(long totalCurrentBytes, long totalCapacityBytes)
         {
-            long bytesToRelease = totalCurrentBytes - (long)(totalConfigQuotaBytes * 0.9);
+            long bytesToRelease = totalCurrentBytes - (long)(totalCapacityBytes * 0.9);
             long releasedBytes = 0;
             int count = 0;
 
@@ -143,10 +143,10 @@ namespace ExpressPackingMonitoring.ViewModels
             }
         }
 
-        private void UpdateDiskUsageText(long totalCurrentBytes, long totalConfigQuotaBytes)
+        private void UpdateDiskUsageText(long totalCurrentBytes, long totalCapacityBytes)
         {
             double totalUsedGB = totalCurrentBytes / 1073741824.0;
-            double totalQuotaGB = totalConfigQuotaBytes / 1073741824.0;
+            double totalCapacityGB = totalCapacityBytes / 1073741824.0;
             string estimateText = "";
             try
             {
@@ -154,9 +154,9 @@ namespace ExpressPackingMonitoring.ViewModels
                 if (dbTotalBytes > 0 && dbTotalSec > 0)
                 {
                     double bytesPerSec = dbTotalBytes / dbTotalSec;
-                    if (totalConfigQuotaBytes > 0)
+                    if (totalCapacityBytes > 0)
                     {
-                        double retentionHours = totalConfigQuotaBytes / bytesPerSec / 3600.0;
+                        double retentionHours = totalCapacityBytes / bytesPerSec / 3600.0;
                         estimateText = retentionHours >= 1
                             ? $"，预计循环可录 {retentionHours:F0} 小时"
                             : $"，预计循环可录 {retentionHours * 60:F0} 分钟";
@@ -168,8 +168,8 @@ namespace ExpressPackingMonitoring.ViewModels
             _ = Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 if (_isDisposed) return;
-                DiskUsagePercent = totalQuotaGB > 0 ? Math.Min(100.0, (totalUsedGB / totalQuotaGB) * 100.0) : 0;
-                DiskUsageText = $"{totalUsedGB:F1} / {totalQuotaGB:F1} GB{estimateText}";
+                DiskUsagePercent = totalCapacityGB > 0 ? Math.Min(100.0, (totalUsedGB / totalCapacityGB) * 100.0) : 0;
+                DiskUsageText = $"{totalUsedGB:F1} / {totalCapacityGB:F1} GB{estimateText}";
             });
         }
 
