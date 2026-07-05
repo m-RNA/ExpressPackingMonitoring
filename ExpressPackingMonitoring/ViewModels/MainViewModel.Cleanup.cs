@@ -154,17 +154,12 @@ namespace ExpressPackingMonitoring.ViewModels
                 if (dbTotalBytes > 0 && dbTotalSec > 0)
                 {
                     double bytesPerSec = dbTotalBytes / dbTotalSec;
-                    long remainingBytes = totalConfigQuotaBytes - totalCurrentBytes;
-                    if (remainingBytes > 0)
+                    if (totalConfigQuotaBytes > 0)
                     {
-                        double remainingHours = remainingBytes / bytesPerSec / 3600.0;
-                        estimateText = remainingHours >= 1
-                            ? $"，预计可录 {remainingHours:F0} 小时"
-                            : $"，预计可录 {remainingHours * 60:F0} 分钟";
-                    }
-                    else
-                    {
-                        estimateText = "，空间已满";
+                        double retentionHours = totalConfigQuotaBytes / bytesPerSec / 3600.0;
+                        estimateText = retentionHours >= 1
+                            ? $"，预计循环可录 {retentionHours:F0} 小时"
+                            : $"，预计循环可录 {retentionHours * 60:F0} 分钟";
                     }
                 }
             }
