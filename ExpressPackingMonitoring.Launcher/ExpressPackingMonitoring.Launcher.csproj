@@ -14,8 +14,13 @@
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
     <StripSymbols>true</StripSymbols>
+    <LauncherDefaultUpdateCheckUrl Condition="'$(LauncherDefaultUpdateCheckUrl)' == ''">https://api.github.com/repos/m-RNA/ExpressPackingMonitoring/releases/latest</LauncherDefaultUpdateCheckUrl>
     <DefaultItemExcludes>$(DefaultItemExcludes);bin_publish_tmp\**;obj_publish_tmp\**</DefaultItemExcludes>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="LauncherDefaultUpdateCheckUrl" Value="$(LauncherDefaultUpdateCheckUrl)" />
+  </ItemGroup>
 
   <ItemGroup>
     <Compile Include="Program.cs" />

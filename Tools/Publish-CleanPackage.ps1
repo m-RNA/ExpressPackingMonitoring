@@ -427,6 +427,7 @@ $appBaseIntermediate = Join-Path $repoRoot "ExpressPackingMonitoring\obj_publish
 $launcherBaseOutput = Join-Path $repoRoot "ExpressPackingMonitoring.Launcher\bin_publish_tmp\clean-package-launcher\"
 $launcherBaseIntermediate = Join-Path $repoRoot "ExpressPackingMonitoring.Launcher\obj_publish_tmp\clean-package-launcher\"
 $gitCommitId = Get-GitCommitId
+$packageUpdateCheckUrl = Get-ConfiguredValue -Key "UPDATE_CHECK_URL" -DefaultValue "https://api.github.com/repos/m-RNA/ExpressPackingMonitoring/releases/latest"
 
 Invoke-DotNetPublish $appProject `
     -c $Configuration `
@@ -445,6 +446,7 @@ Invoke-DotNetPublish $launcherProject `
     --self-contained true `
     -p:BaseOutputPath=$launcherBaseOutput `
     -p:BaseIntermediateOutputPath=$launcherBaseIntermediate `
+    -p:LauncherDefaultUpdateCheckUrl=$packageUpdateCheckUrl `
     -p:PublishDir="$outputFullPath\"
 
 $launcherExe = Join-Path $outputFullPath "ExpressPackingMonitoring.exe"

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.IO.Pipes;
 using System.Net.Http;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -12,7 +13,8 @@ internal static class Program
     private const string AppRelativePath = "app\\ExpressPackingMonitoring.exe";
     private const string AppDllRelativePath = "app\\ExpressPackingMonitoring.dll";
     private const string UpdateUrlKey = "UPDATE_CHECK_URL";
-    private const string DefaultCheckUrl = "https://api.github.com/repos/m-RNA/ExpressPackingMonitoring/releases/latest";
+    private const string DefaultCheckUrlMetadataKey = "LauncherDefaultUpdateCheckUrl";
+    private const string FallbackCheckUrl = "https://api.github.com/repos/m-RNA/ExpressPackingMonitoring/releases/latest";
     private const string DefaultPatchDownloadBaseUrl = "https://github.com/m-RNA/ExpressPackingMonitoring/releases/download";
     private const string PatchPackageType = "baseline_patch";
     private const string UpdateMutexName = @"Local\ExpressPackingMonitoring.Launcher.Update";
@@ -256,12 +258,12 @@ internal static class Program
                 return null;
             }
 
-            string checkUrl = GetUpdateCheckUrl(baseDir);
-            if (string.IsNullOrWhiteSpace(checkUrl))
+            UpdateCheckUrlInfo checkUrl = GetUpdateCheckUrl(baseDir);
+            if (string.IsNullOrWhiteSpace(checkUrl.Url))
                 return null;
 
-            WriteLog("自动检查更新地址：" + SanitizeUrlForLog(checkUrl));
-            using JsonDocument release = await GetJsonAsync(checkUrl, cancellationToken);
+            WriteLog("自动检查更新地址来源：" + checkUrl.Source);
+            using JsonDocument release = await GetJsonAsync(checkUrl.Url, cancellationToken);
             JsonElement releaseRoot = release.RootElement;
             string tagName = ReadString(releaseRoot, "tag_name");
             if (string.IsNullOrWhiteSpace(tagName))
@@ -921,11 +923,11 @@ internal static class Program
         }
     }
 
-    private static string GetUpdateCheckUrl(string baseDir)
+    private static UpdateCheckUrlInfo GetUpdateCheckUrl(string baseDir)
     {
         string? value = Environment.GetEnvironmentVariable(UpdateUrlKey);
         if (!string.IsNullOrWhiteSpace(value))
-            return value.Trim();
+            return new UpdateCheckUrlInfo(value.Trim(), "环境变量");
 
         foreach (string path in new[] { Path.Combine(baseDir, ".env"), Path.Combine(Environment.CurrentDirectory, ".env") })
         {
@@ -944,19 +946,31 @@ internal static class Program
 
                 string key = line[..separator].Trim();
                 if (string.Equals(key, UpdateUrlKey, StringComparison.OrdinalIgnoreCase))
-                    return line[(separator + 1)..].Trim().Trim('"', '\'');
+                    return new UpdateCheckUrlInfo(line[(separator + 1)..].Trim().Trim('"', '\''), ".env");
             }
         }
 
-        return DefaultCheckUrl;
+        return GetEmbeddedDefaultCheckUrl();
     }
 
-    private static string SanitizeUrlForLog(string url)
+    private static UpdateCheckUrlInfo GetEmbeddedDefaultCheckUrl()
     {
-        if (Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
-            return uri.GetLeftPart(UriPartial.Path);
+        try
+        {
+            foreach (AssemblyMetadataAttribute metadata in Assembly.GetExecutingAssembly().GetCustomAttributes<AssemblyMetadataAttribute>())
+            {
+                if (string.Equals(metadata.Key, DefaultCheckUrlMetadataKey, StringComparison.Ordinal) &&
+                    !string.IsNullOrWhiteSpace(metadata.Value))
+                {
+                    return new UpdateCheckUrlInfo(metadata.Value.Trim(), "内置配置");
+                }
+            }
+        }
+        catch
+        {
+        }
 
-        return url;
+        return new UpdateCheckUrlInfo(FallbackCheckUrl, "默认配置");
     }
 
     private static string ReadString(JsonElement element, string propertyName)
@@ -1336,6 +1350,8 @@ internal static class Program
         uint uType,
         ushort wLanguageId,
         uint dwMilliseconds);
+
+    private sealed record UpdateCheckUrlInfo(string Url, string Source);
 
     private sealed record AssetInfo(string Name, string Url);
 
