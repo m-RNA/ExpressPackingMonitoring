@@ -7,7 +7,7 @@ param(
     [string]$BaselineAppDir = "",
     [string]$BaselineLauncherPath = "",
     [string]$BaselineLauncherManifestPath = "",
-    [string]$PatchBaselineVersion = "0.0.16",
+    [string]$PatchBaselineVersion = "0.0.18",
     [switch]$DisablePatch
 )
 
