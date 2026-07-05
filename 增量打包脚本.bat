@@ -8,8 +8,9 @@ set "BASELINE_VERSION=0.0.18"
 if not "%~2"=="" set "BASELINE_VERSION=%~2"
 set "BASELINE_TAG=v%BASELINE_VERSION%"
 set "BASELINE_PACKAGE_DIR=package\ExpressPackingMonitoring+%BASELINE_TAG%"
-set "BASELINE_APP_DIR=%BASELINE_PACKAGE_DIR%\app"
-set "BASELINE_LAUNCHER_MANIFEST=package\launcher_manifest_%BASELINE_TAG%.json"
+set "BASELINE_FULL_DIR=%BASELINE_PACKAGE_DIR%\ExpressPackingMonitoring+%BASELINE_TAG%"
+set "BASELINE_APP_DIR=%BASELINE_FULL_DIR%\app"
+set "BASELINE_LAUNCHER_MANIFEST=%BASELINE_PACKAGE_DIR%\launcher_manifest_%BASELINE_TAG%.json"
 
 set "VERSION_ARG="
 if not "%~1"=="" set "VERSION_ARG=-Version %~1"
@@ -34,7 +35,7 @@ if exist "%BASELINE_LAUNCHER_MANIFEST%" (
     echo        %BASELINE_LAUNCHER_MANIFEST%
     echo.
     echo Patch can still be generated, but launcher source fingerprint will not be checked.
-    echo To enable launcher fingerprint check, keep launcher_manifest_%BASELINE_TAG%.json under package\.
+    echo To enable launcher fingerprint check, keep launcher_manifest_%BASELINE_TAG%.json under %BASELINE_PACKAGE_DIR%\.
     echo.
 )
 

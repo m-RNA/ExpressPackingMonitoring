@@ -67,23 +67,29 @@ function ConvertTo-SafePathName {
 
 $packageVersion = Get-PackageVersion
 $packageName = ConvertTo-SafePathName "ExpressPackingMonitoring+$packageVersion"
+$defaultPackageVersionRoot = Join-Path $repoRoot "package\$packageName"
 
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
-    $OutputDir = Join-Path $repoRoot "package\$packageName"
+    $OutputDir = Join-Path $defaultPackageVersionRoot $packageName
 }
 
 $outputFullPath = [System.IO.Path]::GetFullPath($OutputDir)
 $zipFullPath = if ([string]::IsNullOrWhiteSpace($ZipPath)) {
-    [System.IO.Path]::GetFullPath("$outputFullPath.zip")
+    [System.IO.Path]::GetFullPath((Join-Path $defaultPackageVersionRoot "$packageName.zip"))
 } else {
     [System.IO.Path]::GetFullPath($ZipPath)
 }
+$packageArtifactRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $zipFullPath))
 $repoFullPath = [System.IO.Path]::GetFullPath($repoRoot)
 if (-not $outputFullPath.StartsWith($repoFullPath, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "OutputDir must be inside the repository: $outputFullPath"
 }
 if (-not $zipFullPath.StartsWith($repoFullPath, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "ZipPath must be inside the repository: $zipFullPath"
+}
+if ([string]::Equals($packageArtifactRoot, $outputFullPath, [System.StringComparison]::OrdinalIgnoreCase) -or
+    $packageArtifactRoot.StartsWith(($outputFullPath.TrimEnd('\') + '\'), [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "ZipPath must not be inside OutputDir, otherwise the package may include itself: $zipFullPath"
 }
 
 if (Test-Path $outputFullPath) {
@@ -478,7 +484,7 @@ if (-not (Test-Path $appExe)) {
 $normalizedVersion = Get-NormalizedReleaseVersion $packageVersion
 $normalizedPatchBaselineVersion = Get-NormalizedReleaseVersion $PatchBaselineVersion
 $releaseTag = "v$normalizedVersion"
-$packageRoot = Join-Path $repoRoot "package"
+$packageRoot = $packageArtifactRoot
 $legacyAppFullZipPath = Join-Path $packageRoot "ExpressPackingMonitoring_AppFull_$releaseTag.zip"
 $appPatchZipName = "ExpressPackingMonitoring_AppPatch_$releaseTag.zip"
 $appPatchZipPath = Join-Path $packageRoot $appPatchZipName
