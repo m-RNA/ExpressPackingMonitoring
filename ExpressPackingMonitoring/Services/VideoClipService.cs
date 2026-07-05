@@ -80,34 +80,58 @@ namespace ExpressPackingMonitoring.Services
             };
         }
 
-        public void PrewarmPreviewFrames(long videoId, double startSeconds, double endSeconds)
+        public void PrewarmPreviewFrames(long videoId, double startSeconds, double endSeconds, string previewSide = "")
         {
             var record = GetAvailableRecord(videoId);
             string sourcePath = ResolveClipSourcePath(record);
             double duration = ResolveDuration(record);
             ValidateRange(startSeconds, endSeconds, duration);
 
-            var seconds = new HashSet<double>
-            {
-                ClampPreviewSecond(RoundToTenth(startSeconds), duration),
-                ClampPreviewSecond(Math.Max(startSeconds, RoundToTenth(endSeconds) - 0.1), duration)
-            };
+            string side = string.IsNullOrWhiteSpace(previewSide) ? "both" : previewSide.Trim();
+            bool startRequested = !string.Equals(side, "end", StringComparison.OrdinalIgnoreCase);
+            bool endRequested = !string.Equals(side, "start", StringComparison.OrdinalIgnoreCase);
 
-            double[] offsets = { 0, 0.5, 1, 2, 3 };
-            foreach (double offset in offsets)
+            var seconds = new HashSet<double>();
+            if (startRequested)
+                AddNeighborPreviewSeconds(seconds, startSeconds, duration);
+            if (endRequested)
+                AddNeighborPreviewSeconds(seconds, Math.Max(startSeconds, endSeconds - 0.1), duration);
+
+            if (string.Equals(side, "both", StringComparison.OrdinalIgnoreCase))
             {
-                seconds.Add(ClampPreviewSecond(offset, duration));
-                seconds.Add(ClampPreviewSecond(duration - offset, duration));
+                double[] offsets = { 0, 0.5, 1, 2, 3 };
+                foreach (double offset in offsets)
+                {
+                    seconds.Add(ClampPreviewSecond(offset, duration));
+                    seconds.Add(ClampPreviewSecond(duration - offset, duration));
+                }
             }
 
             _ = Task.Run(() =>
             {
+                bool generatedAny = false;
                 foreach (double second in seconds.OrderBy(x => x))
                 {
-                    try { EnsurePreviewFrame(videoId, sourcePath, second, "prewarm"); }
+                    try
+                    {
+                        EnsurePreviewFrame(videoId, sourcePath, second, "prewarm", requestCleanup: false);
+                        generatedAny = true;
+                    }
                     catch (Exception ex) { _log($"VideoClip PrewarmPreviewFrames: {second:F1}s failed, {ex.Message}"); }
                 }
+                if (generatedAny)
+                    RequestCacheCleanup();
             });
+        }
+
+        private static void AddNeighborPreviewSeconds(HashSet<double> seconds, double centerSeconds, double duration)
+        {
+            double center = RoundToTenth(centerSeconds);
+            for (int i = -10; i <= 10; i++)
+            {
+                double offset = i / 10.0;
+                seconds.Add(ClampPreviewSecond(RoundToTenth(center + offset), duration));
+            }
         }
 
         public ClipTimelineResult CreateTimelinePreviews(long videoId, int frameCount)
@@ -465,7 +489,7 @@ namespace ExpressPackingMonitoring.Services
             return new FFmpegResult(success, proc.ExitCode, stderr);
         }
 
-        private string EnsurePreviewFrame(long videoId, string filePath, double seconds, string label)
+        private string EnsurePreviewFrame(long videoId, string filePath, double seconds, string label, bool requestCleanup = true)
         {
             string key = BuildPreviewKey(videoId, filePath, seconds);
             string path = Path.Combine(AppPaths.ClipPreviewDir, key + ".jpg");
@@ -478,7 +502,8 @@ namespace ExpressPackingMonitoring.Services
                 if (!IsUsableFile(path))
                 {
                     RunFFmpegOrThrow($"-y -ss {FormatSeconds(seconds)} -i {Quote(filePath)} -frames:v 1 {Quote(path)}", path, 30_000);
-                    RequestCacheCleanup();
+                    if (requestCleanup)
+                        RequestCacheCleanup();
                 }
             }
             return path;

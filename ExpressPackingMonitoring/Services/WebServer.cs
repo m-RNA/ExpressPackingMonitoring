@@ -1139,7 +1139,7 @@ namespace ExpressPackingMonitoring.Services
                 }
 
                 var request = ReadJsonBody<ClipRangeRequest>(ctx);
-                _clipService.PrewarmPreviewFrames(id, request.StartSeconds, request.EndSeconds);
+                _clipService.PrewarmPreviewFrames(id, request.StartSeconds, request.EndSeconds, request.PreviewSide);
                 SendJson(ctx, 200, new { success = true });
             }
             catch (Exception ex)
