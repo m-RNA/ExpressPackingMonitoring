@@ -244,6 +244,8 @@ namespace ExpressPackingMonitoring.Services
                             HandleClipPrewarm(ctx, path);
                         else if (method == "POST" && path.StartsWith("/api/videos/") && path.EndsWith("/clip/timeline"))
                             HandleClipTimeline(ctx, path);
+                        else if (method == "POST" && path.StartsWith("/api/videos/") && path.EndsWith("/clip/frame"))
+                            HandleClipFrame(ctx, path);
                         else if (method == "POST" && path.StartsWith("/api/videos/") && path.EndsWith("/clip/preview"))
                             HandleClipPreview(ctx, path);
                         else if (method == "POST" && path.StartsWith("/api/videos/") && path.EndsWith("/clip"))
@@ -1168,6 +1170,27 @@ namespace ExpressPackingMonitoring.Services
             catch (Exception ex)
             {
                 Log($"HandleClipTimeline 异常: {ex.Message}");
+                SendJson(ctx, 400, new { success = false, error = ex.Message });
+            }
+        }
+
+        private void HandleClipFrame(HttpListenerContext ctx, string path)
+        {
+            try
+            {
+                if (!TryFindVideoId(path, "/clip/frame", out long id))
+                {
+                    SendJson(ctx, 400, new { success = false, error = "视频 ID 无效" });
+                    return;
+                }
+
+                var request = ReadJsonBody<ClipRangeRequest>(ctx);
+                var result = _clipService.CreatePreviewFrame(id, request.Seconds);
+                SendJson(ctx, 200, result);
+            }
+            catch (Exception ex)
+            {
+                Log($"HandleClipFrame 异常: {ex.Message}");
                 SendJson(ctx, 400, new { success = false, error = ex.Message });
             }
         }

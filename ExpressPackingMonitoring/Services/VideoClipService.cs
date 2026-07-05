@@ -20,6 +20,7 @@ namespace ExpressPackingMonitoring.Services
     {
         public double StartSeconds { get; set; }
         public double EndSeconds { get; set; }
+        public double Seconds { get; set; }
         public string PreviewSide { get; set; } = "";
         public int FrameCount { get; set; }
         public int FrameIndex { get; set; } = -1;
@@ -34,6 +35,7 @@ namespace ExpressPackingMonitoring.Services
         private readonly Action _requestCacheCleanup;
         private readonly ConcurrentDictionary<string, ClipTaskState> _tasks = new();
         private readonly ConcurrentDictionary<string, object> _previewLocks = new(StringComparer.OrdinalIgnoreCase);
+        private readonly SemaphoreSlim _previewFfmpegLock = new(1, 1);
 
         public VideoClipService(
             VideoDatabase db,
@@ -65,8 +67,8 @@ namespace ExpressPackingMonitoring.Services
             bool startRequested = !string.Equals(side, "end", StringComparison.OrdinalIgnoreCase);
             bool endRequested = !string.Equals(side, "start", StringComparison.OrdinalIgnoreCase);
 
-            string startPath = startRequested ? EnsurePreviewFrame(videoId, sourcePath, roundedStart, "start") : null;
-            string endPath = endRequested ? EnsurePreviewFrame(videoId, sourcePath, endPreviewSeconds, "end") : null;
+            string startPath = startRequested ? EnsurePreviewFrame(videoId, sourcePath, roundedStart, duration, "start") : null;
+            string endPath = endRequested ? EnsurePreviewFrame(videoId, sourcePath, endPreviewSeconds, duration, "end") : null;
 
             return new ClipPreviewResult
             {
@@ -77,6 +79,23 @@ namespace ExpressPackingMonitoring.Services
                 DurationSeconds = roundedEnd - roundedStart,
                 StartPreviewUrl = string.IsNullOrWhiteSpace(startPath) ? "" : "/api/clip-previews/" + Uri.EscapeDataString(Path.GetFileName(startPath)),
                 EndPreviewUrl = string.IsNullOrWhiteSpace(endPath) ? "" : "/api/clip-previews/" + Uri.EscapeDataString(Path.GetFileName(endPath))
+            };
+        }
+
+        public ClipPreviewFrameResult CreatePreviewFrame(long videoId, double seconds)
+        {
+            var record = GetAvailableRecord(videoId);
+            string sourcePath = ResolveClipSourcePath(record);
+            double duration = ResolveDuration(record);
+            double roundedSeconds = ClampPreviewSecond(RoundToTenth(seconds), duration);
+            string path = EnsurePreviewFrame(videoId, sourcePath, roundedSeconds, duration, "frame");
+
+            return new ClipPreviewFrameResult
+            {
+                Success = true,
+                VideoDuration = duration,
+                Seconds = roundedSeconds,
+                Url = "/api/clip-previews/" + Uri.EscapeDataString(Path.GetFileName(path))
             };
         }
 
@@ -114,7 +133,7 @@ namespace ExpressPackingMonitoring.Services
                 {
                     try
                     {
-                        EnsurePreviewFrame(videoId, sourcePath, second, "prewarm", requestCleanup: false);
+                        EnsurePreviewFrame(videoId, sourcePath, second, duration, "prewarm", requestCleanup: false);
                         generatedAny = true;
                     }
                     catch (Exception ex) { _log($"VideoClip PrewarmPreviewFrames: {second:F1}s failed, {ex.Message}"); }
@@ -146,7 +165,7 @@ namespace ExpressPackingMonitoring.Services
             {
                 double ratio = count == 1 ? 0 : i / (double)(count - 1);
                 double second = ClampPreviewSecond(RoundToTenth(duration * ratio), duration);
-                string path = EnsurePreviewFrame(videoId, sourcePath, second, "timeline");
+                string path = EnsurePreviewFrame(videoId, sourcePath, second, duration, "timeline");
                 frames.Add(new ClipTimelineFrame
                 {
                     Index = i,
@@ -172,7 +191,7 @@ namespace ExpressPackingMonitoring.Services
             int index = Math.Clamp(frameIndex, 0, count - 1);
             double ratio = count == 1 ? 0 : index / (double)(count - 1);
             double second = ClampPreviewSecond(RoundToTenth(duration * ratio), duration);
-            string path = EnsurePreviewFrame(videoId, sourcePath, second, "timeline");
+            string path = EnsurePreviewFrame(videoId, sourcePath, second, duration, "timeline");
 
             return new ClipTimelineResult
             {
@@ -279,7 +298,7 @@ namespace ExpressPackingMonitoring.Services
         {
             string tmpPath = GetTempClipPath(task.OutputPath);
             double duration = endSeconds - startSeconds;
-            string args = $"-y -ss {FormatSeconds(startSeconds)} -i {Quote(inputPath)} -t {FormatSeconds(duration)} -c copy -f mp4 {Quote(tmpPath)}";
+            string args = $"-y -ss {FormatSeconds(startSeconds)} -i {Quote(inputPath)} -t {FormatSeconds(duration)} -map 0:v:0 -map 0:a? -c copy -avoid_negative_ts make_zero -movflags +faststart -f mp4 {Quote(tmpPath)}";
             try
             {
                 var result = RunFFmpeg(args, tmpPath, 0, task);
@@ -489,8 +508,9 @@ namespace ExpressPackingMonitoring.Services
             return new FFmpegResult(success, proc.ExitCode, stderr);
         }
 
-        private string EnsurePreviewFrame(long videoId, string filePath, double seconds, string label, bool requestCleanup = true)
+        private string EnsurePreviewFrame(long videoId, string filePath, double seconds, double duration, string label, bool requestCleanup = true)
         {
+            seconds = ClampPreviewSecond(seconds, duration);
             string key = BuildPreviewKey(videoId, filePath, seconds);
             string path = Path.Combine(AppPaths.ClipPreviewDir, key + ".jpg");
             if (IsUsableFile(path))
@@ -501,12 +521,60 @@ namespace ExpressPackingMonitoring.Services
             {
                 if (!IsUsableFile(path))
                 {
-                    RunFFmpegOrThrow($"-y -ss {FormatSeconds(seconds)} -i {Quote(filePath)} -frames:v 1 {Quote(path)}", path, 30_000);
+                    ExtractPreviewFrameOrThrow(filePath, seconds, duration, path, label);
                     if (requestCleanup)
                         RequestCacheCleanup();
                 }
             }
             return path;
+        }
+
+        private void ExtractPreviewFrameOrThrow(string filePath, double seconds, double duration, string outputPath, string label)
+        {
+            string tmpPath = outputPath + ".tmp.jpg";
+            TryDelete(tmpPath);
+
+            var candidates = new List<(double Second, bool Accurate)>
+            {
+                (ClampPreviewSecond(seconds, duration), false),
+                (ClampPreviewSecond(seconds, duration), true),
+                (ClampPreviewSecond(seconds - 0.3, duration), false),
+                (ClampPreviewSecond(seconds + 0.3, duration), false),
+                (ClampPreviewSecond(seconds - 0.8, duration), true)
+            };
+
+            string lastError = "";
+            _previewFfmpegLock.Wait();
+            try
+            {
+                foreach (var candidate in candidates.Distinct())
+                {
+                    TryDelete(tmpPath);
+                    string seek = FormatSeconds(candidate.Second);
+                    string args = candidate.Accurate
+                        ? $"-y -nostdin -hide_banner -loglevel error -i {Quote(filePath)} -ss {seek} -an -sn -dn -frames:v 1 -q:v 3 -update 1 {Quote(tmpPath)}"
+                        : $"-y -nostdin -hide_banner -loglevel error -ss {seek} -i {Quote(filePath)} -an -sn -dn -frames:v 1 -q:v 3 -update 1 {Quote(tmpPath)}";
+
+                    var result = RunFFmpeg(args, tmpPath, 30_000, null);
+                    if (result.Success && IsUsableFile(tmpPath))
+                    {
+                        if (File.Exists(outputPath))
+                            File.Delete(outputPath);
+                        File.Move(tmpPath, outputPath);
+                        return;
+                    }
+
+                    lastError = string.IsNullOrWhiteSpace(result.Stderr) ? $"退出码={result.ExitCode}" : TrimForLog(result.Stderr);
+                }
+            }
+            finally
+            {
+                _previewFfmpegLock.Release();
+                TryDelete(tmpPath);
+            }
+
+            _log($"VideoClip PreviewFrame failed: label={label}, second={seconds:F1}, error={lastError}");
+            throw new InvalidOperationException("预览图生成失败");
         }
 
         private void RequestCacheCleanup()
@@ -636,6 +704,14 @@ namespace ExpressPackingMonitoring.Services
     public sealed class ClipTimelineFrame
     {
         public int Index { get; set; }
+        public double Seconds { get; set; }
+        public string Url { get; set; } = "";
+    }
+
+    public sealed class ClipPreviewFrameResult
+    {
+        public bool Success { get; set; }
+        public double VideoDuration { get; set; }
         public double Seconds { get; set; }
         public string Url { get; set; } = "";
     }
