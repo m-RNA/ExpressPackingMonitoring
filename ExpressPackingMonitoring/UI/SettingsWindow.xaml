@@ -1049,7 +1049,7 @@
                                                   Cursor="Hand"/>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowStyle}"
+                                    <Grid Style="{StaticResource SettingRowLastStyle}"
                                           ToolTip="底层仍保存为 CQP。CQP 数值越小越清晰、文件越大；这里用更直观的方向显示。">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -1078,26 +1078,6 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowLastStyle}"
-                                          ToolTip="负数表示让音频提前，正数表示让音频延后；通常保持 0。">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="24"/>
-                                            <ColumnDefinition Width="260"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Margin="0,0,16,0">
-                                            <TextBlock Text="声音同步微调" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="只有声音和画面不同步时再调整"
-                                                       Style="{StaticResource FieldHintStyle}"/>
-                                        </StackPanel>
-                                        <xctk:IntegerUpDown Grid.Column="2"
-                                                           Height="36"
-                                                           Tag="ms"
-                                                           Value="{Binding Config.AudioSyncOffsetMs}"
-                                                           Minimum="-5000"
-                                                           Maximum="5000"
-                                                           Increment="50"/>
-                                    </Grid>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -2500,7 +2480,7 @@
                                                 Style="{StaticResource ToggleSwitchStyle}"/>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowLastStyle}">
+                                    <Grid Style="{StaticResource SettingRowStyle}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="24"/>
@@ -2518,6 +2498,36 @@
                                                   HorizontalAlignment="Left"
                                                   Style="{StaticResource ToggleSwitchStyle}"/>
                                     </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowLastStyle}"
+                                          ToolTip="负数表示让音频提前，正数表示让音频延后；通常保持 0。">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="24"/>
+                                            <ColumnDefinition Width="260"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="声音同步微调" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="只有声音和画面不同步时再调整"
+                                                    Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <Grid>
+                                                <TextBlock Text="更提前" Style="{StaticResource SliderEndLabelStyle}" HorizontalAlignment="Left"/>
+                                                <TextBlock Text="{Binding Config.AudioSyncOffsetMs, StringFormat={}{0} ms}"
+                                                           Style="{StaticResource SliderValueTextStyle}"
+                                                           HorizontalAlignment="Center"/>
+                                                <TextBlock Text="更延后" Style="{StaticResource SliderEndLabelStyle}" HorizontalAlignment="Right"/>
+                                            </Grid>
+                                            <Slider Style="{StaticResource SettingsSliderStyle}"
+                                                    Minimum="-2000"
+                                                    Maximum="2000"
+                                                    TickFrequency="50"
+                                                    IsSnapToTickEnabled="True"
+                                                    Value="{Binding Config.AudioSyncOffsetMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                        </StackPanel>
+                                    </Grid>
+
                                 </StackPanel>
                             </Border>
 
