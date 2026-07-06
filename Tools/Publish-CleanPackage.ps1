@@ -130,6 +130,24 @@ function Remove-PackageRuntimeState {
     }
 }
 
+function Copy-PackageTtsCache {
+    param([string]$AppDir)
+
+    $sourceDir = Join-Path $repoRoot "package\tts_cache"
+    if (-not (Test-Path $sourceDir)) {
+        Write-Host "Package tts_cache not found, skipped: $sourceDir"
+        return
+    }
+
+    $targetDir = Join-Path $AppDir "tts_cache"
+    if (Test-Path $targetDir) {
+        Remove-Item -LiteralPath $targetDir -Recurse -Force
+    }
+
+    Copy-Item -LiteralPath $sourceDir -Destination $targetDir -Recurse -Force
+    Write-Host "Package tts_cache copied: $targetDir"
+}
+
 function Compress-PackageWithRetry {
     param(
         [string]$SourceDir,
@@ -484,6 +502,7 @@ Get-ChildItem -LiteralPath $outputFullPath -File -ErrorAction SilentlyContinue |
     Remove-Item -Force
 
 Remove-PackageRuntimeState -AppDir $appPublishDir
+Copy-PackageTtsCache -AppDir $appPublishDir
 
 $launcherExe = Join-Path $outputFullPath "ExpressPackingMonitoring.exe"
 $appExe = Join-Path $appPublishDir "ExpressPackingMonitoring.exe"
