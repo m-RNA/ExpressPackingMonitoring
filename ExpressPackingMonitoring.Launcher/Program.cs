@@ -25,7 +25,7 @@ internal static class Program
     private static readonly TimeSpan NetworkUpdateTimeout = TimeSpan.FromSeconds(75);
     private const uint InfoIcon = 0x00000040;
     private const uint ErrorIcon = 0x00000010;
-    private const uint DialogTimeoutMs = 10000;
+    private const uint DialogTimeoutMs = 60000;
 
     private static readonly HttpClient HttpClient = new()
     {
