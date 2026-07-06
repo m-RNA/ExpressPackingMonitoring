@@ -207,7 +207,7 @@ internal static class Program
             {
                 WriteLog($"当前版本 {currentVersion} 低于 pending Patch 基线 {descriptor.PatchBaselineVersion}，清理 pending 更新");
                 TryDeleteDirectory(pendingDir);
-                return BuildManualUpdateNotification(descriptor, "当前版本过旧，请自行下载完整包更新。");
+                return BuildManualUpdateNotification(descriptor, ManualUpdateReason.VersionBelowBaseline);
             }
 
             ValidateDownloadedFileSize(patchZipPath, descriptor.PatchPackage.Size);
@@ -281,16 +281,16 @@ internal static class Program
             UpdateDescriptor descriptor = ReadUpdateDescriptor(updateManifest.RootElement, latestVersion);
 
             if (!descriptor.PatchSupported)
-                return BuildManualUpdateNotification(descriptor, "本版本需要完整更新，请自行下载完整包。");
+                return BuildManualUpdateNotification(descriptor, ManualUpdateReason.PatchNotSupported);
 
             if (!string.IsNullOrWhiteSpace(descriptor.PatchBaselineVersion) &&
                 CompareVersions(currentVersion, descriptor.PatchBaselineVersion) < 0)
             {
-                return BuildManualUpdateNotification(descriptor, "当前版本过旧，请自行下载完整包更新。");
+                return BuildManualUpdateNotification(descriptor, ManualUpdateReason.VersionBelowBaseline);
             }
 
             if (!IsPatchDescriptorUsable(descriptor))
-                return BuildManualUpdateNotification(descriptor, "本版本需要完整更新，请自行下载完整包。");
+                return BuildManualUpdateNotification(descriptor, ManualUpdateReason.PatchDescriptorUnavailable);
 
             await DownloadPendingPatchAsync(updateManifest.RootElement, descriptor, cancellationToken);
             WriteLog($"Patch 已下载到 pending，下次启动安装：{descriptor.LatestVersion}");
@@ -841,9 +841,17 @@ internal static class Program
             .ToArray();
     }
 
-    private static UpdateNotification BuildManualUpdateNotification(UpdateDescriptor descriptor, string reason)
+    private static UpdateNotification BuildManualUpdateNotification(UpdateDescriptor descriptor, ManualUpdateReason reason)
     {
-        string message = $"{reason}\n\n发现新版本：v{descriptor.LatestVersion}";
+        string reasonText = reason switch
+        {
+            ManualUpdateReason.PatchNotSupported => "本次包含启动器或基础组件更新，需要下载完整包后解压覆盖安装。",
+            ManualUpdateReason.VersionBelowBaseline => "当前版本过旧，不能直接使用本次增量更新，需要下载完整包后解压覆盖安装。",
+            ManualUpdateReason.PatchDescriptorUnavailable => "本版本需要完整更新，需要下载完整包后解压覆盖安装。",
+            _ => "本版本需要完整更新，需要下载完整包后解压覆盖安装。"
+        };
+
+        string message = $"发现新版本：v{descriptor.LatestVersion}\n{reasonText}";
         if (!string.IsNullOrWhiteSpace(descriptor.FullDownloadPage))
             message += $"\n完整包下载页：{descriptor.FullDownloadPage}";
 
@@ -874,7 +882,7 @@ internal static class Program
 
     private static string BuildFailedMessage(UpdateDescriptor descriptor)
     {
-        string message = $"增量更新失败，已恢复旧版本。\n\n发现新版本：v{descriptor.LatestVersion}\n请自行下载完整包更新。";
+        string message = $"增量更新失败，已恢复旧版本。\n\n发现新版本：v{descriptor.LatestVersion}\n请下载完整包后解压覆盖安装。";
         if (!string.IsNullOrWhiteSpace(descriptor.FullDownloadPage))
             message += $"\n完整包下载页：{descriptor.FullDownloadPage}";
 
@@ -1377,6 +1385,13 @@ internal static class Program
     private sealed record PatchFile(string RelativePath, string Sha256, long Size);
 
     private sealed record FileBackup(string TargetPath, string BackupPath, bool Existed);
+
+    private enum ManualUpdateReason
+    {
+        PatchNotSupported,
+        VersionBelowBaseline,
+        PatchDescriptorUnavailable
+    }
 
     private sealed class PatchDownloadFailureState
     {
