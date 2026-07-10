@@ -30,6 +30,7 @@ public partial class FirstUseSetupWizardWindow : Window
     private int _stepIndex;
     private bool _isLoadingDevices;
     private VideoCaptureDevice _previewCamera;
+    private Task _previewCameraForceStopTask;
     private DateTime _lastPreviewUpdateAt = DateTime.MinValue;
     private WasapiCapture _micCapture;
     private readonly string _testBarcodeValue = $"TEST{DateTime.Now:yyyyMMddHHmmss}";
@@ -225,6 +226,9 @@ public partial class FirstUseSetupWizardWindow : Window
 
     private void NextButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_stepIndex == 1 && !TryLeaveCameraStep())
+            return;
+
         if (_stepIndex == 4)
         {
             ApplySelections();
@@ -239,7 +243,19 @@ public partial class FirstUseSetupWizardWindow : Window
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_stepIndex == 1 && !TryLeaveCameraStep())
+            return;
         ShowStep(_stepIndex - 1);
+    }
+
+    private bool TryLeaveCameraStep()
+    {
+        if (StopCameraPreview())
+            return true;
+
+        CameraStatusText.Text = "摄像头未能停止，请重新插拔后再继续";
+        CameraStatusText.Visibility = Visibility.Visible;
+        return false;
     }
 
     private void SkipButton_Click(object sender, RoutedEventArgs e)
@@ -260,7 +276,12 @@ public partial class FirstUseSetupWizardWindow : Window
 
     private void StartCameraPreviewFromSelection()
     {
-        StopCameraPreview();
+        if (!StopCameraPreview())
+        {
+            CameraStatusText.Text = "上一个摄像头未能停止，请重新插拔后重试";
+            CameraStatusText.Visibility = Visibility.Visible;
+            return;
+        }
         CameraPreviewImage.Source = null;
 
         if (CameraComboBox.SelectedItem is not CameraInfo camera || string.IsNullOrEmpty(camera.Moniker))
@@ -338,24 +359,39 @@ public partial class FirstUseSetupWizardWindow : Window
         return source;
     }
 
-    private void StopCameraPreview()
+    private bool StopCameraPreview()
     {
-        if (_previewCamera == null) return;
+        VideoCaptureDevice camera = _previewCamera;
+        if (camera == null) return true;
 
-        try { _previewCamera.NewFrame -= PreviewCamera_NewFrame; } catch { }
+        try { camera.NewFrame -= PreviewCamera_NewFrame; } catch { }
         try
         {
-            if (_previewCamera.IsRunning)
+            if (camera.IsRunning)
             {
-                _previewCamera.SignalToStop();
-                for (int i = 0; i < 20 && _previewCamera.IsRunning; i++)
+                camera.SignalToStop();
+                for (int i = 0; i < 20 && camera.IsRunning; i++)
                 {
                     Thread.Sleep(50);
                 }
             }
         }
         catch { }
-        _previewCamera = null;
+
+        if (camera.IsRunning)
+        {
+            if (_previewCameraForceStopTask == null || _previewCameraForceStopTask.IsCompleted)
+                _previewCameraForceStopTask = Task.Run(() => camera.Stop());
+            try { _previewCameraForceStopTask.Wait(2000); } catch { }
+        }
+
+        if (camera.IsRunning)
+            return false;
+
+        if (ReferenceEquals(_previewCamera, camera))
+            _previewCamera = null;
+        _previewCameraForceStopTask = null;
+        return true;
     }
 
     private void MicComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

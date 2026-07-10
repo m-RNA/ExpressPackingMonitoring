@@ -48,6 +48,7 @@ namespace ExpressPackingMonitoring.ViewModels
         public static HashSet<string> ValidatedEncoders { get; private set; } = new();
 
         private VideoCaptureDevice _videoSource;
+        private Task _cameraForceStopTask;
         private Mat _latestFrame;
         private readonly object _frameLock = new object();
 
@@ -1103,8 +1104,12 @@ namespace ExpressPackingMonitoring.ViewModels
                 _isSetupWizardActive = true;
                 if (!IsRecording)
                 {
-                    StopCamera();
-                    pausedCamera = true;
+                    pausedCamera = StopCamera();
+                    if (!pausedCamera)
+                    {
+                        ShowToast("摄像头未能停止，暂时无法打开配置向导");
+                        return;
+                    }
                 }
 
                 var clonedConfig = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(Config)) ?? new AppConfig();
@@ -1164,8 +1169,12 @@ namespace ExpressPackingMonitoring.ViewModels
                 return false;
 
             _isSetupWizardActive = true;
-            StopCamera();
-            return true;
+            if (StopCamera())
+                return true;
+
+            _isSetupWizardActive = false;
+            ShowToast("摄像头未能停止，暂时无法打开配置向导");
+            return false;
         }
 
         public void ResumeCameraAfterSetupWizard()
@@ -1638,7 +1647,12 @@ namespace ExpressPackingMonitoring.ViewModels
             try
             {
                 RuntimeLog.Warn("Camera", $"RestartCamera start recording={IsRecording}, failures={_consecutiveRestartFailures}");
-                StopCamera();
+                if (!StopCamera())
+                {
+                    RuntimeLog.Warn("Camera", "RestartCamera aborted because previous camera did not stop");
+                    ShowToast("摄像头停止失败，请重新插拔后重试");
+                    return;
+                }
                 StartCamera();
                 _lastRestartAttempt = DateTime.Now;
                 RuntimeLog.Info("Camera", $"RestartCamera done running={_videoSource?.IsRunning == true}");
@@ -1673,7 +1687,11 @@ namespace ExpressPackingMonitoring.ViewModels
                     RuntimeLog.Warn("Camera", "Camera reconnect requested while recording, stopping current recording before restart");
                     await SafeStopRecordingAsync();
 
-                    StopCamera();
+                    if (!StopCamera())
+                    {
+                        ShowToast("摄像头停止失败，未继续重连");
+                        return;
+                    }
                     StartCamera();
                     _lastRestartAttempt = DateTime.Now;
 
@@ -1703,7 +1721,11 @@ namespace ExpressPackingMonitoring.ViewModels
                 else
                 {
                     // 非录制状态：原有逻辑
-                    StopCamera();
+                    if (!StopCamera())
+                    {
+                        ShowToast("摄像头停止失败，未继续重连");
+                        return;
+                    }
                     StartCamera();
                     _lastRestartAttempt = DateTime.Now;
 
@@ -1780,8 +1802,12 @@ namespace ExpressPackingMonitoring.ViewModels
                 {
                     await Application.Current.Dispatcher.InvokeAsync(() => {
                         if (_isCameraSleeping || IsRecording || _isSetupWizardActive) return; // 再次检查防止竞态
+                        if (!StopCamera())
+                        {
+                            ShowToast("摄像头未能进入休眠，请重新插拔后重试");
+                            return;
+                        }
                         IsCameraSleeping = true; // SetProperty 会同时更新字段并触发 PropertyChanged
-                        StopCamera();
                         VideoFrame = null;
                         ShowToast($"提示：摄像头已休眠（空闲{Config.CameraIdleMinutes}分钟）");
                         Speak("摄像头已休眠");
@@ -1802,6 +1828,12 @@ namespace ExpressPackingMonitoring.ViewModels
                 if (_isSetupWizardActive || _isDisposed)
                 {
                     RuntimeLog.Info("Camera", "StartCamera skipped while setup wizard owns camera");
+                    return;
+                }
+
+                if (_videoSource != null)
+                {
+                    RuntimeLog.Warn("Camera", $"StartCamera skipped because previous source still exists, running={_videoSource.IsRunning}");
                     return;
                 }
 
@@ -1919,27 +1951,48 @@ namespace ExpressPackingMonitoring.ViewModels
             }
         }
 
-        private void StopCamera()
+        private bool StopCamera()
         {
-            if (_videoSource != null)
+            VideoCaptureDevice source = _videoSource;
+            if (source != null)
             {
-                RuntimeLog.Info("Camera", $"StopCamera running={_videoSource.IsRunning}");
-                try { _videoSource.NewFrame -= VideoSource_NewFrame; } catch { }
+                RuntimeLog.Info("Camera", $"StopCamera running={source.IsRunning}");
+                try { source.NewFrame -= VideoSource_NewFrame; } catch { }
                 try
                 {
-                    if (_videoSource.IsRunning)
+                    if (source.IsRunning)
                     {
-                        _videoSource.SignalToStop();
-                        for (int i = 0; i < 50 && _videoSource.IsRunning; i++)
+                        source.SignalToStop();
+                        for (int i = 0; i < 50 && source.IsRunning; i++)
                             Thread.Sleep(100);
                     }
                 }
                 catch (SEHException) { /* AForge COM cleanup on some laptops */ }
-                catch { }
-                _videoSource = null;
+                catch (Exception ex) { RuntimeLog.Warn("Camera", $"Graceful camera stop failed: {ex.Message}"); }
+
+                if (source.IsRunning)
+                {
+                    RuntimeLog.Warn("Camera", "Graceful camera stop timed out, forcing stop");
+                    if (_cameraForceStopTask == null || _cameraForceStopTask.IsCompleted)
+                        _cameraForceStopTask = Task.Run(() => source.Stop());
+
+                    try { _cameraForceStopTask.Wait(2000); }
+                    catch (Exception ex) { RuntimeLog.Warn("Camera", $"Forced camera stop failed: {ex.GetBaseException().Message}"); }
+                }
+
+                if (source.IsRunning)
+                {
+                    RuntimeLog.Error("Camera", "Camera source is still running after forced stop");
+                    return false;
+                }
+
+                if (ReferenceEquals(_videoSource, source))
+                    _videoSource = null;
+                _cameraForceStopTask = null;
             }
             lock (_frameLock) { _latestFrame?.Dispose(); _latestFrame = null; }
             RuntimeLog.Info("Camera", "StopCamera completed");
+            return true;
         }
         
         private void VideoSource_NewFrame(object sender, NewFrameEventArgs eventArgs) { try { Mat newMat = BitmapToMat(eventArgs.Frame); lock (_frameLock) { _latestFrame?.Dispose(); _latestFrame = newMat; } _lastFrameTime = DateTime.Now; } catch (Exception ex) { RuntimeLog.Error("Camera", "NewFrame conversion failed", ex); } }

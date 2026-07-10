@@ -828,7 +828,11 @@ namespace ExpressPackingMonitoring.UI
             try
             {
                 if (!_isRecording)
+                {
                     pausedCamera = MainVM.SuspendCameraForSetupWizard();
+                    if (!pausedCamera)
+                        return;
+                }
 
                 var wizard = new FirstUseSetupWizardWindow(Config) { Owner = this };
                 if (wizard.ShowDialog() == true && !wizard.WasSkipped)
