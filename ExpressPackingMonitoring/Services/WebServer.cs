@@ -41,6 +41,7 @@ namespace ExpressPackingMonitoring.Services
         private readonly Func<VideoRecord, MkvConversionResult> _mkvConverter;
         private readonly VideoClipService _clipService;
         private readonly CancellationTokenSource _cts = new();
+        private readonly SemaphoreSlim _requestSlots = new(32, 32);
         private Task _listenTask;
         private bool _disposed;
         private static readonly string _logPath = AppPaths.WebDebugLogPath;
@@ -180,8 +181,32 @@ namespace ExpressPackingMonitoring.Services
                 try
                 {
                     var ctx = await _listener.GetContextAsync().ConfigureAwait(false);
-                    _ = Task.Run(() => HandleRequest(ctx), token);
+                    try
+                    {
+                        await _requestSlots.WaitAsync(token).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        try { ctx.Response.Abort(); } catch { }
+                        throw;
+                    }
+
+                    try
+                    {
+                        _ = Task.Run(() =>
+                        {
+                            try { HandleRequest(ctx); }
+                            finally { _requestSlots.Release(); }
+                        });
+                    }
+                    catch
+                    {
+                        _requestSlots.Release();
+                        try { ctx.Response.Abort(); } catch { }
+                        throw;
+                    }
                 }
+                catch (OperationCanceledException) { break; }
                 catch (HttpListenerException) { break; }
                 catch (ObjectDisposedException) { break; }
                 catch { }
