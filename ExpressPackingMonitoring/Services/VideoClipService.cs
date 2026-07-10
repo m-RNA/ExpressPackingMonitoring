@@ -42,6 +42,7 @@ namespace ExpressPackingMonitoring.Services
         private readonly SemaphoreSlim _previewFfmpegLock = new(1, 1);
         private readonly SemaphoreSlim _prewarmSlots = new(2, 2);
         private readonly SemaphoreSlim _clipSlots = new(2, 2);
+        private readonly CancellationTokenSource _disposeCts = new();
         private volatile bool _disposed;
 
         public VideoClipService(
@@ -263,7 +264,7 @@ namespace ExpressPackingMonitoring.Services
                 _tasks[taskId] = task;
             }
 
-            _ = Task.Run(() => RunClipTask(task, sourcePath, startSeconds, endSeconds));
+            _ = RunClipTaskAsync(task, sourcePath, startSeconds, endSeconds);
             return taskId;
         }
 
@@ -325,7 +326,7 @@ namespace ExpressPackingMonitoring.Services
             return ResolveFileInDirectory(AppPaths.ClipsDir, fileName, ".mp4");
         }
 
-        private void RunClipTask(ClipTaskState task, string inputPath, double startSeconds, double endSeconds)
+        private async Task RunClipTaskAsync(ClipTaskState task, string inputPath, double startSeconds, double endSeconds)
         {
             string tmpPath = GetTempClipPath(task.OutputPath);
             double duration = endSeconds - startSeconds;
@@ -333,7 +334,7 @@ namespace ExpressPackingMonitoring.Services
             bool slotEntered = false;
             try
             {
-                _clipSlots.Wait();
+                await _clipSlots.WaitAsync(_disposeCts.Token).ConfigureAwait(false);
                 slotEntered = true;
                 lock (task.Sync)
                 {
@@ -368,6 +369,16 @@ namespace ExpressPackingMonitoring.Services
                     task.Message = "剪辑完成";
                     RequestCacheCleanup();
                 }
+            }
+            catch (OperationCanceledException) when (_disposeCts.IsCancellationRequested)
+            {
+                lock (task.Sync)
+                {
+                    task.CancelRequested = true;
+                    task.Status = "canceled";
+                    task.Message = "服务已停止，剪辑已取消";
+                }
+                TryDelete(tmpPath);
             }
             catch (Exception ex)
             {
@@ -628,6 +639,7 @@ namespace ExpressPackingMonitoring.Services
         {
             if (_disposed) return;
             _disposed = true;
+            _disposeCts.Cancel();
 
             foreach (ClipTaskState task in _tasks.Values)
             {
