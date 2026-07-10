@@ -31,6 +31,7 @@ public static class WorkstationRoles
 
 public static class WorkstationConfigStore
 {
+    private const string ConfigMutexName = @"Local\ExpressPackingMonitoring.Config";
     private static readonly object SaveLock = new();
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -78,35 +79,12 @@ public static class WorkstationConfigStore
     {
         ArgumentNullException.ThrowIfNull(config);
 
-        lock (SaveLock)
+        ExecuteWithSaveLock(() =>
         {
-            string configPath = AppPaths.ConfigPath;
-            string directory = Path.GetDirectoryName(configPath) ?? AppContext.BaseDirectory;
-            string tempPath = configPath + ".tmp";
-            string backupPath = configPath + ".bak";
-            Directory.CreateDirectory(directory);
-
-            try
-            {
-                string json = JsonSerializer.Serialize(config, Options);
-                using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
-                using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
-                {
-                    writer.Write(json);
-                    writer.Flush();
-                    stream.Flush(flushToDisk: true);
-                }
-
-                if (File.Exists(configPath))
-                    File.Replace(tempPath, configPath, backupPath, ignoreMetadataErrors: true);
-                else
-                    File.Move(tempPath, configPath);
-            }
-            finally
-            {
-                try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
-            }
-        }
+            if (TryReadConfig(AppPaths.ConfigPath, out AppConfig latest))
+                config.PrintStationMonitorAddress = latest.PrintStationMonitorAddress;
+            SaveCore(config);
+        });
     }
 
     public static bool TrySave(AppConfig config, out string error)
@@ -122,6 +100,113 @@ public static class WorkstationConfigStore
             error = ex.Message;
             RuntimeLog.Error("Config", "Config save failed", ex);
             return false;
+        }
+    }
+
+    public static bool TryUpdate(Action<AppConfig> update, out AppConfig savedConfig, out string error)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+        try
+        {
+            AppConfig result = new();
+            ExecuteWithSaveLock(() =>
+            {
+                result = ReadCurrentConfig();
+                update(result);
+                AppConfig.NormalizeAfterLoad(result);
+                SaveCore(result);
+            });
+            savedConfig = result;
+            error = "";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            savedConfig = new AppConfig();
+            error = ex.Message;
+            RuntimeLog.Error("Config", "Config update failed", ex);
+            return false;
+        }
+    }
+
+    private static AppConfig ReadCurrentConfig()
+    {
+        if (TryReadConfig(AppPaths.ConfigPath, out AppConfig config))
+            return config;
+        if (TryReadConfig(AppPaths.ConfigPath + ".bak", out config))
+            return config;
+
+        config = new AppConfig();
+        AppConfig.NormalizeAfterLoad(config);
+        return config;
+    }
+
+    private static bool TryReadConfig(string path, out AppConfig config)
+    {
+        config = new AppConfig();
+        if (!File.Exists(path)) return false;
+        try
+        {
+            var loaded = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path, Encoding.UTF8));
+            if (loaded == null) return false;
+            config = loaded;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void SaveCore(AppConfig config)
+    {
+        string configPath = AppPaths.ConfigPath;
+        string directory = Path.GetDirectoryName(configPath) ?? AppContext.BaseDirectory;
+        string tempPath = $"{configPath}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
+        string backupPath = configPath + ".bak";
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            string json = JsonSerializer.Serialize(config, Options);
+            using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
+            {
+                writer.Write(json);
+                writer.Flush();
+                stream.Flush(flushToDisk: true);
+            }
+
+            if (File.Exists(configPath))
+                File.Replace(tempPath, configPath, backupPath, ignoreMetadataErrors: true);
+            else
+                File.Move(tempPath, configPath);
+        }
+        finally
+        {
+            try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
+        }
+    }
+
+    private static void ExecuteWithSaveLock(Action action)
+    {
+        lock (SaveLock)
+        {
+            using var mutex = new Mutex(false, ConfigMutexName);
+            bool ownsMutex = false;
+            try
+            {
+                try { ownsMutex = mutex.WaitOne(TimeSpan.FromSeconds(10)); }
+                catch (AbandonedMutexException) { ownsMutex = true; }
+                if (!ownsMutex)
+                    throw new TimeoutException("等待其他工位保存配置超时");
+                action();
+            }
+            finally
+            {
+                if (ownsMutex)
+                    mutex.ReleaseMutex();
+            }
         }
     }
 }

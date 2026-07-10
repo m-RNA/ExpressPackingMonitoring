@@ -42,8 +42,7 @@ namespace ExpressPackingMonitoring
                 config.WorkstationRole = "";
             if (!useTemporaryRole && !string.IsNullOrWhiteSpace(requestedRole))
             {
-                config.WorkstationRole = requestedRole;
-                if (!TrySaveStartupConfig(config))
+                if (!TrySaveStartupRole(config, requestedRole))
                     return;
             }
 
@@ -57,8 +56,7 @@ namespace ExpressPackingMonitoring
                     return;
                 }
 
-                config.WorkstationRole = selector.SelectedRole;
-                if (!TrySaveStartupConfig(config))
+                if (!TrySaveStartupRole(config, selector.SelectedRole))
                     return;
                 if (WorkstationNetwork.TryRestartApplication())
                     return;
@@ -84,10 +82,16 @@ namespace ExpressPackingMonitoring
             ShutdownMode = ShutdownMode.OnMainWindowClose;
         }
 
-        private bool TrySaveStartupConfig(AppConfig config)
+        private bool TrySaveStartupRole(AppConfig config, string role)
         {
-            if (WorkstationConfigStore.TrySave(config, out string error))
+            if (WorkstationConfigStore.TryUpdate(
+                    current => current.WorkstationRole = role,
+                    out AppConfig savedConfig,
+                    out string error))
+            {
+                config.WorkstationRole = savedConfig.WorkstationRole;
                 return true;
+            }
 
             MessageBox.Show(
                 $"配置保存失败，程序无法安全启动。\n\n请检查磁盘空间和配置目录权限。\n{error}",
