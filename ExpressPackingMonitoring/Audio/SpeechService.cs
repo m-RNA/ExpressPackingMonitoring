@@ -35,7 +35,9 @@ namespace ExpressPackingMonitoring.Audio
         private BlockingCollection<SpeechRequest> _speechQueue = null!;
         private Thread _speechThread = null!;
         private volatile bool _speechCancelRequested;
-        private bool _isDisposed;
+        private volatile bool _isDisposed;
+        private int _disposeStarted;
+        private int _resourceCleanupStarted;
         private string? _ttsCacheDir;
         private DateTime _lastTtsUseTime = DateTime.MinValue;
         private Timer? _idleUnloadTimer;
@@ -1191,19 +1193,56 @@ namespace ExpressPackingMonitoring.Audio
 
         public void Dispose()
         {
-            if (_isDisposed) return;
+            if (Interlocked.Exchange(ref _disposeStarted, 1) != 0) return;
             _isDisposed = true;
             Stop();
             _speechProcessingGate.Set();
             _idleUnloadTimer?.Dispose();
             try { _preGenQueue?.CompleteAdding(); } catch { }
-            try { _preGenThread?.Join(2000); } catch { }
+            bool preGenStopped = TryJoinThread(_preGenThread, 2000);
             try { _speechQueue?.CompleteAdding(); } catch { }
-            try { _speechThread?.Join(2000); } catch { }
+            bool speechStopped = TryJoinThread(_speechThread, 2000);
+
+            if (preGenStopped && speechStopped)
+            {
+                CleanupResources();
+                return;
+            }
+
+            Debug.WriteLine("[SpeechService] 工作线程仍在退出，延后释放共享资源");
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    _preGenThread?.Join();
+                    _speechThread?.Join();
+                    CleanupResources();
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[SpeechService] 延后释放资源失败: {ex.Message}");
+                }
+            });
+        }
+
+        private static bool TryJoinThread(Thread? thread, int timeoutMs)
+        {
+            if (thread == null || !thread.IsAlive) return true;
+            try { return thread.Join(timeoutMs); }
+            catch { return !thread.IsAlive; }
+        }
+
+        private void CleanupResources()
+        {
+            if (Interlocked.Exchange(ref _resourceCleanupStarted, 1) != 0) return;
+
             _ttsNormal?.Dispose();
+            _ttsNormal = null;
             _ttsWarning?.Dispose();
+            _ttsWarning = null;
             lock (_kokoroLock) { _kokoroTts?.Dispose(); _kokoroTts = null; }
             _speechQueue?.Dispose();
+            _preGenQueue?.Dispose();
             _speechProcessingGate.Dispose();
         }
     }
