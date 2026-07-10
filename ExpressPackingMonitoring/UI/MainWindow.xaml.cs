@@ -27,6 +27,7 @@ namespace ExpressPackingMonitoring.UI
         private const int WM_EXITSIZEMOVE = 0x0232;
         private bool _shutdownConfirmed;
         private bool _shutdownInProgress;
+        private bool _resourceCleanupInProgress;
         private readonly DispatcherTimer _scanAutoSubmitTimer;
         private readonly List<double> _scanInputIntervalsMs = new();
         private DateTime _lastScanInputCharAt = DateTime.MinValue;
@@ -396,13 +397,14 @@ namespace ExpressPackingMonitoring.UI
             if (!ScanInputTextBox.IsKeyboardFocusWithin) { e.Handled = true; ScanInputTextBox.Focus(); }
         }
 
-        private async void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        private async void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
         {
             var vm = DataContext as MainViewModel;
 
             if (_shutdownConfirmed)
             {
-                FinishShutdown(vm);
+                e.Cancel = true;
+                await FinishShutdownAsync(vm);
                 return;
             }
 
@@ -458,7 +460,7 @@ namespace ExpressPackingMonitoring.UI
                 catch (InvalidOperationException ex)
                 {
                     RuntimeLog.Warn("Shutdown", $"Confirmed close failed, force shutdown: {ex.Message}");
-                    FinishShutdown(vm);
+                    _ = FinishShutdownAsync(vm);
                 }
             }), DispatcherPriority.Background);
         }
@@ -469,20 +471,35 @@ namespace ExpressPackingMonitoring.UI
                 && message.Contains("文件不存在，跳过", StringComparison.Ordinal);
         }
 
-        private void FinishShutdown(MainViewModel? vm)
+        private async Task FinishShutdownAsync(MainViewModel? vm)
         {
+            if (_resourceCleanupInProgress) return;
+            _resourceCleanupInProgress = true;
             _capsCheckTimer.Stop();
             RestoreCapsLockState();
 
-            if (vm is System.IDisposable disposable) 
+            if (vm != null)
             {
-                disposable.Dispose();
+                vm.BusyText = "正在关闭摄像头和后台服务...";
+                vm.IsBusy = true;
             }
 
-            // 录像收尾已经在 SaveRecordingsBeforeShutdownAsync 中等待完成。
-            // 这里保留显式退出兜底，避免 Web/语音/驱动回调等后台资源让进程残留。
-            try { Application.Current?.Shutdown(0); } catch { }
-            Environment.Exit(0);
+            try
+            {
+                if (vm is System.IDisposable disposable)
+                    await Task.Run(disposable.Dispose);
+            }
+            catch (Exception ex)
+            {
+                RuntimeLog.Error("Shutdown", "Background resource cleanup failed", ex);
+            }
+            finally
+            {
+                // 录像收尾已经完成；解除 Closing 处理器后显式退出，避免后台资源让进程残留。
+                Closing -= Window_Closing;
+                try { Application.Current?.Shutdown(0); } catch { }
+                Environment.Exit(0);
+            }
         }
     }
 }

@@ -140,6 +140,8 @@ namespace ExpressPackingMonitoring.ViewModels
         private readonly SemaphoreSlim _recorderLock = new SemaphoreSlim(1, 1);
         private readonly SemaphoreSlim _mkvConvertLock = new SemaphoreSlim(1, 1);
         private readonly SemaphoreSlim _shutdownLock = new SemaphoreSlim(1, 1);
+        private volatile bool _shutdownRequested;
+        private volatile bool _shutdownPrepared;
         private bool _isInputOnCooldown = false;
         private string _pendingScanDuringCooldown = "";
         private Process _currentFfmpegProcess;
@@ -1404,6 +1406,8 @@ namespace ExpressPackingMonitoring.ViewModels
 
             bool previousBusy = IsBusy;
             string previousBusyText = BusyText;
+            bool prepared = false;
+            _shutdownRequested = true;
             try
             {
                 RuntimeLog.Info("Shutdown", $"Save before shutdown start recording={IsRecording}");
@@ -1460,6 +1464,8 @@ namespace ExpressPackingMonitoring.ViewModels
                     RuntimeLog.Warn("Shutdown", $"Save before shutdown has failed historical conversions, allowing exit. failedConversions={result.fail}");
                 }
 
+                _shutdownPrepared = true;
+                prepared = true;
                 return true;
             }
             catch (Exception ex)
@@ -1470,6 +1476,8 @@ namespace ExpressPackingMonitoring.ViewModels
             }
             finally
             {
+                if (!prepared)
+                    _shutdownRequested = false;
                 IsBusy = previousBusy && !_isDisposed;
                 BusyText = previousBusy ? previousBusyText : "";
                 _shutdownLock.Release();
@@ -1696,7 +1704,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private void RestartCamera()
         {
-            if (_isSetupWizardActive || _isDisposed)
+            if (_isSetupWizardActive || _isDisposed || _shutdownRequested)
             {
                 RuntimeLog.Info("Camera", "RestartCamera skipped while setup wizard owns camera");
                 return;
@@ -1731,7 +1739,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private async void RestartCameraWithRecordingStop()
         {
-            if (_isSetupWizardActive || _isDisposed)
+            if (_isSetupWizardActive || _isDisposed || _shutdownRequested)
             {
                 RuntimeLog.Info("Camera", "RestartCameraWithRecordingStop skipped while setup wizard owns camera");
                 return;
@@ -1853,7 +1861,7 @@ namespace ExpressPackingMonitoring.ViewModels
             while (!_isDisposed)
             {
                 await Task.Delay(10_000); // 每10秒检查一次
-                if (_isDisposed) break;
+                if (_isDisposed || _shutdownRequested) break;
                 if (!Config.EnableCameraIdle || Config.CameraIdleMinutes <= 0) continue;
                 if (_isSetupWizardActive) continue;
                 if (IsRecording || _isCameraSleeping) continue;
@@ -1886,7 +1894,7 @@ namespace ExpressPackingMonitoring.ViewModels
         {
             try
             {
-                if (_isSetupWizardActive || _isDisposed)
+                if (_isSetupWizardActive || _isDisposed || _shutdownRequested)
                 {
                     RuntimeLog.Info("Camera", "StartCamera skipped while setup wizard owns camera");
                     return;
@@ -1964,10 +1972,10 @@ namespace ExpressPackingMonitoring.ViewModels
                 _videoSource.VideoSourceError += (s, e) => {
                     Debug.WriteLine($"[Camera] 视频源错误: {e.Description}");
                     RuntimeLog.Error("Camera", $"VideoSourceError: {e.Description}");
-                    if (_isSetupWizardActive || _isDisposed)
+                    if (_isSetupWizardActive || _isDisposed || _shutdownRequested)
                         return;
                     _ = Application.Current.Dispatcher.InvokeAsync(() => {
-                        if (_isSetupWizardActive || _isDisposed)
+                        if (_isSetupWizardActive || _isDisposed || _shutdownRequested)
                             return;
                         ShowToast("警告：摄像头连接发生错误，尝试重连...");
                         RestartCameraWithRecordingStop();
@@ -2697,6 +2705,7 @@ namespace ExpressPackingMonitoring.ViewModels
         public void Dispose()
         {
             if (_isDisposed) return;
+            _shutdownRequested = true;
             _isDisposed = true;
             _cts?.Cancel();
             try { _uiHeartbeatTimer?.Stop(); } catch { }
@@ -2740,9 +2749,12 @@ namespace ExpressPackingMonitoring.ViewModels
             }
             catch { }
 
-            // 等待上一次的 finalize 任务完成
-            try { _lastFinalizeTask?.Wait(5000); } catch { }
-            try { _postStopMuxTask?.Wait(5000); } catch { }
+            // 正常关闭流程已异步等待录像收尾，不在 UI 关闭阶段重复阻塞。
+            if (!_shutdownPrepared)
+            {
+                try { _lastFinalizeTask?.Wait(5000); } catch { }
+                try { _postStopMuxTask?.Wait(5000); } catch { }
+            }
 
             // 录制中退出：更新数据库并转换 MP4
             if (!string.IsNullOrEmpty(videoFileToConvert) && File.Exists(videoFileToConvert))
