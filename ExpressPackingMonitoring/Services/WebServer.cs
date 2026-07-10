@@ -110,7 +110,7 @@ namespace ExpressPackingMonitoring.Services
                 if (!allowAccessSetup)
                 {
                     throw new InvalidOperationException(
-                        "Web 服务缺少监听权限。请打开设置，在“局域网查看”中重新启用并保存，以完成管理员授权。",
+                        "Web 服务缺少监听权限。请打开设置，在“局域网查看”中直接保存，以完成管理员授权。",
                         ex);
                 }
 
@@ -136,9 +136,9 @@ namespace ExpressPackingMonitoring.Services
         private static void RegisterUrlAcl(int port)
         {
             string url = $"http://+:{port}/";
-            RunElevatedCmd($"netsh http add urlacl url={url} user=Everyone", "注册 Web 服务 URL ACL");
-            // 同时确保防火墙规则存在
-            RunElevatedCmd($"netsh advfirewall firewall add rule name=\"快递打包监控 Web服务\" dir=in action=allow protocol=TCP localport={port}", "注册 Web 服务防火墙规则");
+            string command = $"netsh http add urlacl url={url} user=Everyone && "
+                + $"netsh advfirewall firewall add rule name=\"快递打包监控 Web服务\" dir=in action=allow protocol=TCP localport={port}";
+            RunElevatedCmd(command, "配置局域网服务访问权限");
         }
 
         private static void RunElevatedCmd(string arguments, string actionName)
@@ -154,12 +154,15 @@ namespace ExpressPackingMonitoring.Services
                     WindowStyle = ProcessWindowStyle.Hidden,
                     CreateNoWindow = true
                 };
-                var proc = Process.Start(psi);
+                using var proc = Process.Start(psi);
                 if (proc == null)
                     throw new InvalidOperationException($"{actionName}失败：无法启动管理员命令。");
 
                 if (!proc.WaitForExit(15000))
+                {
+                    try { proc.Kill(entireProcessTree: true); } catch { }
                     throw new TimeoutException($"{actionName}超时，请手动以管理员身份运行 netsh 或关闭 Web 服务。");
+                }
 
                 if (proc.ExitCode != 0)
                     throw new InvalidOperationException($"{actionName}失败，netsh 退出码：{proc.ExitCode}。");

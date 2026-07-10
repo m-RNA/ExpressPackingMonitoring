@@ -1030,6 +1030,7 @@ namespace ExpressPackingMonitoring.ViewModels
                         || Config.WebServerPort != clonedConfig.WebServerPort
                         || Config.TranscodeCacheMaxMB != clonedConfig.TranscodeCacheMaxMB
                         || Config.EnableOrderInfoLog != clonedConfig.EnableOrderInfoLog;
+                    bool webServerNeedsRecovery = clonedConfig.EnableWebServer && _webServer == null;
 
                     AppConfig.NormalizeAfterLoad(clonedConfig);
                     if (!SaveConfig(clonedConfig, notifyUser: true))
@@ -1070,12 +1071,13 @@ namespace ExpressPackingMonitoring.ViewModels
                             _globalKeyHook.Stop();
                     }
                     bool webServerApplied = true;
-                    if (webServerChanged && !workstationChanged)
+                    bool webServerShouldApply = (webServerChanged || webServerNeedsRecovery) && !workstationChanged;
+                    if (webServerShouldApply)
                     {
                         ShowToast("正在应用局域网服务设置...");
                         webServerApplied = await RestartWebServerAsync(allowAccessSetup: Config.EnableWebServer);
                     }
-                    else if (!webServerChanged)
+                    else if (!webServerChanged && !webServerNeedsRecovery)
                     {
                         _ = RefreshWorkstationStatusAsync();
                     }
@@ -1100,8 +1102,8 @@ namespace ExpressPackingMonitoring.ViewModels
                     }
                     else
                     {
-                        if (!webServerChanged || webServerApplied)
-                            ShowToast(webServerChanged ? "配置已保存，局域网服务已应用" : "提示：配置已保存");
+                        if (!webServerShouldApply || webServerApplied)
+                            ShowToast(webServerShouldApply ? "配置已保存，局域网服务已应用" : "提示：配置已保存");
                     }
                 }
             }
