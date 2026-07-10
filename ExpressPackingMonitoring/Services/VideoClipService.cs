@@ -345,7 +345,7 @@ namespace ExpressPackingMonitoring.Services
                 }
 
                 int timeoutMs = (int)Math.Clamp(duration * 2000 + 60_000, 60_000, 15 * 60_000);
-                var result = RunFFmpeg(args, tmpPath, timeoutMs, task);
+                var result = RunFFmpeg(args, tmpPath, timeoutMs, task, _disposeCts.Token);
                 lock (task.Sync)
                 {
                     if (task.CancelRequested || task.Status == "canceled")
@@ -509,12 +509,17 @@ namespace ExpressPackingMonitoring.Services
 
         private void RunFFmpegOrThrow(string args, string outputPath, int timeoutMs)
         {
-            var result = RunFFmpeg(args, outputPath, timeoutMs, null);
+            var result = RunFFmpeg(args, outputPath, timeoutMs, null, _disposeCts.Token);
             if (!result.Success)
                 throw new InvalidOperationException("FFmpeg 处理失败");
         }
 
-        private FFmpegResult RunFFmpeg(string args, string outputPath, int timeoutMs, ClipTaskState task)
+        private FFmpegResult RunFFmpeg(
+            string args,
+            string outputPath,
+            int timeoutMs,
+            ClipTaskState task,
+            CancellationToken cancellationToken = default)
         {
             string ffmpegPath = AppPaths.FindFFmpeg();
             if (string.IsNullOrWhiteSpace(ffmpegPath) || !File.Exists(ffmpegPath))
@@ -543,6 +548,15 @@ namespace ExpressPackingMonitoring.Services
 
             string stderr = "";
             var stderrTask = proc.StandardError.ReadToEndAsync();
+            using var cancellationRegistration = cancellationToken.Register(() =>
+            {
+                try
+                {
+                    if (!proc.HasExited)
+                        proc.Kill(entireProcessTree: true);
+                }
+                catch { }
+            });
             bool exited;
             if (timeoutMs <= 0)
             {
@@ -562,6 +576,7 @@ namespace ExpressPackingMonitoring.Services
             }
 
             try { stderr = stderrTask.GetAwaiter().GetResult(); } catch { }
+            cancellationToken.ThrowIfCancellationRequested();
             bool success = proc.ExitCode == 0 && IsUsableFile(outputPath);
             _log($"VideoClip FFmpeg: 退出码={proc.ExitCode}, stderr={TrimForLog(stderr)}");
             return new FFmpegResult(success, proc.ExitCode, stderr);
@@ -676,7 +691,7 @@ namespace ExpressPackingMonitoring.Services
             };
 
             string lastError = "";
-            _previewFfmpegLock.Wait();
+            _previewFfmpegLock.Wait(_disposeCts.Token);
             try
             {
                 foreach (var candidate in candidates.Distinct())
@@ -687,7 +702,7 @@ namespace ExpressPackingMonitoring.Services
                         ? $"-y -nostdin -hide_banner -loglevel error -i {Quote(filePath)} -ss {seek} -an -sn -dn -frames:v 1 -q:v 3 -update 1 {Quote(tmpPath)}"
                         : $"-y -nostdin -hide_banner -loglevel error -ss {seek} -i {Quote(filePath)} -an -sn -dn -frames:v 1 -q:v 3 -update 1 {Quote(tmpPath)}";
 
-                    var result = RunFFmpeg(args, tmpPath, 30_000, null);
+                    var result = RunFFmpeg(args, tmpPath, 30_000, null, _disposeCts.Token);
                     if (result.Success && IsUsableFile(tmpPath))
                     {
                         if (File.Exists(outputPath))
