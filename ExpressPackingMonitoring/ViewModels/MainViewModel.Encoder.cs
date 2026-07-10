@@ -28,9 +28,19 @@ namespace ExpressPackingMonitoring.ViewModels
                 };
                 using var proc = Process.Start(psi);
                 if (proc == null) return "";
-                string output = proc.StandardOutput.ReadToEnd();
-                proc.WaitForExit(5000);
-                return output ?? "";
+                Task<string> stdoutTask = proc.StandardOutput.ReadToEndAsync();
+                Task<string> stderrTask = proc.StandardError.ReadToEndAsync();
+                if (!WaitForEncoderProbeExit(proc, 5000))
+                {
+                    RuntimeLog.Warn("EncoderDetect", "ffmpeg -encoders timed out");
+                    return "";
+                }
+
+                string output = ReadProbeOutput(stdoutTask);
+                string stderr = ReadProbeOutput(stderrTask);
+                if (proc.ExitCode != 0)
+                    RuntimeLog.Warn("EncoderDetect", $"ffmpeg -encoders failed exit={proc.ExitCode}, stderr={stderr}");
+                return output;
             }
             catch { return ""; }
         }
@@ -46,19 +56,29 @@ namespace ExpressPackingMonitoring.ViewModels
             Task.Run(() =>
             {
                 _isEncoderDetectRunning = true;
-                ShowToast("处理中：正在重新检测 GPU 编码器，请稍候...");
+                try
+                {
+                    ShowToast("处理中：正在重新检测 GPU 编码器，请稍候...");
 
-                var (options, validated) = DetectAvailableEncodersSync();
-                CachedEncoderOptions = options;
-                ValidatedEncoders = validated;
+                    var (options, validated) = DetectAvailableEncodersSync();
+                    CachedEncoderOptions = options;
+                    ValidatedEncoders = validated;
 
-                Config.EncoderOptionsCache = options;
-                Config.ValidatedEncodersCache = validated.ToList();
-                Config.IsEncoderDetected = true;
-                SaveConfig();
-
-                _isEncoderDetectRunning = false;
-                ShowToast("成功：编码器重新检测完成");
+                    Config.EncoderOptionsCache = options;
+                    Config.ValidatedEncodersCache = validated.ToList();
+                    Config.IsEncoderDetected = true;
+                    SaveConfig();
+                    ShowToast("成功：编码器重新检测完成");
+                }
+                catch (Exception ex)
+                {
+                    RuntimeLog.Error("EncoderDetect", "Manual encoder detection failed", ex);
+                    ShowToast("编码器检测失败，已保留现有设置");
+                }
+                finally
+                {
+                    _isEncoderDetectRunning = false;
+                }
             });
         }
 
@@ -76,12 +96,37 @@ namespace ExpressPackingMonitoring.ViewModels
                 };
                 using var proc = Process.Start(psi);
                 if (proc == null) return (false, "Process.Start returned null");
-                string stderr = proc.StandardError.ReadToEnd();
-                bool exited = proc.WaitForExit(15000);
+                Task<string> stderrTask = proc.StandardError.ReadToEndAsync();
+                bool exited = WaitForEncoderProbeExit(proc, 15000);
+                string stderr = ReadProbeOutput(stderrTask);
                 int exitCode = exited ? proc.ExitCode : -999;
                 return (exited && exitCode == 0, $"exit={exitCode} stderr={stderr}");
             }
             catch (Exception ex) { return (false, $"exception: {ex.Message}"); }
+        }
+
+        private static bool WaitForEncoderProbeExit(Process process, int timeoutMs)
+        {
+            if (process.WaitForExit(timeoutMs))
+                return true;
+
+            try { process.Kill(entireProcessTree: true); }
+            catch { }
+            try { process.WaitForExit(3000); }
+            catch { }
+            return false;
+        }
+
+        private static string ReadProbeOutput(Task<string> outputTask)
+        {
+            try
+            {
+                return outputTask.Wait(TimeSpan.FromSeconds(3)) ? outputTask.Result ?? "" : "";
+            }
+            catch
+            {
+                return "";
+            }
         }
 
         public static (List<GpuEncoderOption> options, HashSet<string> validated) DetectAvailableEncodersSync()

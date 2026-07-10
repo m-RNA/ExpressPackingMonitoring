@@ -185,7 +185,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private bool _autoStopWarned = false;
         private bool _maxDurationWarned = false;
         private bool _pendingCameraRestart = false; // 录制中修改了摄像头配置，录制结束后重启
-        private bool _isEncoderDetectRunning = true; // 是否正在进行 GPU 编码器检测
+        private volatile bool _isEncoderDetectRunning = true; // 是否正在进行 GPU 编码器检测
         private readonly string _activeWorkstationRole = WorkstationRoles.CameraMonitor;
         private string _workstationAccessText = "其他电脑暂时无法连接";
         private string _workstationPrintStatusText = "快递单打印工位：未连接";
@@ -420,24 +420,34 @@ namespace ExpressPackingMonitoring.ViewModels
             // 在起动时后台探测可用 GPU 编码器并缓存
             Task.Run(() => {
                 _isEncoderDetectRunning = true;
-                if (Config.IsEncoderDetected && Config.EncoderOptionsCache != null && Config.ValidatedEncodersCache != null)
+                try
                 {
-                    CachedEncoderOptions = Config.EncoderOptionsCache;
-                    ValidatedEncoders = new HashSet<string>(Config.ValidatedEncodersCache);
+                    if (Config.IsEncoderDetected && Config.EncoderOptionsCache != null && Config.ValidatedEncodersCache != null)
+                    {
+                        CachedEncoderOptions = Config.EncoderOptionsCache;
+                        ValidatedEncoders = new HashSet<string>(Config.ValidatedEncodersCache);
+                    }
+                    else
+                    {
+                        var (options, validated) = DetectAvailableEncodersSync();
+                        CachedEncoderOptions = options;
+                        ValidatedEncoders = validated;
+
+                        // 保存到配置中
+                        Config.EncoderOptionsCache = options;
+                        Config.ValidatedEncodersCache = validated.ToList();
+                        Config.IsEncoderDetected = true;
+                        SaveConfig();
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    var (options, validated) = DetectAvailableEncodersSync();
-                    CachedEncoderOptions = options;
-                    ValidatedEncoders = validated;
-                    
-                    // 保存到配置中
-                    Config.EncoderOptionsCache = options;
-                    Config.ValidatedEncodersCache = validated.ToList();
-                    Config.IsEncoderDetected = true;
-                    SaveConfig();
+                    RuntimeLog.Error("EncoderDetect", "Startup encoder detection failed", ex);
                 }
-                _isEncoderDetectRunning = false;
+                finally
+                {
+                    _isEncoderDetectRunning = false;
+                }
             });
             InitDatabase();
             RefreshTodayStats();
