@@ -15,7 +15,7 @@
 dotnet restore ExpressPackingMonitoring.sln
 dotnet build ExpressPackingMonitoring.sln -c Debug
 dotnet run --project ExpressPackingMonitoring
-powershell -ExecutionPolicy Bypass -File Tools\Publish-CleanPackage.ps1
+pwsh -NoProfile -File Tools\Publish-CleanPackage.ps1
 ```
 
 - `restore` downloads NuGet dependencies.
@@ -32,6 +32,7 @@ powershell -ExecutionPolicy Bypass -File Tools\Publish-CleanPackage.ps1
 - `ffmpeg.exe` may be resolved from `app\tools\ffmpeg.exe`, the application runtime directory, or the system `PATH`.
 - `Scripts/快递助手订单推送.user.js` is the browser userscript used for order push integration.
 - Edge TTS is the default online voice path. Kokoro local TTS models and runtime dependencies are optional and should not be bundled unless explicitly intended.
+- Full packages include the generated default Edge TTS cache. AppPatch packages must exclude TTS cache files.
 
 ## Update & Release Workflow
 
@@ -40,6 +41,9 @@ powershell -ExecutionPolicy Bypass -File Tools\Publish-CleanPackage.ps1
 - AppPatch packages are fixed-baseline cumulative patches. The default patch baseline is `0.0.18`, but scripts may allow overriding it when a new formal baseline is chosen.
 - Keep update URLs configurable through environment variables or `.env`. The default update check URL is GitHub releases latest API; `.env` may point to another release provider.
 - Do not generate AppFull packages. Release uploads normally include the full zip, `update_vX.Y.Z.json`, optional `ExpressPackingMonitoring_AppPatch_vX.Y.Z.zip`, and `launcher_manifest_vX.Y.Z.json`.
+- Keep release notes in `update_vX.Y.Z.json` synchronized with the final release description before uploading.
+- GitHub releases receive all generated upload artifacts. Gitee releases receive the update JSON, optional AppPatch, and launcher manifest, but not the full package zip.
+- For Gitee, open the new-release page for the user and let the user complete the form and upload files manually; do not automate submission unless the user explicitly changes this workflow.
 - Do not update ExpressPackingMonitoring.Launcher unless necessary
 
 ## Storage, Cache, and Web Video
