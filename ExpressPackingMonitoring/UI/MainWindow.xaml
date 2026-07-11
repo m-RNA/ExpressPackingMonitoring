@@ -402,12 +402,20 @@
                                                 </Border>
                                             </Grid>
 
-                                            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,5,0,0">
-                                                <Path Data="{StaticResource FluentClockIcon}" Width="12" Height="12" Stretch="Uniform" Fill="{DynamicResource TextMuted}" Margin="0,0,4,0"/>
-                                                <TextBlock x:Name="DurationText" Text="{Binding Duration}" FontWeight="SemiBold" FontSize="12" Margin="0,0,12,0" Foreground="{DynamicResource TextSecondary}"/>
-                                                <Path Data="{StaticResource FluentCalendarIcon}" Width="12" Height="12" Stretch="Uniform" Fill="{DynamicResource TextMuted}" Margin="0,0,4,0"/>
-                                                <TextBlock Text="{Binding DateStr}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
-                                            </StackPanel>
+                                            <Grid Grid.Row="1" Margin="0,5,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left">
+                                                    <Path Data="{StaticResource FluentClockIcon}" Width="12" Height="12" Stretch="Uniform" Fill="{DynamicResource TextMuted}" Margin="0,0,4,0"/>
+                                                    <TextBlock Text="{Binding DateStr}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                                                    <Path x:Name="DurationIcon" Data="{StaticResource FluentSaveIcon}" Width="12" Height="12" Stretch="Uniform" Fill="{DynamicResource TextMuted}" Margin="0,0,4,0"/>
+                                                    <TextBlock x:Name="DurationText" Text="{Binding Duration}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource TextSecondary}"/>
+                                                </StackPanel>
+                                            </Grid>
                                         </Grid>
                                     </Grid>
                                 </Border>
@@ -420,6 +428,8 @@
                                         <Setter TargetName="BadgeBorder" Property="Background" Value="{DynamicResource BadgeErrorBg}"/>
                                         <Setter TargetName="BadgeText" Property="Foreground" Value="{DynamicResource BadgeErrorText}"/>
                                         <Setter TargetName="DurationText" Property="Foreground" Value="{DynamicResource AccentRed}"/>
+                                        <Setter TargetName="DurationIcon" Property="Data" Value="{StaticResource FluentClockIcon}"/>
+                                        <Setter TargetName="DurationIcon" Property="Fill" Value="{DynamicResource AccentRed}"/>
                                         <Setter TargetName="ActiveStatusBorder" Property="Visibility" Value="Visible"/>
                                         
                                         <DataTrigger.EnterActions>
