@@ -263,6 +263,17 @@ namespace ExpressPackingMonitoring.ViewModels
                 "秒");
         }
 
+        internal static string FormatWatermarkTimestamp(DateTimeOffset timestamp)
+        {
+            TimeSpan offset = timestamp.Offset;
+            string sign = offset < TimeSpan.Zero ? "-" : "+";
+            offset = offset.Duration();
+            string offsetText = offset.Minutes == 0
+                ? $"{sign}{offset.Hours:00}"
+                : $"{sign}{offset.Hours:00}:{offset.Minutes:00}";
+            return $"UTC{offsetText}: {timestamp:yyyy/MM/dd HH:mm:ss}";
+        }
+
         private string _toastMessage;
         private bool _isToastVisible;
         private CancellationTokenSource _toastCts;
@@ -2634,8 +2645,7 @@ namespace ExpressPackingMonitoring.ViewModels
                                 {
                                     processedFrame = currentFrame.Clone();
                                 }
-                                var now = DateTimeOffset.Now.ToOffset(TimeSpan.FromHours(8));
-                                string line1 = $"UTC+8: {now:yyyy/MM/dd HH:mm:ss}";
+                                string line1 = FormatWatermarkTimestamp(DateTimeOffset.Now);
                                 double fontScale = Math.Max(0.5, processedFrame.Height / 720.0) * 0.6;
                                 int thickness = fontScale >= 0.8 ? 2 : 1;
                                 int lineHeight = (int)(30 * fontScale / 0.6);
