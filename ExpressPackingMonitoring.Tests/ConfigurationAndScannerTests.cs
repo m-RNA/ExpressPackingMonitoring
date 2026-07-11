@@ -27,6 +27,20 @@ public sealed class ConfigurationAndScannerTests
     }
 
     [Fact]
+    public void AddMonitorConnectPermission_AddsExactHostWithoutDuplicatingWildcardPermission()
+    {
+        const string script = "// ==UserScript==\n// @connect      localhost\n// @connect      *\n// ==/UserScript==";
+
+        string customized = PrintToolInstallGuide.AddMonitorConnectPermission(script, "192.168.2.239:5280");
+        string repeated = PrintToolInstallGuide.AddMonitorConnectPermission(customized, "http://192.168.2.239:5280");
+
+        Assert.Contains("// @connect      192.168.2.239", customized);
+        Assert.Contains("// @connect      *", customized);
+        Assert.Equal(customized, repeated);
+    }
+
+
+    [Fact]
     public void NormalizeAfterLoad_ResolvesConflictingScannerModesAndBounds()
     {
         var config = new AppConfig

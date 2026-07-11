@@ -1822,6 +1822,7 @@ namespace ExpressPackingMonitoring.Services
             }
 
             string script = File.ReadAllText(scriptPath, Encoding.UTF8);
+            script = PrintToolInstallGuide.AddMonitorConnectPermission(script, ctx.Request.Url?.Authority ?? "");
             ctx.Response.StatusCode = 200;
             ctx.Response.ContentType = "application/javascript; charset=utf-8";
             ctx.Response.Headers["Content-Disposition"] = "inline; filename=\"kuaidizs-order-push.user.js\"";

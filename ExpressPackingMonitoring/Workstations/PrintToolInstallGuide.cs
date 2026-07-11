@@ -15,7 +15,13 @@ internal static class PrintToolInstallGuide
         string guideDir = AppPaths.GuideCacheDir;
         Directory.CreateDirectory(guideDir);
         string guidePath = Path.Combine(guideDir, TemplateFileName);
-        string scriptPath = ResolveUserscriptPath();
+        string sourceScriptPath = ResolveUserscriptPath();
+        string scriptPath = Path.Combine(guideDir, ScriptFileName);
+        if (File.Exists(sourceScriptPath))
+        {
+            string script = File.ReadAllText(sourceScriptPath, Encoding.UTF8);
+            File.WriteAllText(scriptPath, AddMonitorConnectPermission(script, monitorAddress), Encoding.UTF8);
+        }
         string scriptUrl = File.Exists(scriptPath) ? new Uri(scriptPath).AbsoluteUri : "";
         string html = Render(monitorAddress, BuildScriptLink(scriptUrl));
         File.WriteAllText(guidePath, html, Encoding.UTF8);
@@ -37,6 +43,27 @@ internal static class PrintToolInstallGuide
         };
 
         return candidates.FirstOrDefault(File.Exists) ?? candidates[0];
+    }
+
+    internal static string AddMonitorConnectPermission(string script, string monitorAddress)
+    {
+        if (string.IsNullOrWhiteSpace(script) || string.IsNullOrWhiteSpace(monitorAddress)) return script;
+
+        string value = monitorAddress.Trim();
+        if (!value.Contains("://", StringComparison.Ordinal)) value = "http://" + value;
+        if (!Uri.TryCreate(value, UriKind.Absolute, out Uri? uri) || string.IsNullOrWhiteSpace(uri.Host)) return script;
+
+        string host = uri.Host;
+        if (host.Any(c => char.IsWhiteSpace(c) || c is '/' or '\\')) return script;
+        string directive = $"// @connect      {host}";
+        if (script.Contains(directive, StringComparison.Ordinal)) return script;
+
+        const string marker = "// @connect      localhost";
+        int markerIndex = script.IndexOf(marker, StringComparison.Ordinal);
+        if (markerIndex < 0) return script;
+        int lineEnd = script.IndexOf('\n', markerIndex);
+        if (lineEnd < 0) return script + Environment.NewLine + directive;
+        return script.Insert(lineEnd + 1, directive + "\n");
     }
 
     private static string Render(string monitorAddress, string scriptLink)
