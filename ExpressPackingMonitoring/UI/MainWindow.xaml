@@ -191,10 +191,14 @@
                                                         <Setter TargetName="RecordActionIcon" Property="Data" Value="{StaticResource FluentStopIcon}"/>
                                                         <Setter TargetName="RecordActionText" Property="Text" Value="停止录制"/>
                                                     </DataTrigger>
-                                                    <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                                    <MultiDataTrigger>
+                                                        <MultiDataTrigger.Conditions>
+                                                            <Condition Binding="{Binding IsBusy}" Value="True"/>
+                                                            <Condition Binding="{Binding IsShutdownInProgress}" Value="False"/>
+                                                        </MultiDataTrigger.Conditions>
                                                         <Setter TargetName="RecordActionIcon" Property="Data" Value="{StaticResource FluentArrowSyncIcon}"/>
                                                         <Setter TargetName="RecordActionText" Property="Text" Value="{Binding BusyText}"/>
-                                                    </DataTrigger>
+                                                    </MultiDataTrigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
                                         </Setter.Value>
@@ -204,8 +208,16 @@
                                             <Setter Property="Background" Value="{DynamicResource AccentRed}"/>
                                         </DataTrigger>
                                         <!-- 新增：Busy过渡状态，优先于 IsRecording -->
-                                        <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding IsBusy}" Value="True"/>
+                                                <Condition Binding="{Binding IsShutdownInProgress}" Value="False"/>
+                                            </MultiDataTrigger.Conditions>
                                             <Setter Property="Background" Value="#A0A0A0"/> <!-- 灰色表示被锁定 -->
+                                        </MultiDataTrigger>
+                                        <DataTrigger Binding="{Binding IsShutdownInProgress}" Value="True">
+                                            <Setter Property="IsHitTestVisible" Value="False"/>
+                                            <Setter Property="Opacity" Value="0.65"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>

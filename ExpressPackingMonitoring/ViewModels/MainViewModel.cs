@@ -157,6 +157,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private readonly SemaphoreSlim _mkvConvertLock = new SemaphoreSlim(1, 1);
         private readonly SemaphoreSlim _shutdownLock = new SemaphoreSlim(1, 1);
         private volatile bool _shutdownRequested;
+        private bool _isShutdownInProgress;
         private volatile bool _shutdownPrepared;
         private bool _isInputOnCooldown = false;
         private string _pendingScanDuringCooldown = "";
@@ -290,6 +291,7 @@ namespace ExpressPackingMonitoring.ViewModels
         public string CurrentMode { get => _currentMode; set { if (SetProperty(ref _currentMode, value)) ScheduleRefreshBarcodes(); } }
         public string CurrentOrderId { get => _currentOrderId; set => SetProperty(ref _currentOrderId, value); }
         public bool IsRecording { get => _isRecording; set { if (SetProperty(ref _isRecording, value)) ScheduleRefreshBarcodes(); } }
+        public bool IsShutdownInProgress { get => _isShutdownInProgress; private set => SetProperty(ref _isShutdownInProgress, value); }
         public double DiskUsagePercent { get => _diskUsagePercent; set => SetProperty(ref _diskUsagePercent, value); }
         public string DiskUsageText { get => _diskUsageText; set => SetProperty(ref _diskUsageText, value); }
         public AppConfig Config { get => _config; set => SetProperty(ref _config, value); }
@@ -533,7 +535,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private void OnGlobalBarcodeScanned(string barcode)
         {
-            if (_isDisposed) return;
+            if (_isDisposed || _shutdownRequested) return;
             HandleScan(barcode);
         }
 
@@ -634,7 +636,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private async void ToggleRecording() 
         {
             NotifyUserActivity();
-            if (IsBusy || _isDisposed) return;
+            if (IsBusy || _isDisposed || _shutdownRequested) return;
             if (!await _recorderLock.WaitAsync(0)) return; 
 
             try 
@@ -710,7 +712,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private async void HandleScan(string scanResult)
         {
             NotifyUserActivity();
-            if (IsBusy || _isDisposed) { ScanInputText = ""; return; }
+            if (IsBusy || _isDisposed || _shutdownRequested) { ScanInputText = ""; return; }
             if (string.IsNullOrWhiteSpace(scanResult)) return;
             string upperResult = scanResult.ToUpper().Trim();
             
@@ -1678,12 +1680,13 @@ namespace ExpressPackingMonitoring.ViewModels
             string previousBusyText = BusyText;
             bool prepared = false;
             _shutdownRequested = true;
+            IsShutdownInProgress = true;
             try
             {
                 RuntimeLog.Info("Shutdown", $"Save before shutdown start recording={IsRecording}");
                 progress?.Report("正在保存录像，请稍候...");
                 IsBusy = true;
-                BusyText = "正在保存录像，请稍候...";
+                BusyText = "正在关闭程序...";
 
                 if (IsRecording)
                 {
@@ -1747,9 +1750,17 @@ namespace ExpressPackingMonitoring.ViewModels
             finally
             {
                 if (!prepared)
+                {
                     _shutdownRequested = false;
-                IsBusy = previousBusy && !_isDisposed;
-                BusyText = previousBusy ? previousBusyText : "";
+                    IsShutdownInProgress = false;
+                    IsBusy = previousBusy && !_isDisposed;
+                    BusyText = previousBusy ? previousBusyText : "";
+                }
+                else
+                {
+                    IsBusy = true;
+                    BusyText = "正在关闭程序...";
+                }
                 _shutdownLock.Release();
             }
         }

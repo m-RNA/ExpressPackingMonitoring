@@ -435,7 +435,7 @@ namespace ExpressPackingMonitoring.UI
             {
                 var progress = new Progress<string>(msg =>
                 {
-                    vm.BusyText = msg;
+                    vm.BusyText = "正在关闭程序...";
                     vm.IsBusy = true;
                     if (!IsRoutineShutdownProgressMessage(msg))
                         vm.ShowToast(msg);
@@ -480,7 +480,7 @@ namespace ExpressPackingMonitoring.UI
 
             if (vm != null)
             {
-                vm.BusyText = "正在关闭摄像头和后台服务...";
+                vm.BusyText = "正在关闭程序...";
                 vm.IsBusy = true;
             }
 

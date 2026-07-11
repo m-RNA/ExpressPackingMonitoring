@@ -25,7 +25,7 @@ namespace ExpressPackingMonitoring.ViewModels
             if (!IsRecording || _isDisposed) return;
 
             IsBusy = true;
-            BusyText = "正在停止...";
+            BusyText = _shutdownRequested ? "正在关闭程序..." : "正在停止...";
             IsRecording = false; // 1. 立即改变 UI 状态
             _isScanning = false;
             _delayBeforeZooming = false;
@@ -197,8 +197,8 @@ namespace ExpressPackingMonitoring.ViewModels
                 }
             });
             
-            // 如果是在关闭窗口时发生，不要解除 Busy，防止被再次点击
-            if (Application.Current?.MainWindow != null && !_isDisposed)
+            // 退出期间由关闭流程持续管理 Busy，避免按钮短暂变回“开始录制”并被再次点击。
+            if (Application.Current?.MainWindow != null && !_isDisposed && !_shutdownRequested)
             {
                 IsBusy = false;
             }
