@@ -230,7 +230,7 @@ public sealed class ConfigurationAndScannerTests
         var refundAlert = new AlertRequest
         {
             Message = "退款警告",
-            SpeechText = "订单有退款，不要打包",
+            SpeechText = "订单有退款，请核对",
             Priority = AlertPriority.Critical,
             Sound = AlertSound.IndustrialAlarm,
             SoundRepeatCount = 1,

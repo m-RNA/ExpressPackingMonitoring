@@ -42,7 +42,7 @@ namespace ExpressPackingMonitoring.Audio
         public const string RefundClosed = "退款流程已关闭或取消";
 
         public static string CreatePrintedRefundAnnouncement(string statusText) =>
-            $"订单有退款，{statusText}，不要打包";
+            $"订单有退款，{statusText}，请核对";
 
         public static string CreateBuyerMessageAnnouncement(string message) => $"买家留言，{message}";
 
