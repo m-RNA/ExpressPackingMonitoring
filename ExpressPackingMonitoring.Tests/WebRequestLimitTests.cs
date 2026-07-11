@@ -62,4 +62,20 @@ public sealed class WebRequestLimitTests
 
         Assert.Contains("买家留言过长", error.Message);
     }
+
+    [Fact]
+    public void ClipEditor_UsesSingleScreenSourcePlaybackWorkflow()
+    {
+        string html = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Web", "index.html"));
+
+        Assert.Contains("id=\"clipSourcePlayer\"", html);
+        Assert.Contains("id=\"clipPlayhead\"", html);
+        Assert.Contains("id=\"clipPlaySelectionBtn\"", html);
+        Assert.Contains("生成并下载", html);
+        Assert.Contains("resolvePlaybackUrl(v.id)", html);
+        Assert.DoesNotContain("id=\"clipResult\"", html);
+        Assert.DoesNotContain("/clip/preview", html);
+        Assert.DoesNotContain("/clip/frame", html);
+        Assert.DoesNotContain("/clip/prewarm", html);
+    }
 }
