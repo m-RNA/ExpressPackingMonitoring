@@ -17,7 +17,10 @@ public sealed class ConfigurationAndScannerTests
 
         Assert.Contains("// @grant        GM_openInTab", script);
         Assert.Contains("const IS_REFUND_WORKER", script);
-        Assert.Contains("GM_openInTab(buildRefundWorkerUrl(), { active: false", script);
+        Assert.Contains("GM_openInTab(buildRefundWorkerUrl(), { active: false, setParent: false })", script);
+        Assert.Contains("【退款核验专用】请勿操作", script);
+        Assert.Contains("data-epm-refund-worker-overlay", script);
+        Assert.Contains("请勿操作或关闭此页面", script);
         Assert.Contains("if (!IS_REFUND_WORKER) return;", script);
         Assert.Contains("普通页面只负责订单推送，不再领取退款请求或切换筛选", script);
         Assert.Contains("writeRefundWorkerHeartbeat();", script);

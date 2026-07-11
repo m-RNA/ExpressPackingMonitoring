@@ -78,7 +78,33 @@
     function startRefundWorkerHeartbeat() {
         writeRefundWorkerHeartbeat();
         setInterval(writeRefundWorkerHeartbeat, REFUND_WORKER_HEARTBEAT_INTERVAL_MS);
-        document.title = `退款核验工作页 - ${document.title}`;
+        const workerTitle = '【退款核验专用】请勿操作';
+        const applyWorkerIdentity = () => {
+            if (document.title !== workerTitle) document.title = workerTitle;
+        };
+        applyWorkerIdentity();
+        const titleElement = document.querySelector('title');
+        if (titleElement) {
+            new MutationObserver(applyWorkerIdentity).observe(titleElement, { childList: true, subtree: true, characterData: true });
+        }
+
+        const overlay = document.createElement('div');
+        overlay.setAttribute('data-epm-refund-worker-overlay', '');
+        overlay.innerHTML = `
+            <div style="width:min(560px,calc(100vw - 48px));padding:48px 40px;border:1px solid rgba(255,255,255,.22);border-radius:20px;background:rgba(15,23,42,.72);box-shadow:0 24px 80px rgba(0,0,0,.38);text-align:center;">
+                <img src="https://raw.githubusercontent.com/m-RNA/ExpressPackingMonitoring/main/ExpressPackingMonitoring/app.ico" alt="" style="width:88px;height:88px;margin-bottom:24px;" />
+                <div style="font-size:34px;line-height:1.35;font-weight:800;letter-spacing:1px;">退款核验专用工作页</div>
+                <div style="margin-top:18px;font-size:22px;line-height:1.6;font-weight:700;color:#fecaca;">请勿操作或关闭此页面</div>
+                <div style="margin-top:22px;font-size:15px;line-height:1.8;color:#cbd5e1;">此页面由快递打包监控自动管理<br />用于在后台核验打印后退款订单</div>
+            </div>`;
+        Object.assign(overlay.style, {
+            position: 'fixed', inset: '0', zIndex: '2147483647',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'linear-gradient(145deg,#7f1d1d 0%,#991b1b 42%,#450a0a 100%)',
+            color: '#fff', fontFamily: 'Microsoft YaHei, sans-serif',
+            pointerEvents: 'auto', userSelect: 'none'
+        });
+        document.body.appendChild(overlay);
     }
 
     async function ensureRefundWorker(force) {
@@ -98,7 +124,8 @@
         const ownedLock = GM_getValue(REFUND_WORKER_OPEN_LOCK_KEY, null);
         if (!ownedLock || ownedLock.token !== token) return;
 
-        GM_openInTab(buildRefundWorkerUrl(), { active: false, insert: true, setParent: false });
+        // 默认追加到标签栏末尾，不与用户正在操作的打印页并排插入。
+        GM_openInTab(buildRefundWorkerUrl(), { active: false, setParent: false });
         debugLog('[打包监控] 已在后台打开退款核验工作页');
     }
 
