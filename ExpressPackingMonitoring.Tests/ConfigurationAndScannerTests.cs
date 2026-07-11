@@ -21,6 +21,11 @@ public sealed class ConfigurationAndScannerTests
         Assert.Contains("【退款核验专用】请勿操作", script);
         Assert.Contains("data-epm-refund-worker-overlay", script);
         Assert.Contains("请勿操作或关闭此页面", script);
+        Assert.Contains("claimRefundWorkerLease()", script);
+        Assert.Contains("ownedHeartbeat.token !== REFUND_WORKER_TOKEN", script);
+        Assert.Contains("closeDuplicateRefundWorker()", script);
+        Assert.Contains("const REFUND_WORKER_STALE_MS = 10 * 60 * 1000", script);
+        Assert.Contains("if (!event.persisted) releaseRefundWorkerLease()", script);
         Assert.Contains("if (!IS_REFUND_WORKER) return;", script);
         Assert.Contains("普通页面只负责订单推送，不再领取退款请求或切换筛选", script);
         Assert.Contains("writeRefundWorkerHeartbeat();", script);

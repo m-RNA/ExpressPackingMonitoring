@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         订单备注播报插件
 // @namespace    https://github.com/ExpressPackingMonitoring
-// @version      2.0
+// @version      2.1
 // @description  从快递助手批量打印页面提取订单备注和打印后退款状态，发送到监控工位，打包时自动播报或报警。
 // @author       ExpressPackingMonitoring
 // @icon         https://raw.githubusercontent.com/m-RNA/ExpressPackingMonitoring/main/ExpressPackingMonitoring/app.ico
@@ -39,10 +39,12 @@
     const REFUND_WORKER_HEARTBEAT_KEY = 'refund_worker_heartbeat';
     const REFUND_WORKER_OPEN_LOCK_KEY = 'refund_worker_open_lock';
     const REFUND_WORKER_HEARTBEAT_INTERVAL_MS = 2000;
-    const REFUND_WORKER_STALE_MS = 90000;
-    const REFUND_WORKER_OPEN_COOLDOWN_MS = 120000;
+    // Chrome 可能暂停长时间处于后台的标签页，不应因短时无心跳反复新建工作页。
+    const REFUND_WORKER_STALE_MS = 10 * 60 * 1000;
+    const REFUND_WORKER_OPEN_COOLDOWN_MS = 10 * 60 * 1000;
     const IS_REFUND_WORKER = new URL(location.href).searchParams.get(REFUND_WORKER_PARAM) === '1';
-    const CHANGELOG = 'v2.0：使用独立后台标签页核验打印后退款，不再切换用户正在操作的页面';
+    const REFUND_WORKER_TOKEN = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const CHANGELOG = 'v2.1：退款核验工作页增加唯一租约，自动关闭并发产生的重复页面';
     const DEBUG_LOG = false;
 
     let lastUserActivityAt = Date.now();
@@ -71,13 +73,62 @@
         return url.href;
     }
 
-    function writeRefundWorkerHeartbeat() {
-        GM_setValue(REFUND_WORKER_HEARTBEAT_KEY, Date.now());
+    function getRefundWorkerHeartbeat() {
+        const value = GM_getValue(REFUND_WORKER_HEARTBEAT_KEY, 0);
+        return typeof value === 'object' && value
+            ? { token: String(value.token || ''), time: Number(value.time || 0) }
+            : { token: '', time: Number(value || 0) };
     }
 
-    function startRefundWorkerHeartbeat() {
+    function writeRefundWorkerHeartbeat() {
+        GM_setValue(REFUND_WORKER_HEARTBEAT_KEY, { token: REFUND_WORKER_TOKEN, time: Date.now() });
+    }
+
+    function releaseRefundWorkerLease() {
+        const heartbeat = getRefundWorkerHeartbeat();
+        if (heartbeat.token === REFUND_WORKER_TOKEN) {
+            GM_setValue(REFUND_WORKER_HEARTBEAT_KEY, 0);
+        }
+    }
+
+    function closeDuplicateRefundWorker() {
+        document.title = '【重复的退款核验页】正在关闭';
+        window.close();
+        setTimeout(() => location.replace('about:blank'), 300);
+    }
+
+    async function claimRefundWorkerLease() {
+        const heartbeat = getRefundWorkerHeartbeat();
+        if (heartbeat.time > 0 && Date.now() - heartbeat.time < REFUND_WORKER_STALE_MS &&
+            heartbeat.token !== REFUND_WORKER_TOKEN) {
+            closeDuplicateRefundWorker();
+            return false;
+        }
+
         writeRefundWorkerHeartbeat();
-        setInterval(writeRefundWorkerHeartbeat, REFUND_WORKER_HEARTBEAT_INTERVAL_MS);
+        await delay(100 + Math.floor(Math.random() * 150));
+        const ownedHeartbeat = getRefundWorkerHeartbeat();
+        if (ownedHeartbeat.token !== REFUND_WORKER_TOKEN) {
+            closeDuplicateRefundWorker();
+            return false;
+        }
+        return true;
+    }
+
+    async function startRefundWorkerHeartbeat() {
+        if (!await claimRefundWorkerLease()) return false;
+
+        window.addEventListener('pagehide', event => {
+            if (!event.persisted) releaseRefundWorkerLease();
+        });
+        setInterval(() => {
+            const heartbeat = getRefundWorkerHeartbeat();
+            if (heartbeat.token && heartbeat.token !== REFUND_WORKER_TOKEN) {
+                closeDuplicateRefundWorker();
+                return;
+            }
+            writeRefundWorkerHeartbeat();
+        }, REFUND_WORKER_HEARTBEAT_INTERVAL_MS);
         const workerTitle = '【退款核验专用】请勿操作';
         const applyWorkerIdentity = () => {
             if (document.title !== workerTitle) document.title = workerTitle;
@@ -105,6 +156,7 @@
             pointerEvents: 'auto', userSelect: 'none'
         });
         document.body.appendChild(overlay);
+        return true;
     }
 
     async function ensureRefundWorker(force) {
@@ -112,8 +164,8 @@
         if (!force && !document.querySelector('tr.packageItem, select.extendSearchList')) return;
 
         const now = Date.now();
-        const heartbeat = Number(GM_getValue(REFUND_WORKER_HEARTBEAT_KEY, 0));
-        if (!force && heartbeat > 0 && now - heartbeat < REFUND_WORKER_STALE_MS) return;
+        const heartbeat = getRefundWorkerHeartbeat();
+        if (!force && heartbeat.time > 0 && now - heartbeat.time < REFUND_WORKER_STALE_MS) return;
 
         const currentLock = GM_getValue(REFUND_WORKER_OPEN_LOCK_KEY, null);
         if (!force && currentLock && now - Number(currentLock.time || 0) < REFUND_WORKER_OPEN_COOLDOWN_MS) return;
@@ -836,11 +888,11 @@
     });
 
     if (IS_REFUND_WORKER) {
-        startRefundWorkerHeartbeat();
         setTimeout(async () => {
+            if (!await startRefundWorkerHeartbeat()) return;
             await ensureMonitorAddress(true);
             startOrderLookupPolling();
-        }, 3000);
+        }, 0);
     } else {
         // 普通页面只负责订单推送，不再领取退款请求或切换筛选。
         setTimeout(async () => {
