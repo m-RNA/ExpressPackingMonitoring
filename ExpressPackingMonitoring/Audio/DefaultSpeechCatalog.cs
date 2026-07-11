@@ -12,8 +12,6 @@ namespace ExpressPackingMonitoring.Audio
         public const string SwitchToShipping = "切换发货";
         public const string SwitchToReturn = "切换退货";
         public const string CameraConnected = "摄像头已连接";
-        public const string CameraAwake = "摄像头已唤醒";
-        public const string CameraSleeping = "摄像头已休眠";
         public const string MotionDetected = "检测到画面运动，重置超时";
         public const string TestOrderReceived = "收到测试订单";
 
@@ -59,8 +57,6 @@ namespace ExpressPackingMonitoring.Audio
             new(SwitchToShipping, AlertVoiceStyle.Normal),
             new(SwitchToReturn, AlertVoiceStyle.Normal),
             new(CameraConnected, AlertVoiceStyle.Normal),
-            new(CameraAwake, AlertVoiceStyle.Normal),
-            new(CameraSleeping, AlertVoiceStyle.Normal),
             new(MotionDetected, AlertVoiceStyle.Normal),
             new(TestOrderReceived, AlertVoiceStyle.Normal),
 

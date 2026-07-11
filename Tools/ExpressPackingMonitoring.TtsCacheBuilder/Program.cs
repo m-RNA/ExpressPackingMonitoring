@@ -26,11 +26,13 @@ using var speech = new SpeechService(outputDirectory)
 
 int generated = 0;
 var failures = new List<string>();
+var expectedCachePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 foreach (DefaultSpeechPrompt prompt in DefaultSpeechCatalog.Prompts)
 {
     bool isWarning = prompt.VoiceStyle == AlertVoiceStyle.Warning;
-    if (speech.GenerateCacheNow(prompt.Text, isWarning))
+    if (speech.GenerateCacheNow(prompt.Text, isWarning, out string cachePath))
     {
+        expectedCachePaths.Add(Path.GetFullPath(cachePath));
         generated++;
         Console.WriteLine($"[{generated}/{DefaultSpeechCatalog.Prompts.Count}] {prompt.Text}");
     }
@@ -38,6 +40,18 @@ foreach (DefaultSpeechPrompt prompt in DefaultSpeechCatalog.Prompts)
     {
         failures.Add(prompt.Text);
         Console.Error.WriteLine($"Failed: {prompt.Text}");
+    }
+}
+
+foreach (string cachePath in Directory.GetFiles(outputDirectory, "*.*", SearchOption.TopDirectoryOnly))
+{
+    string extension = Path.GetExtension(cachePath);
+    if ((string.Equals(extension, ".mp3", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(extension, ".wav", StringComparison.OrdinalIgnoreCase)) &&
+        !expectedCachePaths.Contains(Path.GetFullPath(cachePath)))
+    {
+        File.Delete(cachePath);
+        Console.WriteLine($"Removed stale cache: {Path.GetFileName(cachePath)}");
     }
 }
 

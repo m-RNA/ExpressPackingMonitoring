@@ -2132,7 +2132,6 @@ namespace ExpressPackingMonitoring.ViewModels
                 _consecutiveRestartFailures = 0;
                 StartCamera();
                 ShowToast("摄像头已唤醒");
-                Speak(DefaultSpeechCatalog.CameraAwake);
                 Debug.WriteLine("[Idle] 用户活跃，摄像头唤醒");
             }
             else if (_consecutiveRestartFailures >= MaxConsecutiveRestartFailures)
@@ -2167,7 +2166,6 @@ namespace ExpressPackingMonitoring.ViewModels
                         IsCameraSleeping = true; // SetProperty 会同时更新字段并触发 PropertyChanged
                         VideoFrame = null;
                         ShowToast($"提示：摄像头已休眠（空闲{Config.CameraIdleMinutes}分钟）");
-                        Speak(DefaultSpeechCatalog.CameraSleeping);
                         Debug.WriteLine($"[Idle] 摄像头休眠: 空闲{idleMinutes:F1}分钟");
                         RuntimeLog.Info("MkvRecover", "Camera idle, start pending MKV conversion");
                         _mkvRecoveryTask = Task.Run(RecoverOrphanedMkvAsync);

@@ -728,8 +728,9 @@ namespace ExpressPackingMonitoring.Audio
             PreGenerateCacheInternal(text, isWarning);
         }
 
-        public bool GenerateCacheNow(string text, bool isWarning = false)
+        public bool GenerateCacheNow(string text, bool isWarning, out string cachePath)
         {
+            cachePath = string.Empty;
             if (!EnableAiTts || string.IsNullOrWhiteSpace(text))
                 return false;
 
@@ -738,7 +739,7 @@ namespace ExpressPackingMonitoring.Audio
             string voiceKey = GetCurrentVoiceKey(isWarning);
             string extension = IsEdgeTtsEngine ? ".mp3" : ".wav";
             string cacheKey = GetCacheKey(text, AiTtsSpeed, voiceKey, AiTtsEngine);
-            string cachePath = Path.Combine(_ttsCacheDir!, cacheKey + extension);
+            cachePath = Path.Combine(_ttsCacheDir!, cacheKey + extension);
             return File.Exists(cachePath) || TryGenerateAiCache(text, isWarning, cachePath);
         }
 

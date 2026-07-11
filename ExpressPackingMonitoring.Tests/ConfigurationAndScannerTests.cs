@@ -240,5 +240,7 @@ public sealed class ConfigurationAndScannerTests
                 DefaultSpeechCatalog.Prompts,
                 item => item.Text == prompt && item.VoiceStyle == AlertVoiceStyle.Warning);
         }
+        Assert.DoesNotContain(DefaultSpeechCatalog.Prompts, item => item.Text == "摄像头已唤醒");
+        Assert.DoesNotContain(DefaultSpeechCatalog.Prompts, item => item.Text == "摄像头已休眠");
     }
 }
