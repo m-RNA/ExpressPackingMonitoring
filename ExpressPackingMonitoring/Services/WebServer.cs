@@ -946,7 +946,7 @@ namespace ExpressPackingMonitoring.Services
             catch (Exception ex)
             {
                 Log($"HandleStorageOverview 异常: {ex.Message}");
-                SendJson(ctx, 500, new { error = "存储信息暂不可用" });
+                SendJson(ctx, 500, new { errorCode = "storage_unavailable", error = "存储信息暂不可用" });
             }
         }
 
@@ -1130,7 +1130,7 @@ namespace ExpressPackingMonitoring.Services
             if (record == null || !File.Exists(record.FilePath))
             {
                 Log($"HandlePlay: 文件不存在 filePath={record?.FilePath}");
-                SendJson(ctx, 404, new { error = "文件不存在" });
+                SendJson(ctx, 404, new { errorCode = "file_not_found", error = "文件不存在" });
                 return;
             }
 
@@ -1206,7 +1206,7 @@ namespace ExpressPackingMonitoring.Services
 
             if (_mkvConverter == null)
             {
-                SendJson(ctx, 500, new { error = "服务器未配置 MKV 转 MP4 转换器" });
+                SendJson(ctx, 500, new { errorCode = "transcoder_unavailable", error = "服务器未配置 MKV 转 MP4 转换器" });
                 return "";
             }
 
@@ -1272,7 +1272,7 @@ namespace ExpressPackingMonitoring.Services
             string ffmpegPath = AppPaths.FindFFmpeg();
             if (string.IsNullOrEmpty(ffmpegPath) || !File.Exists(ffmpegPath))
             {
-                SendJson(ctx, 500, new { error = "服务器未找到 ffmpeg.exe，无法转码播放" });
+                SendJson(ctx, 500, new { errorCode = "ffmpeg_not_found", error = "服务器未找到 ffmpeg.exe，无法转码播放" });
                 return;
             }
 
@@ -1482,7 +1482,7 @@ namespace ExpressPackingMonitoring.Services
             {
                 if (!TryFindVideoId(path, "/clip/preview", out long id))
                 {
-                    SendJson(ctx, 400, new { success = false, error = "视频 ID 无效" });
+                    SendJson(ctx, 400, new { success = false, errorCode = "invalid_video_id", error = "视频 ID 无效" });
                     return;
                 }
 
@@ -1503,7 +1503,7 @@ namespace ExpressPackingMonitoring.Services
             {
                 if (!TryFindVideoId(path, "/clip/prewarm", out long id))
                 {
-                    SendJson(ctx, 400, new { success = false, error = "视频 ID 无效" });
+                    SendJson(ctx, 400, new { success = false, errorCode = "invalid_video_id", error = "视频 ID 无效" });
                     return;
                 }
 
@@ -1524,7 +1524,7 @@ namespace ExpressPackingMonitoring.Services
             {
                 if (!TryFindVideoId(path, "/clip/timeline", out long id))
                 {
-                    SendJson(ctx, 400, new { success = false, error = "视频 ID 无效" });
+                    SendJson(ctx, 400, new { success = false, errorCode = "invalid_video_id", error = "视频 ID 无效" });
                     return;
                 }
 
@@ -1547,7 +1547,7 @@ namespace ExpressPackingMonitoring.Services
             {
                 if (!TryFindVideoId(path, "/clip/frame", out long id))
                 {
-                    SendJson(ctx, 400, new { success = false, error = "视频 ID 无效" });
+                    SendJson(ctx, 400, new { success = false, errorCode = "invalid_video_id", error = "视频 ID 无效" });
                     return;
                 }
 
@@ -1568,7 +1568,7 @@ namespace ExpressPackingMonitoring.Services
             {
                 if (!TryFindVideoId(path, "/clip", out long id))
                 {
-                    SendJson(ctx, 400, new { success = false, error = "视频 ID 无效" });
+                    SendJson(ctx, 400, new { success = false, errorCode = "invalid_video_id", error = "视频 ID 无效" });
                     return;
                 }
 
@@ -1589,7 +1589,7 @@ namespace ExpressPackingMonitoring.Services
             var task = _clipService.GetTask(taskId);
             if (task == null)
             {
-                SendJson(ctx, 404, new { success = false, status = "not_found", message = "剪辑任务不存在", downloadUrl = "" });
+                SendJson(ctx, 404, new { success = false, errorCode = "clip_task_not_found", status = "not_found", message = "剪辑任务不存在", downloadUrl = "" });
                 return;
             }
 
@@ -1602,7 +1602,7 @@ namespace ExpressPackingMonitoring.Services
             var task = _clipService.CancelTask(taskId);
             if (task == null)
             {
-                SendJson(ctx, 404, new { success = false, status = "not_found", message = "剪辑任务不存在", downloadUrl = "" });
+                SendJson(ctx, 404, new { success = false, errorCode = "clip_task_not_found", status = "not_found", message = "剪辑任务不存在", downloadUrl = "" });
                 return;
             }
 
@@ -1615,7 +1615,7 @@ namespace ExpressPackingMonitoring.Services
             string filePath = _clipService.ResolveClipPath(fileName);
             if (string.IsNullOrWhiteSpace(filePath))
             {
-                SendJson(ctx, 404, new { error = "剪辑文件不存在" });
+                SendJson(ctx, 404, new { errorCode = "clip_file_not_found", error = "剪辑文件不存在" });
                 return;
             }
 

@@ -7,6 +7,7 @@ using System.Windows.Interop;
 using System.Windows.Input;
 using System.Windows.Threading;
 using ExpressPackingMonitoring.Config;
+using ExpressPackingMonitoring.Localization;
 using ExpressPackingMonitoring.ViewModels;
 
 namespace ExpressPackingMonitoring.UI
@@ -174,7 +175,7 @@ namespace ExpressPackingMonitoring.UI
                     };
                 }
 
-                Title = $"快递打包监控 {AppVersion.Current}";
+                Title = AppLanguage.Format("Main.Title", AppVersion.Current);
 
                 Dispatcher.BeginInvoke(new Action(() =>
                 {

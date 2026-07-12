@@ -1,5 +1,6 @@
 using ExpressPackingMonitoring.Services;
 using System.Collections.Generic;
+using ExpressPackingMonitoring.Localization;
 
 namespace ExpressPackingMonitoring.Audio
 {
@@ -7,50 +8,52 @@ namespace ExpressPackingMonitoring.Audio
 
     public static class DefaultSpeechCatalog
     {
-        public const string StartRecording = "开始录制";
-        public const string StopRecording = "停止录制";
-        public const string SwitchToShipping = "发货模式";
-        public const string SwitchToReturn = "退货模式";
-        public const string CameraConnected = "摄像头已连接";
-        public const string MotionDetected = "画面运动，重置超时";
-        public const string TestOrderReceived = "收到测试订单";
+        public static string StartRecording => T("StartRecording");
+        public static string StopRecording => T("StopRecording");
+        public static string SwitchToShipping => T("SwitchToShipping");
+        public static string SwitchToReturn => T("SwitchToReturn");
+        public static string CameraConnected => T("CameraConnected");
+        public static string MotionDetected => T("MotionDetected");
+        public static string TestOrderReceived => T("TestOrderReceived");
 
-        public const string MissingOrderNumber = "没有单号";
-        public const string InvalidOrderNumber = "非法单号";
-        public const string DuplicateOrderNumber = "重复单号";
-        public const string RecordingHasNoOrderNumber = "未绑定单号，不会停录";
-        public const string OrderNumberMismatch = "单号不一致，不会停录";
-        public const string VideoFileTooSmall = "视频过小，已删除";
-        public const string RecordingTooShort = "录像过短，已丢弃";
-        public const string CameraNotReady = "摄像头未就绪";
-        public const string StoragePathNotWritable = "存储路径不可写";
-        public const string AudioRecordingStartFailed = "音频录制启动失败";
-        public const string RecordingFailed = "录制失败";
-        public const string ReconnectCamera = "请重新连接摄像头";
-        public const string CameraDisconnected = "摄像头断开，尝试连接中";
-        public const string CameraNotDetected = "未检测到摄像头";
-        public const string CameraReconnecting = "摄像头重新连接中";
-        public const string MotionTimeoutWarning = "画面即将静止超时";
-        public const string RecordingDurationWarning = "录制即将达到最大时长";
-        public const string MotionTimeoutStopped = "静止超时，停止录制";
-        public const string RecordingDurationStopped = "时长超时，停止录制";
+        public static string MissingOrderNumber => T("MissingOrderNumber");
+        public static string InvalidOrderNumber => T("InvalidOrderNumber");
+        public static string DuplicateOrderNumber => T("DuplicateOrderNumber");
+        public static string RecordingHasNoOrderNumber => T("RecordingHasNoOrderNumber");
+        public static string OrderNumberMismatch => T("OrderNumberMismatch");
+        public static string VideoFileTooSmall => T("VideoFileTooSmall");
+        public static string RecordingTooShort => T("RecordingTooShort");
+        public static string CameraNotReady => T("CameraNotReady");
+        public static string StoragePathNotWritable => T("StoragePathNotWritable");
+        public static string AudioRecordingStartFailed => T("AudioRecordingStartFailed");
+        public static string RecordingFailed => T("RecordingFailed");
+        public static string ReconnectCamera => T("ReconnectCamera");
+        public static string CameraDisconnected => T("CameraDisconnected");
+        public static string CameraNotDetected => T("CameraNotDetected");
+        public static string CameraReconnecting => T("CameraReconnecting");
+        public static string MotionTimeoutWarning => T("MotionTimeoutWarning");
+        public static string RecordingDurationWarning => T("RecordingDurationWarning");
+        public static string MotionTimeoutStopped => T("MotionTimeoutStopped");
+        public static string RecordingDurationStopped => T("RecordingDurationStopped");
 
-        public const string RefundWaitingSeller = "等待卖家处理退款";
-        public const string RefundWaitingBuyerReturn = "等待买家退货";
-        public const string RefundWaitingSellerConfirm = "等待卖家确认收到退货";
-        public const string RefundCompleted = "退款已完成";
-        public const string RefundClosed = "退款流程已关闭或取消";
+        public static string RefundWaitingSeller => T("RefundWaitingSeller");
+        public static string RefundWaitingBuyerReturn => T("RefundWaitingBuyerReturn");
+        public static string RefundWaitingSellerConfirm => T("RefundWaitingSellerConfirm");
+        public static string RefundCompleted => T("RefundCompleted");
+        public static string RefundClosed => T("RefundClosed");
 
         public static string CreatePrintedRefundAnnouncement(string statusText) =>
-            $"订单有退款，{statusText}，请核对";
+            AppLanguage.Format("Speech.PrintedRefund", statusText);
 
-        public static string CreateBuyerMessageAnnouncement(string message) => $"买家留言，{message}";
+        public static string CreateBuyerMessageAnnouncement(string message) => AppLanguage.Format("Speech.BuyerMessage", message);
 
-        public static string CreateSellerMemoAnnouncement(string memo) => $"卖家备注，{memo}";
+        public static string CreateSellerMemoAnnouncement(string memo) => AppLanguage.Format("Speech.SellerMemo", memo);
 
-        public static string CreateProductAnnouncement(string productInfo) => $"商品，{productInfo}";
+        public static string CreateProductAnnouncement(string productInfo) => AppLanguage.Format("Speech.Product", productInfo);
 
-        public static IReadOnlyList<DefaultSpeechPrompt> Prompts { get; } =
+        private static string T(string key) => AppLanguage.Get("Speech." + key);
+
+        public static IReadOnlyList<DefaultSpeechPrompt> Prompts =>
         [
             new(StartRecording, AlertVoiceStyle.Normal),
             new(StopRecording, AlertVoiceStyle.Normal),

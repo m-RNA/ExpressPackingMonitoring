@@ -20,8 +20,7 @@
     <PublishSingleFile>false</PublishSingleFile>
     <!-- 原生库保持可独立加载，优先保证 OpenCV/SQLite/LibVLC 等运行稳定性。 -->
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <!-- 只保留中文资源，去掉其他语言的卫星程序集 -->
-    <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages> 
+    <SatelliteResourceLanguages>en-US;zh-Hans</SatelliteResourceLanguages>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <GitCommitId Condition="'$(GitCommitId)' == ''">$(SourceRevisionId)</GitCommitId>
   </PropertyGroup>
@@ -104,6 +103,7 @@
     <Compile Include="Input\GlobalKeyboardHook.cs" />
     <Compile Include="Input\ScannerAutoSubmitPolicy.cs" />
     <Compile Include="Logging\RuntimeLog.cs" />
+    <Compile Include="Localization\AppLanguage.cs" />
     <Compile Include="Services\UpdateCheckOptions.cs" />
     <Compile Include="Services\UpdateCheckService.cs" />
     <Compile Include="Services\AlertService.cs" />

@@ -1,0 +1,452 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="设置" xml:space="preserve"><value>Settings</value></data>
+  <data name="取消" xml:space="preserve"><value>Cancel</value></data>
+  <data name="确定" xml:space="preserve"><value>OK</value></data>
+  <data name="保存" xml:space="preserve"><value>Save</value></data>
+  <data name="关闭" xml:space="preserve"><value>Close</value></data>
+  <data name="下一步" xml:space="preserve"><value>Next</value></data>
+  <data name="上一步" xml:space="preserve"><value>Back</value></data>
+  <data name="完成" xml:space="preserve"><value>Finish</value></data>
+  <data name="播放" xml:space="preserve"><value>Play</value></data>
+  <data name="暂停" xml:space="preserve"><value>Pause</value></data>
+  <data name="下载" xml:space="preserve"><value>Download</value></data>
+  <data name="剪辑" xml:space="preserve"><value>Clip</value></data>
+  <data name="跟随系统" xml:space="preserve"><value>Use system language</value></data>
+  <data name="简体中文" xml:space="preserve"><value>Simplified Chinese</value></data>
+  <data name="外观主题" xml:space="preserve"><value>Appearance</value></data>
+  <data name="浅色主题" xml:space="preserve"><value>Light</value></data>
+  <data name="深色主题" xml:space="preserve"><value>Dark</value></data>
+  <data name="设备与画面" xml:space="preserve"><value>Devices &amp; video</value></data>
+  <data name="面单放大" xml:space="preserve"><value>Label zoom</value></data>
+  <data name="录制控制" xml:space="preserve"><value>Recording</value></data>
+  <data name="存储管理" xml:space="preserve"><value>Storage</value></data>
+  <data name="AI 语音" xml:space="preserve"><value>AI voice</value></data>
+  <data name="局域网查看" xml:space="preserve"><value>LAN access</value></data>
+  <data name="扫码设置" xml:space="preserve"><value>Scanner</value></data>
+  <data name="高级设置" xml:space="preserve"><value>Advanced</value></data>
+  <data name="关于" xml:space="preserve"><value>About</value></data>
+  <data name="摄像头" xml:space="preserve"><value>Camera</value></data>
+  <data name="麦克风" xml:space="preserve"><value>Microphone</value></data>
+  <data name="语音提醒" xml:space="preserve"><value>Voice alerts</value></data>
+  <data name="摄像头监控工位" xml:space="preserve"><value>Camera monitoring station</value></data>
+  <data name="快递单打印工位" xml:space="preserve"><value>Shipping-label station</value></data>
+  <data name="录像列表" xml:space="preserve"><value>Recordings</value></data>
+  <data name="开始日期" xml:space="preserve"><value>Start date</value></data>
+  <data name="结束日期" xml:space="preserve"><value>End date</value></data>
+  <data name="订单号或文件名" xml:space="preserve"><value>Order number or file name</value></data>
+  <data name="加载中" xml:space="preserve"><value>Loading</value></data>
+  <data name="正在搜索..." xml:space="preserve"><value>Searching...</value></data>
+  <data name="连接失败" xml:space="preserve"><value>Connection failed</value></data>
+  <data name="开始录制" xml:space="preserve"><value>Start recording</value></data>
+  <data name="停止录制" xml:space="preserve"><value>Stop recording</value></data>
+  <data name="发货模式" xml:space="preserve"><value>Shipping mode</value></data>
+  <data name="退货模式" xml:space="preserve"><value>Return mode</value></data>
+  <data name="重新检测" xml:space="preserve"><value>Detect again</value></data>
+  <data name="检查更新" xml:space="preserve"><value>Check for updates</value></data>
+  <data name="播放选区" xml:space="preserve"><value>Play selection</value></data>
+  <data name="生成并下载" xml:space="preserve"><value>Create and download</value></data>
+  <data name="开始时间" xml:space="preserve"><value>Start time</value></data>
+  <data name="结束时间" xml:space="preserve"><value>End time</value></data>
+  <data name="剪辑后时长" xml:space="preserve"><value>Clip duration</value></data>
+  <data name="存储路径" xml:space="preserve"><value>Storage path</value></data>
+  <data name="预留空间" xml:space="preserve"><value>Reserved space</value></data>
+  <data name="选择磁盘分区" xml:space="preserve"><value>Select drive</value></data>
+  <data name="选择用于保存录像的磁盘" xml:space="preserve"><value>Select a drive for recordings</value></data>
+  <data name="语言" xml:space="preserve"><value>Language</value></data>
+  <data name="界面语言" xml:space="preserve"><value>Display language</value></data>
+  <data name="默认跟随 Windows 显示语言，修改后重启生效" xml:space="preserve"><value>Uses the Windows display language by default. Restart to apply changes</value></data>
+  <data name="RestartSaved" xml:space="preserve"><value>Language preference saved. Restart the application to apply it</value></data>
+  <data name="RestartRequired" xml:space="preserve"><value>Restart required</value></data>
+  <data name="Speech.StartRecording" xml:space="preserve"><value>Recording started</value></data>
+  <data name="Speech.StopRecording" xml:space="preserve"><value>Recording stopped</value></data>
+  <data name="Speech.SwitchToShipping" xml:space="preserve"><value>Shipping mode</value></data>
+  <data name="Speech.SwitchToReturn" xml:space="preserve"><value>Return mode</value></data>
+  <data name="Speech.CameraConnected" xml:space="preserve"><value>Camera connected</value></data>
+  <data name="Speech.MotionDetected" xml:space="preserve"><value>Motion detected. Timeout reset</value></data>
+  <data name="Speech.TestOrderReceived" xml:space="preserve"><value>Test order received</value></data>
+  <data name="Speech.MissingOrderNumber" xml:space="preserve"><value>No order number</value></data>
+  <data name="Speech.InvalidOrderNumber" xml:space="preserve"><value>Invalid order number</value></data>
+  <data name="Speech.DuplicateOrderNumber" xml:space="preserve"><value>Duplicate order number</value></data>
+  <data name="Speech.RecordingHasNoOrderNumber" xml:space="preserve"><value>No order number is linked. Recording will continue</value></data>
+  <data name="Speech.OrderNumberMismatch" xml:space="preserve"><value>Order number does not match. Recording will continue</value></data>
+  <data name="Speech.VideoFileTooSmall" xml:space="preserve"><value>Video was too small and has been deleted</value></data>
+  <data name="Speech.RecordingTooShort" xml:space="preserve"><value>Recording was too short and has been discarded</value></data>
+  <data name="Speech.CameraNotReady" xml:space="preserve"><value>Camera is not ready</value></data>
+  <data name="Speech.StoragePathNotWritable" xml:space="preserve"><value>Storage location is not writable</value></data>
+  <data name="Speech.AudioRecordingStartFailed" xml:space="preserve"><value>Audio recording failed to start</value></data>
+  <data name="Speech.RecordingFailed" xml:space="preserve"><value>Recording failed</value></data>
+  <data name="Speech.ReconnectCamera" xml:space="preserve"><value>Please reconnect the camera</value></data>
+  <data name="Speech.CameraDisconnected" xml:space="preserve"><value>Camera disconnected. Reconnecting</value></data>
+  <data name="Speech.CameraNotDetected" xml:space="preserve"><value>No camera detected</value></data>
+  <data name="Speech.CameraReconnecting" xml:space="preserve"><value>Reconnecting camera</value></data>
+  <data name="Speech.MotionTimeoutWarning" xml:space="preserve"><value>Motion timeout is approaching</value></data>
+  <data name="Speech.RecordingDurationWarning" xml:space="preserve"><value>Maximum recording duration is approaching</value></data>
+  <data name="Speech.MotionTimeoutStopped" xml:space="preserve"><value>Motion timeout. Recording stopped</value></data>
+  <data name="Speech.RecordingDurationStopped" xml:space="preserve"><value>Maximum duration reached. Recording stopped</value></data>
+  <data name="Speech.RefundWaitingSeller" xml:space="preserve"><value>Waiting for the seller to process the refund</value></data>
+  <data name="Speech.RefundWaitingBuyerReturn" xml:space="preserve"><value>Waiting for the buyer to return the item</value></data>
+  <data name="Speech.RefundWaitingSellerConfirm" xml:space="preserve"><value>Waiting for the seller to confirm the returned item</value></data>
+  <data name="Speech.RefundCompleted" xml:space="preserve"><value>Refund completed</value></data>
+  <data name="Speech.RefundClosed" xml:space="preserve"><value>Refund closed or cancelled</value></data>
+  <data name="Speech.PrintedRefund" xml:space="preserve"><value>This order has a refund. {0}. Please verify it</value></data>
+  <data name="Speech.BuyerMessage" xml:space="preserve"><value>Buyer message. {0}</value></data>
+  <data name="Speech.SellerMemo" xml:space="preserve"><value>Seller note. {0}</value></data>
+  <data name="Speech.Product" xml:space="preserve"><value>Product. {0}</value></data>
+  <data name="安装订单备注插件" xml:space="preserve"><value>Install the order notes plugin</value></data>
+  <data name="包含在线播放转码、剪辑预览和剪辑下载文件" xml:space="preserve"><value>Contains online playback transcoding, clip preview and clip download files</value></data>
+  <data name="保护录像网页" xml:space="preserve"><value>Protect recording page</value></data>
+  <data name="倍率越高，面单越清楚，但画面范围越小" xml:space="preserve"><value>The higher the magnification, the clearer the list, but the smaller the picture range.</value></data>
+  <data name="本项目使用 AGPL-3.0 License 开源" xml:space="preserve"><value>This project is open source using AGPL-3.0 License</value></data>
+  <data name="播报买家留言" xml:space="preserve"><value>Broadcast buyer's message</value></data>
+  <data name="播报买家留言和卖家备注" xml:space="preserve"><value>Report buyer messages and seller notes</value></data>
+  <data name="播报卖家备注" xml:space="preserve"><value>Broadcast seller notes</value></data>
+  <data name="播报商品信息" xml:space="preserve"><value>Broadcast product information</value></data>
+  <data name="磁盘至少保留多少 GB 不给录像使用。低于安全值时会自动恢复，避免系统或其他软件没空间" xml:space="preserve"><value>The minimum number of GB that should be reserved on the disk and not used for recording. It will automatically recover when it is lower than the safe value to prevent the system or other software from running out of space.</value></data>
+  <data name="打包监控程序官方开源软件适用中小电商" xml:space="preserve"><value>Official open-source packing monitor for small and medium online stores</value></data>
+  <data name="打包结束后画面不动，就自动停止录像" xml:space="preserve"><value>After the packaging is completed, if the screen does not move, the recording will be automatically stopped.</value></data>
+  <data name="打包时自动播报买家留言和卖家备注，避免漏看特殊要求" xml:space="preserve"><value>Automatically broadcast buyer messages and seller notes when packaging to avoid missing special requirements</value></data>
+  <data name="打开 GitHub 仓库，查看源码、发布记录和问题反馈" xml:space="preserve"><value>Open the GitHub repository to view source code, release records and problem feedback</value></data>
+  <data name="打开仓库" xml:space="preserve"><value>Open repository</value></data>
+  <data name="打开软件后后台检查，有新版本时提示下载" xml:space="preserve"><value>After opening the software, it will check in the background and prompt you to download when there is a new version.</value></data>
+  <data name="打印后退款报警" xml:space="preserve"><value>Refund alarm after printing</value></data>
+  <data name="单个录像超过这个时间就自动停止" xml:space="preserve"><value>If a single recording exceeds this time, it will automatically stop</value></data>
+  <data name="单号判断规则" xml:space="preserve"><value>Order number validation</value></data>
+  <data name="单字符间隔上限" xml:space="preserve"><value>Maximum character interval</value></data>
+  <data name="底层仍保存为 CQP。CQP 数值越小越清晰、文件越大；这里用更直观的方向显示" xml:space="preserve"><value>The underlying layer is still saved as CQP. The smaller the CQP value, the clearer and larger the file; here it is displayed in a more intuitive direction.</value></data>
+  <data name="电脑开机后自动启动本程序" xml:space="preserve"><value>This program will automatically start after the computer is turned on.</value></data>
+  <data name="调试日志" xml:space="preserve"><value>Debug logging</value></data>
+  <data name="调整播报快慢" xml:space="preserve"><value>Adjust the broadcast speed</value></data>
+  <data name="订单备注播报" xml:space="preserve"><value>Order-note announcements</value></data>
+  <data name="动画持续时间" xml:space="preserve"><value>animation duration</value></data>
+  <data name="端口是浏览器访问服务时使用的数字，例如 http://电脑IP:端口" xml:space="preserve"><value>The port is the number used by the browser to access the service, such as http://computer IP:port</value></data>
+  <data name="断句关键词" xml:space="preserve"><value>Pause keywords</value></data>
+  <data name="多数连续字符间隔低于该值时，也可认为是扫码枪输入" xml:space="preserve"><value>When the interval between most consecutive characters is lower than this value, it can also be considered as input from a code scanner.</value></data>
+  <data name="二次修改分发时请保留原作者署名、版权声明和许可证信息" xml:space="preserve"><value>Please retain the original author's signature, copyright statement and license information when making secondary modifications and distribution.</value></data>
+  <data name="发货或退货扫到退款单时继续录像并按退款状态连续报警" xml:space="preserve"><value>When a refund order is scanned for shipment or return, the video will continue to be recorded and the alarm will be sent continuously according to the refund status.</value></data>
+  <data name="范围大" xml:space="preserve"><value>Wider view</value></data>
+  <data name="方便事后确认这段录像对应哪个订单" xml:space="preserve"><value>It is convenient to confirm later which order this video corresponds to.</value></data>
+  <data name="防止单个录像录得太久" xml:space="preserve"><value>Prevent a single video from being recorded for too long</value></data>
+  <data name="防止扫码枪连续触发太快" xml:space="preserve"><value>Prevent the code scanner from triggering too quickly continuously</value></data>
+  <data name="访问录像、播放和剪辑时验证专用链接，订单插件不受影响" xml:space="preserve"><value>Verify the dedicated link when accessing recording, playback and editing, and the order plug-in will not be affected</value></data>
+  <data name="访问密钥会包含在复制的完整访问链接中，请不要发送给无关人员" xml:space="preserve"><value>The access key will be included in the copied full access link, please do not send it to unrelated persons.</value></data>
+  <data name="放大倍数" xml:space="preserve"><value>Zoom level</value></data>
+  <data name="放大画面保持多久后恢复" xml:space="preserve"><value>How long does the zoomed-in screen last before it resumes?</value></data>
+  <data name="放大前等待" xml:space="preserve"><value>Wait before zooming in</value></data>
+  <data name="放大停留时间" xml:space="preserve"><value>Zoom dwell time</value></data>
+  <data name="分辨率" xml:space="preserve"><value>Resolution</value></data>
+  <data name="负数表示让音频提前，正数表示让音频延后；通常保持 0" xml:space="preserve"><value>A negative number means to advance the audio, a positive number means to delay the audio; usually kept at 0</value></data>
+  <data name="个人学习、自家店铺自用可以免费使用" xml:space="preserve"><value>It can be used free of charge for personal study and self-use in your own store.</value></data>
+  <data name="更短" xml:space="preserve"><value>shorter</value></data>
+  <data name="更多缓存" xml:space="preserve"><value>more cache</value></data>
+  <data name="更久在线" xml:space="preserve"><value>Stay active longer</value></data>
+  <data name="更快" xml:space="preserve"><value>faster</value></data>
+  <data name="更快休眠" xml:space="preserve"><value>Sleep sooner</value></data>
+  <data name="更宽松" xml:space="preserve"><value>looser</value></data>
+  <data name="更灵敏" xml:space="preserve"><value>More sensitive</value></data>
+  <data name="更慢" xml:space="preserve"><value>slower</value></data>
+  <data name="更清晰" xml:space="preserve"><value>Higher quality</value></data>
+  <data name="更柔和" xml:space="preserve"><value>softer</value></data>
+  <data name="更省空间" xml:space="preserve"><value>Smaller files</value></data>
+  <data name="更提前" xml:space="preserve"><value>More in advance</value></data>
+  <data name="更晚" xml:space="preserve"><value>later</value></data>
+  <data name="更稳妥" xml:space="preserve"><value>Safer</value></data>
+  <data name="更延后" xml:space="preserve"><value>Later</value></data>
+  <data name="更严格" xml:space="preserve"><value>stricter</value></data>
+  <data name="更早" xml:space="preserve"><value>earlier</value></data>
+  <data name="更长" xml:space="preserve"><value>longer</value></data>
+  <data name="工位用途" xml:space="preserve"><value>Workstation role</value></data>
+  <data name="过渡时长" xml:space="preserve"><value>Transition duration</value></data>
+  <data name="合并 MKV" xml:space="preserve"><value>Merge MKV files</value></data>
+  <data name="画面不动超过这个时间后停止录像" xml:space="preserve"><value>Stop recording after the screen remains motionless for more than this time</value></data>
+  <data name="画面流畅度" xml:space="preserve"><value>Frame rate</value></data>
+  <data name="画面没变化时自动结束录像" xml:space="preserve"><value>Automatically end recording when the picture does not change</value></data>
+  <data name="画质与文件大小" xml:space="preserve"><value>Quality and file size</value></data>
+  <data name="缓存包含在线播放转码、剪辑预览图和剪辑下载文件，超出上限后会自动清理最旧文件" xml:space="preserve"><value>The cache contains online playback transcoding, clip previews, and clip download files. The oldest files will be automatically cleared after the upper limit is exceeded.</value></data>
+  <data name="建议与普通播报使用不同角色，便于区分警告提示" xml:space="preserve"><value>It is recommended to use different roles from ordinary broadcasts to facilitate the differentiation of warning prompts.</value></data>
+  <data name="仅限同码停录" xml:space="preserve"><value>Only stop recording with the same code</value></data>
+  <data name="警告播报声线" xml:space="preserve"><value>Warning voice</value></data>
+  <data name="静止超时" xml:space="preserve"><value>Motion timeout</value></data>
+  <data name="开机自启动" xml:space="preserve"><value>Start at boot</value></data>
+  <data name="开启后，超时、停录和订单信息会用语音提醒" xml:space="preserve"><value>When turned on, voice reminders will be given for timeouts, recording stops and order information.</value></data>
+  <data name="开启后放大和恢复时会有平滑动画" xml:space="preserve"><value>When turned on, there will be smooth animation when zooming in and restoring.</value></data>
+  <data name="开始合并" xml:space="preserve"><value>Start merging</value></data>
+  <data name="开始录制后等待多久再放大" xml:space="preserve"><value>How long to wait after starting recording before zooming in</value></data>
+  <data name="可跟随系统，或固定为浅色 / 深色主题" xml:space="preserve"><value>Can follow the system or be fixed to light/dark theme</value></data>
+  <data name="空闲超过这个时间后关闭摄像头" xml:space="preserve"><value>Turn off the camera after being idle for longer than this time</value></data>
+  <data name="空闲超时" xml:space="preserve"><value>Idle timeout</value></data>
+  <data name="空闲时省资源，有操作时再恢复" xml:space="preserve"><value>Save resources when idle and resume when operations are required</value></data>
+  <data name="快递打包监控" xml:space="preserve"><value>Express packaging monitoring</value></data>
+  <data name="快要自动停止录像前，提前多久提醒" xml:space="preserve"><value>How long to remind before automatically stopping recording</value></data>
+  <data name="离线语音" xml:space="preserve"><value>Offline voice</value></data>
+  <data name="连续字符平均间隔低于该值时，认为更像扫码枪高速输入" xml:space="preserve"><value>When the average interval between consecutive characters is lower than this value, it is considered more like high-speed input with a code scanner.</value></data>
+  <data name="联网语音" xml:space="preserve"><value>Online voice</value></data>
+  <data name="浏览器访问用的端口，保存后自动重启服务" xml:space="preserve"><value>The port used for browser access, and the service will be automatically restarted after saving.</value></data>
+  <data name="录像保存位置" xml:space="preserve"><value>Recording locations</value></data>
+  <data name="录像编码异常时，用它重新检测电脑能力" xml:space="preserve"><value>When the video encoding is abnormal, use it to re-test the computer's capabilities.</value></data>
+  <data name="录像会按列表顺序保存。某个磁盘只剩下预留空间时，会自动换到下一个磁盘；系统盘默认至少预留 30GB 或 10%，其他磁盘至少预留 20GB 或 5%，以较大值为准" xml:space="preserve"><value>Videos will be saved in list order. When a disk only has reserved space left, it will be automatically changed to the next disk; by default, at least 30GB or 10% is reserved for the system disk, and at least 20GB or 5% is reserved for other disks, whichever is larger.</value></data>
+  <data name="录像网页访问密钥" xml:space="preserve"><value>Recording page access key</value></data>
+  <data name="录制开始时先放大中心画面，停留一会儿后再恢复" xml:space="preserve"><value>When recording starts, zoom in on the center image, stay there for a while, and then restore it.</value></data>
+  <data name="录制声音" xml:space="preserve"><value>Record sound</value></data>
+  <data name="面单大" xml:space="preserve"><value>Larger label</value></data>
+  <data name="配置录像保存位置，以及每个磁盘要留给系统和其他软件的空间" xml:space="preserve"><value>Configure the recording storage location and the space on each disk to be reserved for the system and other software</value></data>
+  <data name="配置向导" xml:space="preserve"><value>Configuration wizard</value></data>
+  <data name="平滑过渡" xml:space="preserve"><value>smooth transition</value></data>
+  <data name="平均输入间隔" xml:space="preserve"><value>Average input interval</value></data>
+  <data name="普通播报声线" xml:space="preserve"><value>Standard voice</value></data>
+  <data name="启用局域网查看" xml:space="preserve"><value>Enable LAN access</value></data>
+  <data name="启用录像水印" xml:space="preserve"><value>Enable recording watermark</value></data>
+  <data name="启用面单放大" xml:space="preserve"><value>Enable label zoom</value></data>
+  <data name="清除已保存的显卡编码检测结果，下次重新判断可用编码器" xml:space="preserve"><value>Clear the saved graphics card encoding detection results and re-judge the available encoders next time</value></data>
+  <data name="全局键盘监听" xml:space="preserve"><value>Global keyboard listener</value></data>
+  <data name="软件在后台也能扫码开始录制" xml:space="preserve"><value>The software can also scan the QR code to start recording in the background.</value></data>
+  <data name="扫码间隔保护" xml:space="preserve"><value>Scan cooldown</value></data>
+  <data name="扫码内容至少达到这个长度才会提交。全局键盘监听和无回车窗口内识别都会用到" xml:space="preserve"><value>The scanned code content will be submitted if it reaches at least this length. Both global keyboard monitoring and recognition within a carriage-enter-free window are used.</value></data>
+  <data name="扫码枪可能连续发送多次内容，这里用于避免重复触发录制切换" xml:space="preserve"><value>The code scanner may send content multiple times in succession. This is used to avoid triggering the recording switch repeatedly.</value></data>
+  <data name="扫码枪没开自动回车时打开。需要软件窗口在前台" xml:space="preserve"><value>Enable when the scanner does not send Enter. The application window must be in the foreground</value></data>
+  <data name="扫码枪没有自动回车时使用。只在软件窗口内识别，避免影响其他程序输入" xml:space="preserve"><value>Use when the scanner does not send Enter. Recognition is limited to this window so other applications are unaffected</value></data>
+  <data name="扫码最小长度" xml:space="preserve"><value>Minimum scan length</value></data>
+  <data name="扫描残留的 MKV 和 WAV，合并为 MP4" xml:space="preserve"><value>Scan residual MKV and WAV and merge into MP4</value></data>
+  <data name="商品名太长时，用这些词自动停顿" xml:space="preserve"><value>When the product name is too long, use these words to automatically pause</value></data>
+  <data name="上移" xml:space="preserve"><value>Move up</value></data>
+  <data name="少于这个时长的视频不保存" xml:space="preserve"><value>Videos shorter than this length will not be saved</value></data>
+  <data name="声音同步微调" xml:space="preserve"><value>Audio sync adjustment</value></data>
+  <data name="省空间" xml:space="preserve"><value>Smaller files</value></data>
+  <data name="使用前请自行确认你的使用方式是否满足 AGPL-3.0 要求" xml:space="preserve"><value>Before use, please confirm whether your usage meets the requirements of AGPL-3.0</value></data>
+  <data name="使用在线语音时的警告提示声音" xml:space="preserve"><value>Warning sound when using online voice</value></data>
+  <data name="使用在线语音时的普通提示声音" xml:space="preserve"><value>Normal prompt sound when using online voice</value></data>
+  <data name="视频编码格式" xml:space="preserve"><value>Video encoding format</value></data>
+  <data name="视频文件被清理后，列表里仍显示这条记录" xml:space="preserve"><value>After the video file is cleaned, this record is still displayed in the list</value></data>
+  <data name="输入一段文字，试听当前播报效果" xml:space="preserve"><value>Enter a piece of text to listen to the current broadcast effect</value></data>
+  <data name="数值越小，对手动输入越严格" xml:space="preserve"><value>The smaller the value, the stricter the manual input</value></data>
+  <data name="太短的不当作单号，防止误触发" xml:space="preserve"><value>If it is too short, it will not be regarded as an order number to prevent false triggering.</value></data>
+  <data name="太短的视频自动丢弃" xml:space="preserve"><value>Videos that are too short will be automatically discarded</value></data>
+  <data name="提前提醒时间" xml:space="preserve"><value>Reminder time in advance</value></data>
+  <data name="添加磁盘" xml:space="preserve"><value>Add drive</value></data>
+  <data name="停顿越短越灵敏，越长越不易误触" xml:space="preserve"><value>The shorter the pause, the more sensitive it is; the longer the pause, the less likely it is to accidentally touch.</value></data>
+  <data name="停止" xml:space="preserve"><value>Stop</value></data>
+  <data name="同一网络里的电脑或手机可以用浏览器查看录像，首次开启可能请求管理员权限" xml:space="preserve"><value>Computers or mobile phones on the same network can use a browser to view the recording. Administrator permissions may be required when opening it for the first time.</value></data>
+  <data name="网页访问端口" xml:space="preserve"><value>Web access port</value></data>
+  <data name="网页临时缓存上限" xml:space="preserve"><value>Web page temporary cache limit</value></data>
+  <data name="往右更清晰，往左更省空间" xml:space="preserve"><value>Move to the right for clearer view, move to the left to save space.</value></data>
+  <data name="无回车窗口内识别" xml:space="preserve"><value>In-window recognition without Enter</value></data>
+  <data name="无回车窗口内识别时，最后一次输入后超过这个时间没有新字符，才判断一次扫码是否完成" xml:space="preserve"><value>Without Enter, a scan is submitted only after no new characters arrive for this period</value></data>
+  <data name="系统语音" xml:space="preserve"><value>System voice</value></data>
+  <data name="系统语音不需要网络；联网语音声音更自然；离线语音使用本地模型，需要额外运行依赖" xml:space="preserve"><value>System voice does not require a network; networked voice sounds more natural; offline voice uses a local model and requires additional running dependencies.</value></data>
+  <data name="下移" xml:space="preserve"><value>Move down</value></data>
+  <data name="显示已清理记录" xml:space="preserve"><value>Show cleared records</value></data>
+  <data name="限制录像时长" xml:space="preserve"><value>Limit recording duration</value></data>
+  <data name="项目仓库" xml:space="preserve"><value>Project repository</value></data>
+  <data name="小于该大小的视频会自动删除；填 0 表示不限制" xml:space="preserve"><value>Videos smaller than this size will be automatically deleted; fill in 0 to indicate no limit</value></data>
+  <data name="修改后对外分发或提供网络服务时，需要遵守 AGPL-3.0 的开源义务" xml:space="preserve"><value>When distributing or providing network services after modification, you need to comply with the open source obligations of AGPL-3.0</value></data>
+  <data name="需要保留现场声音时开启" xml:space="preserve"><value>Turn on when you need to preserve live sound</value></data>
+  <data name="选择录制声音使用的麦克风" xml:space="preserve"><value>Select the microphone used to record sound</value></data>
+  <data name="选择拍摄打包过程的摄像头" xml:space="preserve"><value>Choose a camera to capture the packaging process</value></data>
+  <data name="选择提醒声音使用系统语音、联网语音还是离线语音" xml:space="preserve"><value>Choose whether the reminder sound uses system voice, online voice, or offline voice</value></data>
+  <data name="选择这台电脑负责录像还是打印" xml:space="preserve"><value>Choose whether this computer is responsible for recording or printing</value></data>
+  <data name="移除选中" xml:space="preserve"><value>Remove selected</value></data>
+  <data name="应用" xml:space="preserve"><value>Apply</value></data>
+  <data name="影响录像体积和播放兼容性" xml:space="preserve"><value>Affects video size and playback compatibility</value></data>
+  <data name="硬件加速" xml:space="preserve"><value>Hardware acceleration</value></data>
+  <data name="用显卡帮忙录像，降低电脑占用" xml:space="preserve"><value>Use a graphics card to help record and reduce computer usage</value></data>
+  <data name="用于兼容偶尔有抖动的扫码枪" xml:space="preserve"><value>For compatibility with scanners that occasionally jitter</value></data>
+  <data name="用于判断扫码内容是不是有效单号" xml:space="preserve"><value>Used to determine whether the scanned code is a valid order number</value></data>
+  <data name="用于正常订单提示" xml:space="preserve"><value>Used for normal order prompts</value></data>
+  <data name="用于重复单号、非法单号等提醒" xml:space="preserve"><value>Used to remind duplicate order numbers, illegal order numbers, etc.</value></data>
+  <data name="优先使用显卡进行视频编码，可降低 CPU 占用；如果录像异常，可改为自动或 CPU" xml:space="preserve"><value>Prioritize using the graphics card for video encoding, which can reduce CPU usage; if the recording is abnormal, it can be changed to automatic or CPU</value></data>
+  <data name="语速" xml:space="preserve"><value>Speech rate</value></data>
+  <data name="语音引擎" xml:space="preserve"><value>Voice engine</value></data>
+  <data name="语音预览" xml:space="preserve"><value>Voice preview</value></data>
+  <data name="越高越流畅，也更占空间" xml:space="preserve"><value>The higher it is, the smoother it is, and it also takes up more space.</value></data>
+  <data name="越高越清晰，文件也越大" xml:space="preserve"><value>The higher it is, the clearer it is and the larger the file is.</value></data>
+  <data name="再次扫描同一单号才停止录像，扫到其他单号不停止" xml:space="preserve"><value>Scan the same order number again to stop recording. Scan other order numbers and it will not stop.</value></data>
+  <data name="在线警告声音" xml:space="preserve"><value>Online warning sound</value></data>
+  <data name="在线普通声音" xml:space="preserve"><value>Online normal voice</value></data>
+  <data name="长时间不用时关闭摄像头" xml:space="preserve"><value>Turn off the camera when not in use for an extended period of time</value></data>
+  <data name="正则表达式用于过滤非法扫码内容。不了解正则时请不要修改" xml:space="preserve"><value>Regular expressions are used to filter illegal code scanning content. Please do not modify it if you do not understand the regular rules.</value></data>
+  <data name="只有声音和画面不同步时再调整" xml:space="preserve"><value>Only adjust if the sound and picture are out of sync</value></data>
+  <data name="至少 16 个字符；留空会自动生成，修改后旧链接立即失效" xml:space="preserve"><value>At least 16 characters; if left blank, it will be automatically generated. After modification, the old link will become invalid immediately.</value></data>
+  <data name="重新检查打包模式、摄像头、麦克风和扫码枪" xml:space="preserve"><value>Recheck packaging mode, camera, microphone and scanner</value></data>
+  <data name="重新运行" xml:space="preserve"><value>Rerun</value></data>
+  <data name="重置编码器检测" xml:space="preserve"><value>Reset encoder detection</value></data>
+  <data name="自动检查更新" xml:space="preserve"><value>Automatically check for updates</value></data>
+  <data name="自动提交停顿" xml:space="preserve"><value>Auto-submit pause</value></data>
+  <data name="最大时长" xml:space="preserve"><value>Maximum duration</value></data>
+  <data name="最小文件大小" xml:space="preserve"><value>Minimum file size</value></data>
+  <data name="Edge 声线来自微软在线语音服务，网络不可用时会回退到系统语音" xml:space="preserve"><value>Edge voice comes from Microsoft's online voice service and will fall back to system voice when the network is unavailable.</value></data>
+  <data name="H.265/HEVC 体积更小，但部分电脑或浏览器可能无法直接播放；H.264 兼容性更好" xml:space="preserve"><value>H.265/HEVC is smaller, but some computers or browsers may not be able to play it directly; H.264 has better compatibility</value></data>
+  <data name="Kokoro 声线编号由本地模型决定；不了解时保持默认即可" xml:space="preserve"><value>Kokoro's voice number is determined by the local model; if you don't know, just keep the default</value></data>
+  <data name="分钟" xml:space="preserve"><value> min</value></data>
+  <data name="秒" xml:space="preserve"><value> sec</value></data>
+  <data name="倍" xml:space="preserve"><value>x</value></data>
+  <data name="位" xml:space="preserve"><value> characters</value></data>
+  <data name="版本" xml:space="preserve"><value>Version</value></data>
+  <data name="1. 选择打包模式" xml:space="preserve"><value>1. Select packaging mode</value></data>
+  <data name="2. 选择摄像头" xml:space="preserve"><value>2. Select camera</value></data>
+  <data name="3. 选择麦克风" xml:space="preserve"><value>3. Select microphone</value></data>
+  <data name="4. 测试扫码枪" xml:space="preserve"><value>4. Test the code scanner</value></data>
+  <data name="5. 完成" xml:space="preserve"><value>5. Complete</value></data>
+  <data name="按日" xml:space="preserve"><value>Daily</value></data>
+  <data name="按月" xml:space="preserve"><value>Monthly</value></data>
+  <data name="按这台电脑连接的硬件选择。普通查看视频的电脑，可直接用浏览器访问监控地址。" xml:space="preserve"><value>Select the hardware this computer is connected to. For ordinary computers that view videos, you can directly access the monitoring address using a browser.</value></data>
+  <data name="按周" xml:space="preserve"><value>Weekly</value></data>
+  <data name="按最基础的步骤确认打包模式、摄像头、麦克风和扫码枪。" xml:space="preserve"><value>Follow the most basic steps to confirm the packaging mode, camera, microphone and code scanner.</value></data>
+  <data name="把快递助手里的买家留言、卖家备注发送到监控工位，打包时自动播报。" xml:space="preserve"><value>Send the buyer's message and seller's remarks in the express assistant to the monitoring station, and automatically broadcast them when packaging.</value></data>
+  <data name="本月" xml:space="preserve"><value>This month</value></data>
+  <data name="本周" xml:space="preserve"><value>This week</value></data>
+  <data name="播放/暂停" xml:space="preserve"><value>play/pause</value></data>
+  <data name="测试发送" xml:space="preserve"><value>Test sending</value></data>
+  <data name="测试扫码枪" xml:space="preserve"><value>Test scanner</value></data>
+  <data name="查看维度: " xml:space="preserve"><value>View dimensions:</value></data>
+  <data name="打包监控" xml:space="preserve"><value>Packing Monitor</value></data>
+  <data name="打包件数" xml:space="preserve"><value>Packed items</value></data>
+  <data name="打包数据深度分析" xml:space="preserve"><value>In-depth analysis of packaged data</value></data>
+  <data name="打包总件数" xml:space="preserve"><value>Total packed items</value></data>
+  <data name="打开网页并复制地址" xml:space="preserve"><value>Open page and copy address</value></data>
+  <data name="大小" xml:space="preserve"><value>size</value></data>
+  <data name="单号精准搜索:" xml:space="preserve"><value>Accurate search for single number:</value></data>
+  <data name="等待扫码内容..." xml:space="preserve"><value>Waiting for scanning content...</value></data>
+  <data name="点击切换模式" xml:space="preserve"><value>Click to switch modes</value></data>
+  <data name="点击任意位置或扫码唤醒" xml:space="preserve"><value>Click anywhere or scan the QR code to wake up</value></data>
+  <data name="定位文件" xml:space="preserve"><value>Show in folder</value></data>
+  <data name="发现新版本" xml:space="preserve"><value>Update available</value></data>
+  <data name="更新内容：" xml:space="preserve"><value>Updates:</value></data>
+  <data name="回放" xml:space="preserve"><value>Playback</value></data>
+  <data name="件" xml:space="preserve"><value> items</value></data>
+  <data name="今日:" xml:space="preserve"><value>Today:</value></data>
+  <data name="局域网查看视频" xml:space="preserve"><value>View video on LAN</value></data>
+  <data name="聚合方式: " xml:space="preserve"><value>Aggregation method:</value></data>
+  <data name="累计工作时长" xml:space="preserve"><value>Total working time</value></data>
+  <data name="历史录像检索与回放" xml:space="preserve"><value>Historical video retrieval and playback</value></data>
+  <data name="连接" xml:space="preserve"><value>connect</value></data>
+  <data name="连续打包模式" xml:space="preserve"><value>Continuous packing mode</value></data>
+  <data name="录像日期范围:" xml:space="preserve"><value>Recording date range:</value></data>
+  <data name="录制中" xml:space="preserve"><value>Recording</value></data>
+  <data name="能看到实时画面，就说明摄像头基础配置正常。" xml:space="preserve"><value>If you can see the real-time picture, it means that the basic configuration of the camera is normal.</value></data>
+  <data name="配置完成" xml:space="preserve"><value>Configuration completed</value></data>
+  <data name="平均:" xml:space="preserve"><value>Average:</value></data>
+  <data name="平均单件用时" xml:space="preserve"><value>Average time per item</value></data>
+  <data name="前往下载" xml:space="preserve"><value>Download</value></data>
+  <data name="切换工位" xml:space="preserve"><value>Switch workstation</value></data>
+  <data name="请选择这台电脑的用途" xml:space="preserve"><value>Please select what you want to use this computer for</value></data>
+  <data name="请用扫码枪扫描一个快递面单条码。检测到自动回车时可后台扫码；没有自动回车时会切到窗口内识别。" xml:space="preserve"><value>Please use a code scanner to scan the barcode of an express delivery receipt. When an automatic carriage return is detected, the code can be scanned in the background; when there is no automatic carriage return, the code will be switched to the window for identification.</value></data>
+  <data name="全部" xml:space="preserve"><value>All</value></data>
+  <data name="如果这台电脑第一次使用，请先自动查找摄像头监控工位。" xml:space="preserve"><value>If this computer is used for the first time, please automatically search for the camera monitoring station first.</value></data>
+  <data name="扫码动态" xml:space="preserve"><value>Scan activity</value></data>
+  <data name="扫描单号开始录制，再次扫描同一单号停止录制。" xml:space="preserve"><value>Scan the tracking number to start recording, scan the same tracking number again to stop recording.</value></data>
+  <data name="扫描新单号后，自动结束上一单并开始下一单。" xml:space="preserve"><value>After scanning the new order number, the previous order will be automatically ended and the next order will be started.</value></data>
+  <data name="稍后再说" xml:space="preserve"><value>Later</value></data>
+  <data name="摄像头监控工位地址" xml:space="preserve"><value>Camera monitoring workstation address</value></data>
+  <data name="摄像头已休眠" xml:space="preserve"><value>The camera has gone to sleep</value></data>
+  <data name="时间范围: " xml:space="preserve"><value>Time range:</value></data>
+  <data name="时长" xml:space="preserve"><value>duration</value></data>
+  <data name="实时音量" xml:space="preserve"><value>real time volume</value></data>
+  <data name="首次使用配置向导" xml:space="preserve"><value>First-time setup</value></data>
+  <data name="数据" xml:space="preserve"><value>Statistics</value></data>
+  <data name="数量" xml:space="preserve"><value>quantity</value></data>
+  <data name="说话时音量条有跳动，就说明麦克风基础配置正常。" xml:space="preserve"><value>If the volume bar jumps when speaking, it means that the basic configuration of the microphone is normal.</value></data>
+  <data name="提示：没有安装本程序的普通电脑，也可以直接用浏览器打开摄像头监控工位显示的地址查看视频。" xml:space="preserve"><value>Tip: For ordinary computers that do not have this program installed, you can also directly use a browser to open the address displayed at the camera monitoring station to view the video.</value></data>
+  <data name="填写或自动查找到监控端地址后，订单备注会发送到对应工位。" xml:space="preserve"><value>After filling in or automatically finding the monitoring terminal address, the order notes will be sent to the corresponding workstation.</value></data>
+  <data name="条码冷却中…" xml:space="preserve"><value>Scan cooldown…</value></data>
+  <data name="跳过" xml:space="preserve"><value>jump over</value></data>
+  <data name="同码停录模式" xml:space="preserve"><value>Same-code stop mode</value></data>
+  <data name="同一局域网内的电脑、手机等设备，可以通过主界面底部显示的局域网访问地址，打开打包视频和回放页面。请确认这些设备连接在同一个局域网内。" xml:space="preserve"><value>Computers, mobile phones and other devices within the same LAN can open the packaged video and playback page through the LAN access address displayed at the bottom of the main interface. Please make sure these devices are connected to the same LAN.</value></data>
+  <data name="推荐" xml:space="preserve"><value>recommend</value></data>
+  <data name="推荐连续打包模式，扫码下一单时自动保存上一单。" xml:space="preserve"><value>The continuous packaging mode is recommended, and the previous order will be automatically saved when you scan the QR code to place an order.</value></data>
+  <data name="下面是日常打包流程。" xml:space="preserve"><value>The following is the daily packaging process.</value></data>
+  <data name="选择打包模式" xml:space="preserve"><value>Select packaging mode</value></data>
+  <data name="选择工位" xml:space="preserve"><value>Choose workstation</value></data>
+  <data name="选择麦克风" xml:space="preserve"><value>Select microphone</value></data>
+  <data name="选择摄像头" xml:space="preserve"><value>Select camera</value></data>
+  <data name="占用存储空间" xml:space="preserve"><value>Taking up storage space</value></data>
+  <data name="占用空间" xml:space="preserve"><value>Taking up space</value></data>
+  <data name="这台电脑接打印机或使用快递助手，把订单发送到摄像头监控工位。" xml:space="preserve"><value>This computer is connected to a printer or a courier assistant is used to send the order to the camera monitoring station.</value></data>
+  <data name="这台电脑接摄像头，负责实时监控、扫码录像、语音播报和接收订单。" xml:space="preserve"><value>This computer is connected to the camera and is responsible for real-time monitoring, scanning code recording, voice broadcasting and receiving orders.</value></data>
+  <data name="正在检查上次连接..." xml:space="preserve"><value>Checking last connection...</value></data>
+  <data name="正在准备麦克风..." xml:space="preserve"><value>Preparing microphone...</value></data>
+  <data name="正在准备摄像头预览..." xml:space="preserve"><value>Preparing camera preview...</value></data>
+  <data name="至" xml:space="preserve"><value>to</value></data>
+  <data name="自动查找" xml:space="preserve"><value>automatic search</value></data>
+  <data name="总耗时:" xml:space="preserve"><value>Total time:</value></data>
+  <data name="总计时长" xml:space="preserve"><value>total duration</value></data>
+  <data name="最近30天" xml:space="preserve"><value>Last 30 days</value></data>
+  <data name="发货" xml:space="preserve"><value>Shipping</value></data>
+  <data name="退货" xml:space="preserve"><value>Return</value></data>
+  <data name="已保存" xml:space="preserve"><value>Saved</value></data>
+  <data name="其他电脑查视频：未开启" xml:space="preserve"><value>Recording access: Disabled</value></data>
+  <data name="其他电脑查视频：正在启动服务..." xml:space="preserve"><value>Recording access: Starting service...</value></data>
+  <data name="其他电脑查视频：暂时不可用" xml:space="preserve"><value>Recording access: Temporarily unavailable</value></data>
+  <data name="其他电脑查视频：正在准备网址..." xml:space="preserve"><value>Recording access: Preparing address...</value></data>
+  <data name="快递单打印工位：未连接" xml:space="preserve"><value>Shipping-label station: Disconnected</value></data>
+  <data name="快递单打印工位：等待服务启动" xml:space="preserve"><value>Shipping-label station: Waiting for service</value></data>
+  <data name="快递单打印工位：Web 启动失败" xml:space="preserve"><value>Shipping-label station: Web service failed</value></data>
+  <data name="快递单打印工位：等待连接" xml:space="preserve"><value>Shipping-label station: Waiting for connection</value></data>
+  <data name="Main.RecordingAccess" xml:space="preserve"><value>Recording access: {0}</value></data>
+  <data name="Main.RecordingAccessProtected" xml:space="preserve"><value>Recording access: {0} (protected)</value></data>
+  <data name="Main.PrintTestOrder" xml:space="preserve"><value>Shipping-label station: {0} Test order received</value></data>
+  <data name="Main.PrintNoRefund" xml:space="preserve"><value>Shipping-label station: {0} Responded; no refund orders found</value></data>
+  <data name="Main.PrintOrders" xml:space="preserve"><value>Shipping-label station: {0} Received {1} orders</value></data>
+  <data name="Main.Title" xml:space="preserve"><value>Packing Monitor {0}</value></data>
+  <data name="Main.OtherComputersUnavailable" xml:space="preserve"><value>Other computers cannot connect yet</value></data>
+  <data name="Main.BarcodeClear" xml:space="preserve"><value>C\nL\nR</value></data>
+  <data name="Main.BarcodeReturn" xml:space="preserve"><value>R\nE\nT</value></data>
+  <data name="Main.BarcodeShipping" xml:space="preserve"><value>S\nH\nI\nP</value></data>
+  <data name="Main.BarcodeStop" xml:space="preserve"><value>S\nT\nO\nP</value></data>
+  <data name="Main.BarcodeStart" xml:space="preserve"><value>S\nT\nA\nR\nT</value></data>
+  <data name="编码器检测失败，已保留现有设置" xml:space="preserve"><value>Encoder detection failed, existing settings retained</value></data>
+  <data name="部分历史录像转换失败，已保留原文件" xml:space="preserve"><value>The conversion of some historical videos failed and the original files have been retained.</value></data>
+  <data name="部分视频合成失败，已保留原文件" xml:space="preserve"><value>Part of the video synthesis failed, the original file has been retained</value></data>
+  <data name="成功：编码器重新检测完成" xml:space="preserve"><value>Encoder detection completed</value></data>
+  <data name="处理中：编码器环境检测中，请稍后打开设置..." xml:space="preserve"><value>Processing: Detecting encoder environment. Open Settings again shortly...</value></data>
+  <data name="处理中：检测已在运行中..." xml:space="preserve"><value>Processing: Detection is already running...</value></data>
+  <data name="处理中：正在重新检测 GPU 编码器，请稍候..." xml:space="preserve"><value>Processing: Detecting GPU encoders...</value></data>
+  <data name="打开下载页面失败" xml:space="preserve"><value>Failed to open download page</value></data>
+  <data name="单号匹配，已停止录制" xml:space="preserve"><value>Order number matched; recording stopped</value></data>
+  <data name="当前录像未绑定单号，无法同码停录" xml:space="preserve"><value>The current recording has no order number and cannot be stopped by rescanning</value></data>
+  <data name="当前没有可复制的访问地址" xml:space="preserve"><value>There is currently no access address to copy</value></data>
+  <data name="画面静止超时，自动停录" xml:space="preserve"><value>The picture freezes and timeout occurs, and the recording automatically stops.</value></data>
+  <data name="警告：存储路径不可写，请检查磁盘" xml:space="preserve"><value>Warning: Storage path is not writable, please check disk</value></data>
+  <data name="警告：录制启动失败" xml:space="preserve"><value>Warning: Recording startup failed</value></data>
+  <data name="警告：目标摄像头未连接，等待重新插入" xml:space="preserve"><value>Warning: Target camera is not connected and is waiting to be reinserted</value></data>
+  <data name="警告：摄像头唤醒后没有画面，未开始录制" xml:space="preserve"><value>Warning: There is no picture after the camera wakes up and the recording has not started.</value></data>
+  <data name="警告：摄像头连接发生错误，尝试重连..." xml:space="preserve"><value>Warning: Camera connection error occurred, try to reconnect...</value></data>
+  <data name="警告：摄像头未就绪，请检查连接" xml:space="preserve"><value>Warning: Camera not ready, please check connection</value></data>
+  <data name="警告：摄像头信号丢失，尝试重连..." xml:space="preserve"><value>Warning: Camera signal lost, try to reconnect...</value></data>
+  <data name="警告：摄像头已断开，等待重新连接..." xml:space="preserve"><value>Warning: Camera has been disconnected, waiting to be reconnected...</value></data>
+  <data name="警告：视频文件太小，已删除" xml:space="preserve"><value>Warning: Video file is too small and has been deleted</value></data>
+  <data name="警告：未检测到任何摄像头" xml:space="preserve"><value>Warning: No cameras detected</value></data>
+  <data name="警告：未找到 FFmpeg，无法录制" xml:space="preserve"><value>Warning: FFmpeg not found, unable to record</value></data>
+  <data name="警告：音轨校验失败，已保留原始文件" xml:space="preserve"><value>Warning: Track verification failed, original file retained</value></data>
+  <data name="警告：音频录制失败，已保留原始文件" xml:space="preserve"><value>Warning: Audio recording failed, original file retained</value></data>
+  <data name="警告：音频疑似提前静音，已保留原始文件" xml:space="preserve"><value>Warning: The audio is suspected to have been muted in advance, the original file has been retained</value></data>
+  <data name="警告：预览画面卡住，正在重连摄像头..." xml:space="preserve"><value>Warning: The preview screen is stuck, reconnecting the camera...</value></data>
+  <data name="录像保存失败，请检查日志" xml:space="preserve"><value>Video saving failed, please check the log</value></data>
+  <data name="录制状态正在切换，请稍后再试" xml:space="preserve"><value>The recording status is switching, please try again later.</value></data>
+  <data name="切换为发货模式" xml:space="preserve"><value>Switch to shipping mode</value></data>
+  <data name="切换为退货模式" xml:space="preserve"><value>Switch to return mode</value></data>
+  <data name="扫码过快，已保留最后一个单号" xml:space="preserve"><value>Scans arrived too quickly; the latest order number was kept</value></data>
+  <data name="摄像头配置已生效" xml:space="preserve"><value>Camera configuration has taken effect</value></data>
+  <data name="摄像头启动失败" xml:space="preserve"><value>Camera startup failed</value></data>
+  <data name="摄像头停止失败，请重新插拔后重试" xml:space="preserve"><value>The camera failed to stop, please plug it in again and try again.</value></data>
+  <data name="摄像头停止失败，未继续重连" xml:space="preserve"><value>The camera failed to stop and did not continue to reconnect.</value></data>
+  <data name="摄像头未能进入休眠，请重新插拔后重试" xml:space="preserve"><value>The camera failed to enter sleep mode, please re-plug and try again.</value></data>
+  <data name="摄像头未能停止，暂时无法打开配置向导" xml:space="preserve"><value>The camera failed to stop and the configuration wizard cannot be opened temporarily.</value></data>
+  <data name="摄像头已唤醒" xml:space="preserve"><value>The camera is awake</value></data>
+  <data name="摄像头已重连，当前录像已保存，请重新扫码继续" xml:space="preserve"><value>The camera has been reconnected and the current video has been saved. Please scan the QR code again to continue.</value></data>
+  <data name="视频合成失败，已保留原文件" xml:space="preserve"><value>Video synthesis failed, the original file has been retained</value></data>
+  <data name="提示：开始录像" xml:space="preserve"><value>Recording started</value></data>
+  <data name="提示：配置已保存，摄像头配置将在录制结束后生效" xml:space="preserve"><value>Tip: The configuration has been saved and the camera configuration will take effect after the recording is completed.</value></data>
+  <data name="提示：配置已保存，重启相机" xml:space="preserve"><value>Tip: The configuration has been saved, restart the camera</value></data>
+  <data name="提示：扫码框已清除" xml:space="preserve"><value>Scan input cleared</value></data>
+  <data name="提示：已达最大录像限制时长" xml:space="preserve"><value>Maximum recording duration reached</value></data>
+  <data name="已打开监控网页，复制失败请重试" xml:space="preserve"><value>The monitoring webpage has been opened. Copying failed. Please try again.</value></data>
+  <data name="已复制并打开监控网页" xml:space="preserve"><value>Copied and opened the monitoring web page</value></data>
+  <data name="已收到测试订单" xml:space="preserve"><value>Test order received</value></data>
+  <data name="已手动停止录制" xml:space="preserve"><value>Recording stopped manually</value></data>
+  <data name="音频录制启动失败" xml:space="preserve"><value>Audio recording failed to start</value></data>
+  <data name="正在应用局域网服务设置..." xml:space="preserve"><value>Applying LAN service settings...</value></data>
+</root>

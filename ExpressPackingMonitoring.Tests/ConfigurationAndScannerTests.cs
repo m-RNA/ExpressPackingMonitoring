@@ -174,11 +174,11 @@ public sealed class ConfigurationAndScannerTests
 
     [Theory]
     [InlineData("NO_REFUND", "无退款")]
-    [InlineData("WAIT_SELLER_AGREE", DefaultSpeechCatalog.RefundWaitingSeller)]
-    [InlineData("WAIT_BUYER_RETURN_GOODS", DefaultSpeechCatalog.RefundWaitingBuyerReturn)]
-    [InlineData("WAIT_SELLER_CONFIRM_GOODS", DefaultSpeechCatalog.RefundWaitingSellerConfirm)]
-    [InlineData("SUCCESS", DefaultSpeechCatalog.RefundCompleted)]
-    [InlineData("CLOSED", DefaultSpeechCatalog.RefundClosed)]
+    [InlineData("WAIT_SELLER_AGREE", "等待卖家处理退款")]
+    [InlineData("WAIT_BUYER_RETURN_GOODS", "等待买家退货")]
+    [InlineData("WAIT_SELLER_CONFIRM_GOODS", "等待卖家确认收到退货")]
+    [InlineData("SUCCESS", "退款已完成")]
+    [InlineData("CLOSED", "退款流程已关闭或取消")]
     public void GetRefundStatusDisplayText_MapsKnownStatuses(string refundStatus, string expected)
     {
         var orderInfo = new OrderInfo { RefundStatus = refundStatus };

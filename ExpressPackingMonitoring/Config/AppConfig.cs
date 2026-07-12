@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text.Json.Serialization;
+using ExpressPackingMonitoring.Localization;
 
 namespace ExpressPackingMonitoring.Config
 {
@@ -102,6 +103,7 @@ namespace ExpressPackingMonitoring.Config
         public bool EnableSoundPrompt { get; set; } = true;
         public double TimeoutWarningSeconds { get; set; } = 10.0;
         public string Theme { get; set; } = "Auto";
+        public string Language { get; set; } = AppLanguage.Auto;
         public bool ShowDeletedVideos { get; set; } = true;
         public bool AutoStartOnBoot { get; set; } = false;
         public bool EnableAutoCheckUpdate { get; set; } = true;
@@ -140,6 +142,10 @@ namespace ExpressPackingMonitoring.Config
         public float AiTtsSpeed { get; set; } = 1.0f;
         public string EdgeTtsVoice { get; set; } = "zh-CN-XiaoxiaoNeural";
         public string EdgeTtsWarningVoice { get; set; } = "zh-CN-YunjianNeural";
+        public string EdgeTtsVoiceZhHans { get; set; } = "";
+        public string EdgeTtsWarningVoiceZhHans { get; set; } = "";
+        public string EdgeTtsVoiceEnUs { get; set; } = "en-US-JennyNeural";
+        public string EdgeTtsWarningVoiceEnUs { get; set; } = "en-US-GuyNeural";
 
         // 订单备注播报（快递助手插件）
         public bool EnableOrderInfoAnnounce { get; set; } = true;
@@ -160,6 +166,13 @@ namespace ExpressPackingMonitoring.Config
         public static bool NormalizeAfterLoad(AppConfig config)
         {
             bool changed = false;
+
+            string normalizedLanguage = AppLanguage.NormalizePreference(config.Language);
+            if (config.Language != normalizedLanguage)
+            {
+                config.Language = normalizedLanguage;
+                changed = true;
+            }
 
             if (string.IsNullOrWhiteSpace(config.WebAccessKey) || config.WebAccessKey.Trim().Length < 16)
             {
@@ -190,6 +203,33 @@ namespace ExpressPackingMonitoring.Config
                 config.EdgeTtsWarningVoice = "zh-CN-YunxiNeural";
                 changed = true;
             }
+
+            if (string.IsNullOrWhiteSpace(config.EdgeTtsVoiceZhHans))
+            {
+                config.EdgeTtsVoiceZhHans = config.EdgeTtsVoice;
+                changed = true;
+            }
+            if (string.IsNullOrWhiteSpace(config.EdgeTtsWarningVoiceZhHans))
+            {
+                config.EdgeTtsWarningVoiceZhHans = config.EdgeTtsWarningVoice;
+                changed = true;
+            }
+            if (string.IsNullOrWhiteSpace(config.EdgeTtsVoiceEnUs))
+            {
+                config.EdgeTtsVoiceEnUs = "en-US-JennyNeural";
+                changed = true;
+            }
+            if (string.IsNullOrWhiteSpace(config.EdgeTtsWarningVoiceEnUs))
+            {
+                config.EdgeTtsWarningVoiceEnUs = "en-US-GuyNeural";
+                changed = true;
+            }
+
+            string effectiveLanguage = AppLanguage.Resolve(config.Language);
+            string effectiveVoice = effectiveLanguage == AppLanguage.Chinese ? config.EdgeTtsVoiceZhHans : config.EdgeTtsVoiceEnUs;
+            string effectiveWarningVoice = effectiveLanguage == AppLanguage.Chinese ? config.EdgeTtsWarningVoiceZhHans : config.EdgeTtsWarningVoiceEnUs;
+            if (config.EdgeTtsVoice != effectiveVoice) { config.EdgeTtsVoice = effectiveVoice; changed = true; }
+            if (config.EdgeTtsWarningVoice != effectiveWarningVoice) { config.EdgeTtsWarningVoice = effectiveWarningVoice; changed = true; }
 
             if (config.VoiceSettingsVersion < CurrentVoiceSettingsVersion)
             {

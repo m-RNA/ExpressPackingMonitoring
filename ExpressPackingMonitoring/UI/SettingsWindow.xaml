@@ -855,6 +855,27 @@
                                             <ColumnDefinition Width="260"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="界面语言" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="默认跟随 Windows 显示语言，修改后重启生效"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <ComboBox Grid.Column="2"
+                                                  SelectedValue="{Binding Config.Language}"
+                                                  SelectedValuePath="Tag"
+                                                  Cursor="Hand">
+                                            <ComboBoxItem Content="跟随系统" Tag="Auto"/>
+                                            <ComboBoxItem Content="简体中文" Tag="zh-Hans"/>
+                                            <ComboBoxItem Content="English" Tag="en-US"/>
+                                        </ComboBox>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="24"/>
+                                            <ColumnDefinition Width="260"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="外观主题" Style="{StaticResource FieldLabelStyle}"/>
                                             <TextBlock Text="可跟随系统，或固定为浅色 / 深色主题"
                                                        Style="{StaticResource FieldHintStyle}"/>
@@ -2754,6 +2775,34 @@
                     <Button Content="取消" Click="BtnCancel_Click" Style="{StaticResource SettingsFooterSecondaryButtonStyle}"/>
                 </UniformGrid>
             </Grid>
+        </Border>
+
+        <Border Grid.RowSpan="2"
+                Background="{DynamicResource ToastBackground}"
+                CornerRadius="8"
+                Padding="28,14"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                IsHitTestVisible="False"
+                Panel.ZIndex="1000">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Setter Property="Opacity" Value="0"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding MainVM.IsToastVisible}" Value="True">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Setter Property="Opacity" Value="1"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <TextBlock Text="{Binding MainVM.ToastMessage}"
+                       Foreground="White"
+                       FontSize="16"
+                       FontWeight="SemiBold"
+                       TextWrapping="Wrap"
+                       MaxWidth="620"/>
         </Border>
     </Grid>
 </Window>

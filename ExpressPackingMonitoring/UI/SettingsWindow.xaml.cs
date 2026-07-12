@@ -20,6 +20,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Windows.Data;
 using System.Windows.Media;
+using ExpressPackingMonitoring.Localization;
 using System.Windows.Media.Imaging;
 using ExpressPackingMonitoring.Services;
 using NAudio.CoreAudioApi;
@@ -116,10 +117,15 @@ namespace ExpressPackingMonitoring.UI
             new EdgeVoiceOption { ShortName = "zh-HK-HiuGaaiNeural", DisplayName = "粤语 HiuGaai - 女声" },
             new EdgeVoiceOption { ShortName = "zh-HK-WanLungNeural", DisplayName = "粤语 WanLung - 男声" },
             new EdgeVoiceOption { ShortName = "zh-TW-HsiaoChenNeural", DisplayName = "台湾晓臻 - 女声" },
-            new EdgeVoiceOption { ShortName = "zh-TW-YunJheNeural", DisplayName = "台湾云哲 - 男声" }
+            new EdgeVoiceOption { ShortName = "zh-TW-YunJheNeural", DisplayName = "台湾云哲 - 男声" },
+            new EdgeVoiceOption { ShortName = "en-US-JennyNeural", DisplayName = "Jenny - Female (US)" },
+            new EdgeVoiceOption { ShortName = "en-US-AriaNeural", DisplayName = "Aria - Female (US)" },
+            new EdgeVoiceOption { ShortName = "en-US-GuyNeural", DisplayName = "Guy - Male (US)" },
+            new EdgeVoiceOption { ShortName = "en-US-DavisNeural", DisplayName = "Davis - Male (US)" }
         };
 
         private string _originalTheme;
+        private string _originalLanguage;
         private bool _isRecording;
         private bool _isLoadingDevices;
         private bool _isSyncingVoiceEngine;
@@ -130,6 +136,7 @@ namespace ExpressPackingMonitoring.UI
             InitializeComponent();
             MainVM = mainVM;
             _originalTheme = clonedConfig.Theme;
+            _originalLanguage = clonedConfig.Language;
             _isRecording = isRecording;
             Config = clonedConfig;
             AppConfig.NormalizeAfterLoad(Config);
@@ -824,6 +831,16 @@ namespace ExpressPackingMonitoring.UI
                 .ToList();
 
             // 3. 校验并保存
+            if (AppLanguage.Resolve(Config.Language) == AppLanguage.Chinese)
+            {
+                Config.EdgeTtsVoiceZhHans = Config.EdgeTtsVoice;
+                Config.EdgeTtsWarningVoiceZhHans = Config.EdgeTtsWarningVoice;
+            }
+            else
+            {
+                Config.EdgeTtsVoiceEnUs = Config.EdgeTtsVoice;
+                Config.EdgeTtsWarningVoiceEnUs = Config.EdgeTtsWarningVoice;
+            }
             AppConfig.NormalizeAfterLoad(Config);
 
             if (!ValidateEncoderSelectionBeforeSave())
@@ -834,7 +851,18 @@ namespace ExpressPackingMonitoring.UI
             var appliedConfig = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(Config)) ?? new AppConfig();
             bool applied = await MainVM.ApplySettingsAsync(appliedConfig);
             if (applied)
+            {
                 _originalTheme = Config.Theme;
+                if (_originalLanguage != Config.Language)
+                {
+                    MessageBox.Show(
+                        AppLanguage.Get("RestartSaved"),
+                        AppLanguage.Get("RestartRequired"),
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                    _originalLanguage = Config.Language;
+                }
+            }
             return applied;
         }
 

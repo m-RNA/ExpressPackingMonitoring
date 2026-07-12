@@ -6,6 +6,7 @@ using ExpressPackingMonitoring.Helpers;
 using ExpressPackingMonitoring.Data;
 using ExpressPackingMonitoring.Config;
 using ExpressPackingMonitoring.Audio;
+using ExpressPackingMonitoring.Localization;
 using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
@@ -210,7 +211,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private bool _pendingCameraRestart = false; // 录制中修改了摄像头配置，录制结束后重启
         private volatile bool _isEncoderDetectRunning = true; // 是否正在进行 GPU 编码器检测
         private readonly string _activeWorkstationRole = WorkstationRoles.CameraMonitor;
-        private string _workstationAccessText = "其他电脑暂时无法连接";
+        private string _workstationAccessText = AppLanguage.Get("Main.OtherComputersUnavailable");
         private string _workstationPrintStatusText = "快递单打印工位：未连接";
         private string _workstationStatusToolTip = "";
         private string _monitorAccessAddress = "";
@@ -356,14 +357,14 @@ namespace ExpressPackingMonitoring.ViewModels
                 // 行1: 扫码框有内容→清除；空→切换模式
                 string cmd1; string label1;
                 if (!string.IsNullOrEmpty(_scanInputText))
-                { cmd1 = "CLEAR"; label1 = "清\n除"; }
+                { cmd1 = "CLEAR"; label1 = AppLanguage.Get("Main.BarcodeClear").Replace("\\n", "\n"); }
                 else if (_currentMode == "发货")
-                { cmd1 = "BACK"; label1 = "退\n货"; }
+                { cmd1 = "BACK"; label1 = AppLanguage.Get("Main.BarcodeReturn").Replace("\\n", "\n"); }
                 else
-                { cmd1 = "SHIP"; label1 = "发\n货"; }
+                { cmd1 = "SHIP"; label1 = AppLanguage.Get("Main.BarcodeShipping").Replace("\\n", "\n"); }
                 // 行2: 未录制→开录；录制中→停录
                 string cmd2 = _isRecording ? "STOP" : "START";
-                string label2 = _isRecording ? "停\n录" : "开\n录";
+                string label2 = AppLanguage.Get(_isRecording ? "Main.BarcodeStop" : "Main.BarcodeStart").Replace("\\n", "\n");
                 if (!_barcode1OnCooldown)
                 {
                     Barcode1Label = label1;
@@ -1168,6 +1169,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
         public void ShowToast(string message)
         {
+            message = AppLanguage.Translate(message);
             if (_alertService != null)
             {
                 _alertService.Publish(new AlertRequest
@@ -1917,8 +1919,8 @@ namespace ExpressPackingMonitoring.ViewModels
 
             MonitorAccessAddress = verifiedAddress;
             WorkstationAccessText = Config.RequireWebAccessKey
-                ? $"其他电脑查视频：{MonitorAccessAddress}（访问保护已开启）"
-                : $"其他电脑查视频：{MonitorAccessAddress}";
+                ? AppLanguage.Format("Main.RecordingAccessProtected", MonitorAccessAddress)
+                : AppLanguage.Format("Main.RecordingAccess", MonitorAccessAddress);
             WorkstationPrintStatusText = "快递单打印工位：等待连接";
             WorkstationStatusToolTip = Config.RequireWebAccessKey
                 ? "访问保护已开启。请点击底部地址复制完整访问链接，再发送到需要查看录像的设备。"
@@ -2006,10 +2008,10 @@ namespace ExpressPackingMonitoring.ViewModels
 
             bool hasTestOrder = orders.Any(x => x.IsTest);
             string printStatusText = hasTestOrder
-                ? $"快递单打印工位：{DateTime.Now:HH:mm} 收到测试订单"
+                ? AppLanguage.Format("Main.PrintTestOrder", DateTime.Now.ToString("HH:mm"))
                 : orders.Count == 0
-                    ? $"快递单打印工位：{DateTime.Now:HH:mm} 已响应，未查到退款订单"
-                    : $"快递单打印工位：{DateTime.Now:HH:mm} 收到 {orders.Count} 条订单";
+                    ? AppLanguage.Format("Main.PrintNoRefund", DateTime.Now.ToString("HH:mm"))
+                    : AppLanguage.Format("Main.PrintOrders", DateTime.Now.ToString("HH:mm"), orders.Count);
             Application application = Application.Current;
             if (application != null)
             {
@@ -2020,8 +2022,8 @@ namespace ExpressPackingMonitoring.ViewModels
                     {
                         if (!string.IsNullOrWhiteSpace(MonitorAccessAddress))
                             WorkstationAccessText = Config.RequireWebAccessKey
-                                ? $"其他电脑查视频：{MonitorAccessAddress}（访问保护已开启）"
-                                : $"其他电脑查视频：{MonitorAccessAddress}";
+                                ? AppLanguage.Format("Main.RecordingAccessProtected", MonitorAccessAddress)
+                                : AppLanguage.Format("Main.RecordingAccess", MonitorAccessAddress);
                         WorkstationPrintStatusText = printStatusText;
                     }
 

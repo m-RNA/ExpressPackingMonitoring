@@ -2,6 +2,7 @@ using ExpressPackingMonitoring.UI;
 using ExpressPackingMonitoring.Logging;
 using ExpressPackingMonitoring.Audio;
 using ExpressPackingMonitoring.Config;
+using ExpressPackingMonitoring.Localization;
 using System;
 using System.Threading.Tasks;
 using System.Windows;
@@ -19,6 +20,9 @@ namespace ExpressPackingMonitoring
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+            var config = WorkstationConfigStore.Load();
+            AppLanguage.Initialize(config.Language);
+            AppLanguage.EnableAutomaticWpfLocalization();
             RegisterRuntimeExceptionLogging();
             RuntimeLog.Info("App", "Application startup");
             RuntimeLog.LogSessionStart(e.Args);
@@ -33,7 +37,6 @@ namespace ExpressPackingMonitoring
                 return;
             }
 
-            var config = WorkstationConfigStore.Load();
             bool forceChoose = e.Args.Any(a => string.Equals(a, "--choose-workstation", StringComparison.OrdinalIgnoreCase));
             string temporaryRole = ResolveRoleOption(e.Args, "--temporary-role");
             bool useTemporaryRole = WorkstationRoles.IsKnown(temporaryRole);
