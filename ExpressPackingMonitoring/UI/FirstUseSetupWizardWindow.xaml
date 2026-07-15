@@ -85,7 +85,7 @@
                        FontSize="28"
                        FontWeight="Black"
                        Foreground="{DynamicResource TextPrimary}"/>
-            <TextBlock Text="按最基础的步骤确认打包模式、摄像头、麦克风和扫码枪。"
+            <TextBlock Text="按步骤完成打包模式、摄像头自动识别、麦克风和可选扫码枪"
                        Margin="0,8,0,0"
                        FontSize="14"
                        Foreground="{DynamicResource TextSecondary}"/>
@@ -108,7 +108,7 @@
                     <TextBlock x:Name="StepModeText" Text="1. 选择打包模式" Style="{StaticResource StepTextStyle}"/>
                     <TextBlock x:Name="StepCameraText" Text="2. 选择摄像头" Style="{StaticResource StepTextStyle}"/>
                     <TextBlock x:Name="StepMicText" Text="3. 选择麦克风" Style="{StaticResource StepTextStyle}"/>
-                    <TextBlock x:Name="StepScannerText" Text="4. 测试扫码枪" Style="{StaticResource StepTextStyle}"/>
+                    <TextBlock x:Name="StepScannerText" Text="4. 扫码枪（可选）" Style="{StaticResource StepTextStyle}"/>
                     <TextBlock x:Name="StepDoneText" Text="5. 完成" Style="{StaticResource StepTextStyle}"/>
                 </StackPanel>
             </Border>
@@ -183,7 +183,7 @@
                                        FontSize="22"
                                        FontWeight="Black"
                                        Foreground="{DynamicResource TextPrimary}"/>
-                            <TextBlock Text="能看到实时画面，就说明摄像头基础配置正常。"
+                            <TextBlock Text="将面单条形码放入引导框，可同时测试摄像头画面和自动识别"
                                        Margin="0,8,0,20"
                                        FontSize="14"
                                        Foreground="{DynamicResource TextSecondary}"/>
@@ -203,6 +203,31 @@
                             <Grid>
                                 <Image x:Name="CameraPreviewImage"
                                        Stretch="Uniform"/>
+                                <Grid x:Name="CameraRecognitionGuide"
+                                      Visibility="Collapsed"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      IsHitTestVisible="False">
+                                    <Rectangle x:Name="CameraRecognitionGuideBorder"
+                                               Stroke="#DD0078D7"
+                                               StrokeThickness="3"
+                                               StrokeDashArray="6 3"
+                                               Fill="#080078D7"
+                                               RadiusX="6"
+                                               RadiusY="6"/>
+                                    <Border HorizontalAlignment="Center"
+                                            VerticalAlignment="Top"
+                                            Margin="0,10,0,0"
+                                            Padding="12,6"
+                                            Background="#DD0067B8"
+                                            CornerRadius="6">
+                                        <TextBlock x:Name="CameraRecognitionStatusText"
+                                                   Text="将面单条形码放入框内"
+                                                   Foreground="White"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"/>
+                                    </Border>
+                                </Grid>
                                 <TextBlock x:Name="CameraStatusText"
                                            Text="正在准备摄像头预览..."
                                            Foreground="#DDFFFFFF"
@@ -259,11 +284,11 @@
 
                     <Grid x:Name="ScannerPage" Visibility="Collapsed">
                         <StackPanel>
-                            <TextBlock Text="测试扫码枪"
+                            <TextBlock Text="扫码枪（可选）"
                                        FontSize="22"
                                        FontWeight="Black"
                                        Foreground="{DynamicResource TextPrimary}"/>
-                            <TextBlock Text="请用扫码枪扫描一个快递面单条码。检测到自动回车时可后台扫码；没有自动回车时会切到窗口内识别。"
+                            <TextBlock Text="摄像头可直接识别面单条形码；扫码枪作为后备方案长期保留，需要时可在这里测试"
                                        Margin="0,8,0,18"
                                        FontSize="14"
                                        Foreground="{DynamicResource TextSecondary}"/>

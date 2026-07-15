@@ -245,6 +245,67 @@
                                    Visibility="Collapsed"
                                    Opacity="1"
                                    RadiusX="2" RadiusY="2"/>
+                        <Grid x:Name="CameraBarcodeGuide"
+                              Width="0"
+                              Height="0"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              IsHitTestVisible="False">
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsCameraBarcodeRecognitionEnabled}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsCameraSleeping}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                            <Rectangle RadiusX="6" RadiusY="6" StrokeThickness="3" StrokeDashArray="6 3">
+                                <Rectangle.Style>
+                                    <Style TargetType="Rectangle">
+                                        <Setter Property="Stroke" Value="#CC0078D7"/>
+                                        <Setter Property="Fill" Value="#080078D7"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCameraBarcodeCandidate}" Value="True">
+                                                <Setter Property="Stroke" Value="#FFFFA000"/>
+                                                <Setter Property="Fill" Value="#10FFA000"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsCameraBarcodeConfirmed}" Value="True">
+                                                <Setter Property="Stroke" Value="#FF22A65A"/>
+                                                <Setter Property="Fill" Value="#1822A65A"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Rectangle.Style>
+                            </Rectangle>
+                            <Border HorizontalAlignment="Center"
+                                    VerticalAlignment="Top"
+                                    Margin="0,10,0,0"
+                                    Padding="12,6"
+                                    CornerRadius="6">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#CC0067B8"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCameraBarcodeCandidate}" Value="True">
+                                                <Setter Property="Background" Value="#DDC47A00"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsCameraBarcodeConfirmed}" Value="True">
+                                                <Setter Property="Background" Value="#DD188447"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="{Binding CameraBarcodeStatusText}"
+                                           Foreground="White"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"/>
+                            </Border>
+                        </Grid>
                         <!-- 摄像头休眠提示 -->
                         <Grid IsHitTestVisible="False">
                             <Grid.Style>
@@ -261,7 +322,7 @@
                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                 <Path Data="{StaticResource FluentSleepIcon}" Width="52" Height="52" Stretch="Uniform" Fill="#AAFFFFFF" HorizontalAlignment="Center" Margin="0,0,0,12"/>
                                 <TextBlock Text="摄像头已休眠" FontSize="22" FontWeight="Bold" Foreground="#AAFFFFFF" HorizontalAlignment="Center"/>
-                                <TextBlock Text="点击任意位置或扫码唤醒" FontSize="14" Foreground="#66FFFFFF" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                                <TextBlock Text="点击任意位置唤醒，再将面单放入识别框" FontSize="14" Foreground="#88FFFFFF" HorizontalAlignment="Center" Margin="0,8,0,0"/>
                             </StackPanel>
                         </Grid>
                     </Grid>

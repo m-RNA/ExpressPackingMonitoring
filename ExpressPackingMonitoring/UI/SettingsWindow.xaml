@@ -2225,7 +2225,24 @@
                             <Border Style="{StaticResource SectionCardStyle}">
                                 <StackPanel>
                                     
-                                    <Grid Style="{StaticResource SettingRowBeforeDividerStyle}">
+                                    <Grid Style="{StaticResource SettingRowStyle}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="24"/>
+                                            <ColumnDefinition Width="260"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="摄像头自动识别面单" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="将条形码放入预览引导框，稳定识别后自动开始或切换录像" Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <CheckBox Grid.Column="2"
+                                                  IsChecked="{Binding Config.EnableCameraBarcodeRecognition}"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left"
+                                                  Style="{StaticResource ToggleSwitchStyle}"/>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowLastStyle}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="24"/>

@@ -25,7 +25,9 @@ A packing video and shipment-risk interception tool for e-commerce sellers and p
 
 - Integrates with Kuaidi Assistant to sync orders and announce buyer messages, seller notes, and product information
 - Checks for post-print refunds asynchronously in shipping and return modes, with status-specific alerts that do not interrupt recording
-- Starts recording automatically when a shipping barcode is scanned and associates the video with its tracking number
+- Uses the camera to recognize one-dimensional shipping-label barcodes and start recording automatically
+- Reads the central guide at a high rate, adds a low-rate full-frame fallback while idle, and restricts recognition to the guide while recording to reduce product-barcode false triggers
+- Keeps camera recognition and keyboard-mode scanners available together, so a scanner can remain as a background-input and recovery fallback
 - Supports camera recording, audio capture, and video watermarks
 - Searches recordings by order or tracking number and plays them in a browser
 - Provides browser-based trim-and-download with a selectable time range
@@ -36,7 +38,7 @@ A packing video and shipment-risk interception tool for e-commerce sellers and p
 
 - Windows 10/11 x64
 - USB camera
-- Barcode scanner configured as a keyboard input device
+- Barcode scanner configured as a keyboard input device (optional, but recommended as a fallback)
 
 The portable release normally includes the required .NET runtime and `ffmpeg.exe`. Running from source or developing the project requires the .NET 8 SDK and `ffmpeg.exe` (the Full build is recommended).
 
@@ -45,9 +47,11 @@ The portable release normally includes the required .NET runtime and `ffmpeg.exe
 1. Open the application and go to Settings.
 2. Select the camera and microphone.
 3. Choose recording locations and the amount of disk space to reserve for the system.
-4. Scan a shipping tracking number to start recording.
+4. Place the shipping-label barcode inside the guide until it is recognized, or use the existing scanner workflow.
 5. Finish the shipment or scan the stop command to end recording.
 6. Enter the tracking number in the recording list whenever you need to retrieve the video.
+
+Placing a label in view does not wake an idle camera. Click the application, press a key, or use the scanner first, then place the label inside the recognition guide.
 
 ## LAN Playback
 

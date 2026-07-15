@@ -107,6 +107,7 @@
     <Compile Include="Services\UpdateCheckOptions.cs" />
     <Compile Include="Services\UpdateCheckService.cs" />
     <Compile Include="Services\AlertService.cs" />
+    <Compile Include="Services\CameraBarcodeRecognitionService.cs" />
     <Compile Include="Services\VideoClipService.cs" />
     <Compile Include="Services\WebServer.cs" />
     <Compile Include="Themes\ThemeManager.cs" />

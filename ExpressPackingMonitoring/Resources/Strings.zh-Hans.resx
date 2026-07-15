@@ -449,4 +449,13 @@
   <data name="已手动停止录制" xml:space="preserve"><value>已手动停止录制</value></data>
   <data name="音频录制启动失败" xml:space="preserve"><value>音频录制启动失败</value></data>
   <data name="正在应用局域网服务设置..." xml:space="preserve"><value>正在应用局域网服务设置...</value></data>
+  <data name="按步骤完成打包模式、摄像头自动识别、麦克风和可选扫码枪" xml:space="preserve"><value>按步骤完成打包模式、摄像头自动识别、麦克风和可选扫码枪</value></data>
+  <data name="4. 扫码枪（可选）" xml:space="preserve"><value>4. 扫码枪（可选）</value></data>
+  <data name="将面单条形码放入引导框，可同时测试摄像头画面和自动识别" xml:space="preserve"><value>将面单条形码放入引导框，可同时测试摄像头画面和自动识别</value></data>
+  <data name="将面单条形码放入框内" xml:space="preserve"><value>将面单条形码放入框内</value></data>
+  <data name="扫码枪（可选）" xml:space="preserve"><value>扫码枪（可选）</value></data>
+  <data name="摄像头可直接识别面单条形码；扫码枪作为后备方案长期保留，需要时可在这里测试" xml:space="preserve"><value>摄像头可直接识别面单条形码；扫码枪作为后备方案长期保留，需要时可在这里测试</value></data>
+  <data name="点击任意位置唤醒，再将面单放入识别框" xml:space="preserve"><value>点击任意位置唤醒，再将面单放入识别框</value></data>
+  <data name="摄像头自动识别面单" xml:space="preserve"><value>摄像头自动识别面单</value></data>
+  <data name="将条形码放入预览引导框，稳定识别后自动开始或切换录像" xml:space="preserve"><value>将条形码放入预览引导框，稳定识别后自动开始或切换录像</value></data>
 </root>

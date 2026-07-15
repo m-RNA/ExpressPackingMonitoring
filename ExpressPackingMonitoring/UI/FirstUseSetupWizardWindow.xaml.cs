@@ -20,6 +20,9 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using ZXing;
 using ZXing.Common;
+using ExpressPackingMonitoring.Services;
+using Mat = OpenCvSharp.Mat;
+using MatType = OpenCvSharp.MatType;
 
 namespace ExpressPackingMonitoring.UI;
 
@@ -35,6 +38,8 @@ public partial class FirstUseSetupWizardWindow : Window
     private WasapiCapture _micCapture;
     private readonly string _testBarcodeValue = $"TEST{DateTime.Now:yyyyMMddHHmmss}";
     private bool _scannerDetectedEnter;
+    private readonly CameraBarcodeRecognitionService _cameraBarcodeRecognition;
+    private DateTime _cameraRecognitionFeedbackUntil = DateTime.MinValue;
 
     public bool WasSkipped { get; private set; }
     public AppConfig ResultConfig => _config;
@@ -43,6 +48,8 @@ public partial class FirstUseSetupWizardWindow : Window
     {
         InitializeComponent();
         _config = config;
+        _cameraBarcodeRecognition = new CameraBarcodeRecognitionService(IsCameraBarcodeCandidate);
+        _cameraBarcodeRecognition.StatusChanged += CameraBarcodeRecognition_StatusChanged;
         _stepTexts = new List<TextBlock> { StepModeText, StepCameraText, StepMicText, StepScannerText, StepDoneText };
 
         ContinuousModeRadio.IsChecked = !_config.EnableSameBarcodeStopRecording;
@@ -51,6 +58,7 @@ public partial class FirstUseSetupWizardWindow : Window
 
         Loaded += FirstUseSetupWizardWindow_Loaded;
         Closed += FirstUseSetupWizardWindow_Closed;
+        CameraPreviewImage.SizeChanged += (_, __) => UpdateCameraRecognitionGuide();
         ShowStep(0);
     }
 
@@ -283,6 +291,7 @@ public partial class FirstUseSetupWizardWindow : Window
             return;
         }
         CameraPreviewImage.Source = null;
+        CameraRecognitionGuide.Visibility = Visibility.Collapsed;
 
         if (CameraComboBox.SelectedItem is not CameraInfo camera || string.IsNullOrEmpty(camera.Moniker))
         {
@@ -339,15 +348,85 @@ public partial class FirstUseSetupWizardWindow : Window
         try
         {
             using var bitmap = (Bitmap)eventArgs.Frame.Clone();
+            using Mat recognitionFrame = BitmapToMat(bitmap);
+            _cameraBarcodeRecognition.TrySubmitFrame(recognitionFrame, allowFullFrame: false);
             BitmapSource source = ConvertBitmapToSource(bitmap);
             source.Freeze();
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 CameraPreviewImage.Source = source;
+                CameraRecognitionGuide.Visibility = Visibility.Visible;
+                UpdateCameraRecognitionGuide();
                 CameraStatusText.Visibility = Visibility.Collapsed;
             }));
         }
         catch { }
+    }
+
+    private bool IsCameraBarcodeCandidate(string value)
+    {
+        return CameraBarcodeCandidatePolicy.IsValid(value, _config.OrderIdRegex);
+    }
+
+    private void CameraBarcodeRecognition_StatusChanged(CameraBarcodeRecognitionStatus status)
+    {
+        _ = Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (status.State == CameraBarcodeRecognitionState.Confirmed)
+            {
+                _cameraRecognitionFeedbackUntil = DateTime.UtcNow.AddSeconds(1.2);
+                CameraRecognitionStatusText.Text = $"已识别 {status.Code}";
+                CameraRecognitionGuideBorder.Stroke = (System.Windows.Media.Brush)FindResource("AccentGreen");
+                return;
+            }
+
+            if (DateTime.UtcNow < _cameraRecognitionFeedbackUntil)
+                return;
+
+            CameraRecognitionStatusText.Text = status.State == CameraBarcodeRecognitionState.Candidate
+                ? "识别中，请保持稳定"
+                : "将面单条形码放入框内";
+            CameraRecognitionGuideBorder.Stroke = status.State == CameraBarcodeRecognitionState.Candidate
+                ? (System.Windows.Media.Brush)FindResource("AccentOrange")
+                : (System.Windows.Media.Brush)FindResource("AccentBlue");
+        }));
+    }
+
+    private void UpdateCameraRecognitionGuide()
+    {
+        if (CameraPreviewImage.Source is not BitmapSource source)
+            return;
+
+        double actualW = CameraPreviewImage.ActualWidth;
+        double actualH = CameraPreviewImage.ActualHeight;
+        if (source.PixelWidth <= 0 || source.PixelHeight <= 0 || actualW <= 0 || actualH <= 0)
+            return;
+
+        double scale = Math.Min(actualW / source.PixelWidth, actualH / source.PixelHeight);
+        CameraRecognitionGuide.Width = source.PixelWidth * CameraBarcodeFrameDecoder.GuideWidthRatio * scale;
+        CameraRecognitionGuide.Height = source.PixelHeight * CameraBarcodeFrameDecoder.GuideHeightRatio * scale;
+    }
+
+    private static Mat BitmapToMat(Bitmap bitmap)
+    {
+        if (bitmap.PixelFormat != System.Drawing.Imaging.PixelFormat.Format24bppRgb)
+        {
+            using var converted = new Bitmap(bitmap.Width, bitmap.Height, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+            using (Graphics graphics = Graphics.FromImage(converted))
+                graphics.DrawImage(bitmap, new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height));
+            return BitmapToMat(converted);
+        }
+
+        var rect = new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height);
+        BitmapData data = bitmap.LockBits(rect, ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+        try
+        {
+            return Mat.FromPixelData(bitmap.Height, bitmap.Width, MatType.CV_8UC3, data.Scan0, data.Stride).Clone();
+        }
+        finally
+        {
+            bitmap.UnlockBits(data);
+        }
     }
 
     private static BitmapSource ConvertBitmapToSource(Bitmap bitmap)
@@ -529,17 +608,19 @@ public partial class FirstUseSetupWizardWindow : Window
         if (SameCodeModeRadio.IsChecked == true)
         {
             FlowText.Text =
-                "1. 扫描面单条码开始录制\n" +
-                "2. 打包完成后再次扫描同一单号\n" +
-                "3. 软件停止录制并保存视频";
+                "1. 将面单条形码放入识别框开始录制\n" +
+                "2. 打包完成后将面单移出识别框至少 1.5 秒\n" +
+                "3. 再次放入同一面单，软件停止录制并保存视频\n" +
+                "4. 扫码枪仍可随时作为后备方案";
         }
         else
         {
             FlowText.Text =
-                "1. 放好快递\n" +
-                "2. 扫描面单条码开始录制\n" +
-                "3. 打包完成后扫描下一单\n" +
-                "4. 软件自动保存上一单并开始下一单";
+                "1. 将面单条形码放入识别框开始录制\n" +
+                "2. 完成当前包裹的打包\n" +
+                "3. 将下一张面单放入识别框\n" +
+                "4. 软件自动保存上一单并开始下一单\n" +
+                "5. 扫码枪仍可随时作为后备方案";
         }
     }
 
@@ -603,5 +684,6 @@ public partial class FirstUseSetupWizardWindow : Window
     {
         StopCameraPreview();
         StopMicPreview();
+        _cameraBarcodeRecognition.Dispose();
     }
 }

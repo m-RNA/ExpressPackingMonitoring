@@ -170,9 +170,19 @@ namespace ExpressPackingMonitoring.ViewModels
         private WebServer _webServer;
         private readonly SemaphoreSlim _webServerLifecycleLock = new(1, 1);
         private GlobalKeyboardHook _globalKeyHook;
+        private CameraBarcodeRecognitionService _cameraBarcodeRecognition;
+        private CancellationTokenSource _cameraBarcodeFeedbackCts;
 
         private bool _isBusy;
-        public bool IsBusy { get => _isBusy; set => SetProperty(ref _isBusy, value); }
+        public bool IsBusy
+        {
+            get => _isBusy;
+            set
+            {
+                if (SetProperty(ref _isBusy, value) && value)
+                    ResetCameraBarcodeRecognition();
+            }
+        }
 
         private string _busyText = "";
         public string BusyText { get => _busyText; set => SetProperty(ref _busyText, value); }
@@ -186,6 +196,14 @@ namespace ExpressPackingMonitoring.ViewModels
         private bool _isRecording;
         private string _scanInputText = "";
         public string ScanInputText { get => _scanInputText; set { if (SetProperty(ref _scanInputText, value)) ScheduleRefreshBarcodes(); } }
+
+        private string _cameraBarcodeStatusText = "将面单条形码放入框内";
+        private bool _isCameraBarcodeCandidate;
+        private bool _isCameraBarcodeConfirmed;
+        public string CameraBarcodeStatusText { get => _cameraBarcodeStatusText; private set => SetProperty(ref _cameraBarcodeStatusText, value); }
+        public bool IsCameraBarcodeCandidate { get => _isCameraBarcodeCandidate; private set => SetProperty(ref _isCameraBarcodeCandidate, value); }
+        public bool IsCameraBarcodeConfirmed { get => _isCameraBarcodeConfirmed; private set => SetProperty(ref _isCameraBarcodeConfirmed, value); }
+        public bool IsCameraBarcodeRecognitionEnabled => Config?.EnableCameraBarcodeRecognition == true;
 
         private double _diskUsagePercent;
         private string _diskUsageText = "0.0 / 0.0 GB";
@@ -315,7 +333,15 @@ namespace ExpressPackingMonitoring.ViewModels
         public bool IsShutdownInProgress { get => _isShutdownInProgress; private set => SetProperty(ref _isShutdownInProgress, value); }
         public double DiskUsagePercent { get => _diskUsagePercent; set => SetProperty(ref _diskUsagePercent, value); }
         public string DiskUsageText { get => _diskUsageText; set => SetProperty(ref _diskUsageText, value); }
-        public AppConfig Config { get => _config; set => SetProperty(ref _config, value); }
+        public AppConfig Config
+        {
+            get => _config;
+            set
+            {
+                if (SetProperty(ref _config, value))
+                    OnPropertyChanged(nameof(IsCameraBarcodeRecognitionEnabled));
+            }
+        }
         public string WorkstationAccessText { get => _workstationAccessText; set => SetProperty(ref _workstationAccessText, value); }
         public string WorkstationPrintStatusText { get => _workstationPrintStatusText; set => SetProperty(ref _workstationPrintStatusText, value); }
         public string WorkstationStatusToolTip { get => _workstationStatusToolTip; set => SetProperty(ref _workstationStatusToolTip, value); }
@@ -458,6 +484,7 @@ namespace ExpressPackingMonitoring.ViewModels
             }
 
             LoadConfig();
+            InitializeCameraBarcodeRecognition();
             // 在起动时后台探测可用 GPU 编码器并缓存
             Task.Run(() => {
                 _isEncoderDetectRunning = true;
@@ -555,6 +582,102 @@ namespace ExpressPackingMonitoring.ViewModels
         {
             if (_isDisposed || _shutdownRequested) return;
             HandleScan(barcode);
+        }
+
+        private void InitializeCameraBarcodeRecognition()
+        {
+            _cameraBarcodeRecognition = new CameraBarcodeRecognitionService(
+                IsAutoSubmitScanCandidate,
+                () => !IsRecording && CanSubmitCameraBarcode());
+            _cameraBarcodeRecognition.StatusChanged += OnCameraBarcodeStatusChanged;
+            _cameraBarcodeRecognition.BarcodeConfirmed += OnCameraBarcodeConfirmed;
+        }
+
+        private bool CanSubmitCameraBarcode()
+        {
+            return Config?.EnableCameraBarcodeRecognition == true
+                && !_isDisposed
+                && !_shutdownRequested
+                && !_isSetupWizardActive
+                && !_isCameraSleeping
+                && !IsBusy;
+        }
+
+        private void TrySubmitCameraBarcodeFrame(Mat frame)
+        {
+            if (!CanSubmitCameraBarcode())
+                return;
+
+            _cameraBarcodeRecognition?.TrySubmitFrame(frame, allowFullFrame: !IsRecording);
+        }
+
+        private void OnCameraBarcodeConfirmed(string code)
+        {
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher == null)
+                return;
+
+            _ = dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (CanSubmitCameraBarcode())
+                    HandleScan(code);
+            }));
+        }
+
+        private void OnCameraBarcodeStatusChanged(CameraBarcodeRecognitionStatus status)
+        {
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher == null)
+                return;
+
+            _ = dispatcher.BeginInvoke(new Action(() => ApplyCameraBarcodeStatus(status)));
+        }
+
+        private void ApplyCameraBarcodeStatus(CameraBarcodeRecognitionStatus status)
+        {
+            if (_isDisposed || Config?.EnableCameraBarcodeRecognition != true)
+                return;
+
+            if (status.State == CameraBarcodeRecognitionState.Confirmed)
+            {
+                _cameraBarcodeFeedbackCts?.Cancel();
+                var cts = _cameraBarcodeFeedbackCts = new CancellationTokenSource();
+                IsCameraBarcodeCandidate = false;
+                IsCameraBarcodeConfirmed = true;
+                CameraBarcodeStatusText = $"已识别 {status.Code}";
+                _ = ResetCameraBarcodeFeedbackAsync(cts);
+                return;
+            }
+
+            if (IsCameraBarcodeConfirmed)
+                return;
+
+            IsCameraBarcodeCandidate = status.State == CameraBarcodeRecognitionState.Candidate;
+            CameraBarcodeStatusText = IsCameraBarcodeCandidate ? "识别中，请保持稳定" : "将面单条形码放入框内";
+        }
+
+        private async Task ResetCameraBarcodeFeedbackAsync(CancellationTokenSource cts)
+        {
+            try
+            {
+                await Task.Delay(1200, cts.Token);
+                if (!cts.IsCancellationRequested && !_isDisposed)
+                {
+                    IsCameraBarcodeConfirmed = false;
+                    IsCameraBarcodeCandidate = false;
+                    CameraBarcodeStatusText = "将面单条形码放入框内";
+                }
+            }
+            catch (OperationCanceledException) { }
+        }
+
+        private void ResetCameraBarcodeRecognition()
+        {
+            _cameraBarcodeFeedbackCts?.Cancel();
+            _cameraBarcodeRecognition?.Reset();
+            IsCameraBarcodeCandidate = false;
+            IsCameraBarcodeConfirmed = false;
+            CameraBarcodeStatusText = "将面单条形码放入框内";
         }
 
         private void StartUiHeartbeat()
@@ -922,14 +1045,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private bool IsOrderScan(string upperResult)
         {
-            if (string.IsNullOrWhiteSpace(upperResult)) return false;
-            if (upperResult.Contains("CLEAR") || upperResult.Contains("清除")) return false;
-            if (upperResult.Contains("SHIP") || upperResult.Contains("发货") || upperResult.Contains("FAHUO")) return false;
-            if (upperResult.Contains("BACK") || upperResult.Contains("退货") || upperResult.Contains("TUIHUO")) return false;
-            if (upperResult.Contains("START") || upperResult.Contains("开始录制")) return false;
-            if (upperResult.Contains("STOP") || upperResult.Contains("停止录制")) return false;
-            try { return System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex); }
-            catch { return false; }
+            return CameraBarcodeCandidatePolicy.IsValid(upperResult, Config.OrderIdRegex);
         }
 
         internal static bool ShouldAlertPrintedRefund(string mode, bool alertEnabled, OrderInfo orderInfo)
@@ -1329,6 +1445,7 @@ namespace ExpressPackingMonitoring.ViewModels
                         || Config.Fps != nextConfig.Fps;
                     bool themeChanged = Config.Theme != nextConfig.Theme;
                     bool globalKeyChanged = Config.EnableGlobalKeyboard != nextConfig.EnableGlobalKeyboard;
+                    bool cameraBarcodeChanged = Config.EnableCameraBarcodeRecognition != nextConfig.EnableCameraBarcodeRecognition;
                     bool workstationChanged = !string.Equals(_activeWorkstationRole, nextConfig.WorkstationRole, StringComparison.OrdinalIgnoreCase);
                     bool aiTtsChanged = Config.EnableAiTts != nextConfig.EnableAiTts
                         || Config.AiTtsEngine != nextConfig.AiTtsEngine;
@@ -1344,6 +1461,8 @@ namespace ExpressPackingMonitoring.ViewModels
                     if (!SaveConfig(nextConfig, notifyUser: true))
                         return false;
                     Config = nextConfig;
+                    if (cameraBarcodeChanged)
+                        ResetCameraBarcodeRecognition();
 
                     // 同步语音服务配置
                     if (_speechService != null)
@@ -1460,11 +1579,12 @@ namespace ExpressPackingMonitoring.ViewModels
                     return;
 
                 AppConfig nextConfig = wizard.WasSkipped ? clonedConfig : wizard.ResultConfig;
-                nextConfig.FirstUseWizardCompleted = true;
+                AppConfig.ApplyFirstUseDefaults(nextConfig);
                 AppConfig.NormalizeAfterLoad(nextConfig);
                 if (!SaveConfig(nextConfig, notifyUser: true))
                     return;
                 Config = nextConfig;
+                ResetCameraBarcodeRecognition();
                 ApplyGlobalKeyboardConfig();
                 if (_globalKeyHook != null)
                 {
@@ -2428,6 +2548,9 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private bool StopCamera()
         {
+            if (!_isDisposed)
+                ResetCameraBarcodeRecognition();
+
             VideoCaptureDevice source = _videoSource;
             if (source != null)
             {
@@ -2532,7 +2655,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
                     if (currentFrame != null && !currentFrame.Empty())
                     {
-
+                        TrySubmitCameraBarcodeFrame(currentFrame);
                         Mat processedFrame = currentFrame;
                         CameraFrameSize = new System.Windows.Size(currentFrame.Width, currentFrame.Height);
 
@@ -3154,6 +3277,8 @@ namespace ExpressPackingMonitoring.ViewModels
             _shutdownRequested = true;
             _isDisposed = true;
             _cts?.Cancel();
+            _cameraBarcodeFeedbackCts?.Cancel();
+            try { _cameraBarcodeRecognition?.Dispose(); } catch { }
             try { _uiHeartbeatTimer?.Stop(); } catch { }
             _stopReason = "程序退出";
 

@@ -9,6 +9,7 @@ using System.Windows.Threading;
 using ExpressPackingMonitoring.Config;
 using ExpressPackingMonitoring.Localization;
 using ExpressPackingMonitoring.ViewModels;
+using ExpressPackingMonitoring.Services;
 
 namespace ExpressPackingMonitoring.UI
 {
@@ -163,15 +164,16 @@ namespace ExpressPackingMonitoring.UI
                     vm.PropertyChanged += (sender, args) =>
                     {
                         if (args.PropertyName == nameof(MainViewModel.LastZoomRect) ||
-                            args.PropertyName == nameof(MainViewModel.CameraFrameSize))
+                            args.PropertyName == nameof(MainViewModel.CameraFrameSize) ||
+                            args.PropertyName == nameof(MainViewModel.IsCameraBarcodeRecognitionEnabled))
                         {
-                            Dispatcher.BeginInvoke(new Action(() => UpdateZoomBorder(vm.LastZoomRect)));
+                            Dispatcher.BeginInvoke(new Action(() => UpdateCameraOverlays(vm)));
                         }
                     };
                     // 窗口/视频区域大小变化时重新计算边框位置
                     VideoImage.SizeChanged += (_, __) =>
                     {
-                        UpdateZoomBorder(vm.LastZoomRect);
+                        UpdateCameraOverlays(vm);
                     };
                 }
 
@@ -200,7 +202,7 @@ namespace ExpressPackingMonitoring.UI
                 else if (msg == WM_EXITSIZEMOVE)
                 {
                     vm.ResumeVideoPreviewUpdatesAfterWindowMove();
-                    UpdateZoomBorder(vm.LastZoomRect);
+                    UpdateCameraOverlays(vm);
                 }
             }
 
@@ -230,6 +232,30 @@ namespace ExpressPackingMonitoring.UI
             ZoomPreviewBorder.Width = zoomRect.Width * scale;
             ZoomPreviewBorder.Height = zoomRect.Height * scale;
             ZoomPreviewBorder.Visibility = Visibility.Visible;
+        }
+
+        private void UpdateCameraOverlays(MainViewModel vm)
+        {
+            UpdateZoomBorder(vm.LastZoomRect);
+            UpdateCameraBarcodeGuide(vm);
+        }
+
+        private void UpdateCameraBarcodeGuide(MainViewModel vm)
+        {
+            double sourceW = vm.CameraFrameSize.Width;
+            double sourceH = vm.CameraFrameSize.Height;
+            double actualW = VideoImage.ActualWidth;
+            double actualH = VideoImage.ActualHeight;
+            if (sourceW <= 0 || sourceH <= 0 || actualW <= 0 || actualH <= 0)
+            {
+                CameraBarcodeGuide.Width = 0;
+                CameraBarcodeGuide.Height = 0;
+                return;
+            }
+
+            double scale = Math.Min(actualW / sourceW, actualH / sourceH);
+            CameraBarcodeGuide.Width = sourceW * CameraBarcodeFrameDecoder.GuideWidthRatio * scale;
+            CameraBarcodeGuide.Height = sourceH * CameraBarcodeFrameDecoder.GuideHeightRatio * scale;
         }
 
         private void BtnSettings_Click(object sender, RoutedEventArgs e)

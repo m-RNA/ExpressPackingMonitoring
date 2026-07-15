@@ -95,6 +95,7 @@ namespace ExpressPackingMonitoring.Config
         public double MinRecordingSeconds { get; set; } = 3.0;
         public int MinVideoFileSizeKB { get; set; } = 50;
         public bool EnableCameraIdle { get; set; } = true;
+        public bool EnableCameraBarcodeRecognition { get; set; } = false;
         public bool EnableSameBarcodeStopRecording { get; set; } = false;
         public double CameraIdleMinutes { get; set; } = 5.0;
 
@@ -301,6 +302,12 @@ namespace ExpressPackingMonitoring.Config
             }
 
             return changed;
+        }
+
+        internal static void ApplyFirstUseDefaults(AppConfig config)
+        {
+            config.EnableCameraBarcodeRecognition = true;
+            config.FirstUseWizardCompleted = true;
         }
 
         private static string NormalizeAiTtsEngine(string engine)
