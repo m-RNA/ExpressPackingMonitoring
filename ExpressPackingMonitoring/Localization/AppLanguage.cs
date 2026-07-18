@@ -21,11 +21,22 @@ public static class AppLanguage
     private static readonly ResourceManager Resources =
         new("ExpressPackingMonitoring.Resources.Strings", typeof(AppLanguage).Assembly);
     private static readonly ConditionalWeakTable<DependencyObject, HashSet<DependencyProperty>> WatchedProperties = new();
+    public static readonly DependencyProperty AutoLocalizeProperty = DependencyProperty.RegisterAttached(
+        "AutoLocalize",
+        typeof(bool),
+        typeof(AppLanguage),
+        new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.Inherits));
 
     public static string Current { get; private set; } = Chinese;
     public static bool IsChinese => Current == Chinese;
     public static string StartRecordingText => Get("开始录制");
     public static string StopRecordingText => Get("停止录制");
+
+    public static void SetAutoLocalize(DependencyObject element, bool value) =>
+        element.SetValue(AutoLocalizeProperty, value);
+
+    public static bool GetAutoLocalize(DependencyObject element) =>
+        (bool)element.GetValue(AutoLocalizeProperty);
 
     public static string NormalizePreference(string? value) => value switch
     {
@@ -133,6 +144,9 @@ public static class AppLanguage
 
     private static void LocalizeSingleElement(FrameworkElement element)
     {
+        if (!GetAutoLocalize(element))
+            return;
+
         switch (element)
         {
             case Window window:
@@ -158,11 +172,12 @@ public static class AppLanguage
     }
 
     internal static bool ShouldLocalizeTextProperty(TextBlock textBlock) =>
-        textBlock.ReadLocalValue(TextBlock.TextProperty) != DependencyProperty.UnsetValue;
+        GetAutoLocalize(textBlock)
+        && textBlock.ReadLocalValue(TextBlock.TextProperty) != DependencyProperty.UnsetValue;
 
     private static void LocalizeContentElement(FrameworkContentElement? element)
     {
-        if (IsChinese || element == null) return;
+        if (IsChinese || element == null || !GetAutoLocalize(element)) return;
         if (element is Run run)
         {
             run.SetCurrentValue(Run.TextProperty, Translate(run.Text));

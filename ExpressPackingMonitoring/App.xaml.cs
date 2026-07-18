@@ -3,6 +3,7 @@ using ExpressPackingMonitoring.Logging;
 using ExpressPackingMonitoring.Audio;
 using ExpressPackingMonitoring.Config;
 using ExpressPackingMonitoring.Localization;
+using ExpressPackingMonitoring.Services;
 using System;
 using System.Threading.Tasks;
 using System.Windows;
@@ -20,6 +21,7 @@ namespace ExpressPackingMonitoring
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+            CameraBarcodeRuntimeOptions.Initialize(e.Args);
             var config = WorkstationConfigStore.Load();
             AppLanguage.Initialize(config.Language);
             AppLanguage.EnableAutomaticWpfLocalization();

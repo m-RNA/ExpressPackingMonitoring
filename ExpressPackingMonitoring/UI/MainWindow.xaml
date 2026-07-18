@@ -311,6 +311,7 @@
                                     Margin="16"
                                     MaxWidth="560"
                                     IsHitTestVisible="False"
+                                    localization:AppLanguage.AutoLocalize="False"
                                     Panel.ZIndex="30">
                             <Border CornerRadius="8"
                                     Padding="12,10"

@@ -157,7 +157,38 @@ public sealed class ConfigurationAndScannerTests
         Assert.Contains("url=http://+:5280/", command);
         Assert.Contains("sddl=\"D:(A;;GX;;;S-1-5-21-1000)\"", command);
         Assert.Contains("localport=5280", command);
+        Assert.Contains("delete urlacl", command);
+        Assert.Contains("firewall delete rule", command);
         Assert.DoesNotContain("user=Everyone", command, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildAccessSetupCommand_FirewallRepairDoesNotRewriteUrlAcl()
+    {
+        string command = WebServer.BuildAccessSetupCommand(
+            5280,
+            "S-1-5-21-1000",
+            includeUrlAcl: false);
+
+        Assert.DoesNotContain("urlacl", command, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("firewall delete rule", command, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("firewall add rule", command, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("localport=5280", command);
+    }
+
+    [Theory]
+    [InlineData("5280", 5280, true)]
+    [InlineData("80,443,5280", 5280, true)]
+    [InlineData("5000-5300", 5280, true)]
+    [InlineData("*", 5280, true)]
+    [InlineData("80,443", 5280, false)]
+    [InlineData("", 5280, false)]
+    public void FirewallPortsContain_RecognizesSingleAndRangePorts(
+        string configuredPorts,
+        int expectedPort,
+        bool expected)
+    {
+        Assert.Equal(expected, WebServer.FirewallPortsContain(configuredPorts, expectedPort));
     }
 
     [Theory]

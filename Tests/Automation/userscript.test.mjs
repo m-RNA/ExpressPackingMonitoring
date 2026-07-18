@@ -120,21 +120,26 @@ function createDiscoveryContext(initialStore, reachableHosts, webRtcPrefixes = [
   const context = {
     DEFAULT_HOST: '127.0.0.1', DEFAULT_PORT: 5280, DEFAULT_ADDRESS: '127.0.0.1:5280',
     INSTALL_MONITOR_ADDRESS: '',
-    DISCOVERY_DONE_KEY: 'monitor_auto_discovery_done', DISCOVERY_TIMEOUT: 1, DISCOVERY_BATCH_SIZE: 32,
+    DISCOVERY_DONE_KEY: 'monitor_auto_discovery_done',
+    DISCOVERY_LAST_ATTEMPT_KEY: 'monitor_auto_discovery_last_attempt',
+    DISCOVERY_RETRY_DELAY_MS: 1,
+    DISCOVERY_TIMEOUT: 1,
+    DISCOVERY_BATCH_SIZE: 32,
     WEBRTC_PREFIXES: webRtcPrefixes,
     GM_getValue: (key, fallback) => store.has(key) ? store.get(key) : fallback,
     GM_setValue: (key, value) => store.set(key, value),
+    showNotification: () => {},
     getStorageUrl: (host, port) => `http://${host}:${port}/api/storage`,
     GM_xmlhttpRequest: options => {
       const host = new URL(options.url).hostname;
       queueMicrotask(() => options.onload({ status: reachableHosts.has(host) ? 200 : 503 }));
     },
-    window: {}, document, setTimeout, clearTimeout, URL, Promise, Set, Array, String, Number, Boolean, Math
+    window: {}, document, setTimeout, clearTimeout, URL, Promise, Set, Array, String, Number, Boolean, Math, Date
   };
   vm.createContext(context);
   vm.runInContext(
-    between('    function getBaseUrl(', '    let monitorDiscoveryPromise = null;') +
-      ';getWebRtcLocalPrefixes=async()=>WEBRTC_PREFIXES;globalThis.findMonitor=findMonitorAddress;',
+    between('    function getBaseUrl(', '    // 专用工作页不显示业务菜单') +
+      ';getWebRtcLocalPrefixes=async()=>WEBRTC_PREFIXES;globalThis.findMonitor=findMonitorAddress;globalThis.ensureMonitor=ensureMonitorAddress;globalThis.shouldDiscover=shouldAttemptMonitorDiscovery;',
     context);
   return { context, store };
 }
@@ -160,4 +165,26 @@ test('fallback discovery scans common LAN prefixes when WebRTC prefix misses', a
     ['10.77.77']);
   assert.equal(await context.findMonitor(false), '192.168.2.239:5280');
   assert.equal(store.get('monitor_address'), '192.168.2.239:5280');
+});
+
+test('failed discovery retries after backoff and recovers when monitor comes online', async () => {
+  const reachableHosts = new Set();
+  const { context, store } = createDiscoveryContext({}, reachableHosts, ['192.168.31']);
+
+  assert.equal(await context.ensureMonitor(true), false);
+  assert.equal(store.get('monitor_auto_discovery_done'), true);
+  reachableHosts.add('192.168.31.10');
+  await new Promise(resolve => setTimeout(resolve, 2));
+
+  assert.equal(await context.ensureMonitor(false), true);
+  assert.equal(store.get('monitor_address'), '192.168.31.10:5280');
+});
+
+test('discovery backoff prevents repeated full scans before retry time', () => {
+  assert.equal(
+    createDiscoveryContext({}, new Set()).context.shouldDiscover(false, true, 1000, 1000),
+    false);
+  assert.equal(
+    createDiscoveryContext({}, new Set()).context.shouldDiscover(false, true, 1000, 1001),
+    true);
 });

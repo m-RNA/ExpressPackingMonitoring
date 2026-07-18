@@ -11,6 +11,7 @@ using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
 using System.Security.Principal;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -152,6 +153,7 @@ namespace ExpressPackingMonitoring.Services
 
         public void Start(bool allowAccessSetup = false)
         {
+            bool accessConfigured = false;
             try
             {
                 _listener.Start();
@@ -169,7 +171,8 @@ namespace ExpressPackingMonitoring.Services
                 }
 
                 // 只有用户明确保存局域网设置时，才请求管理员权限并重试
-                RegisterUrlAcl(Port);
+                ConfigureLanAccess(Port, includeUrlAcl: true);
+                accessConfigured = true;
                 try { _listener.Close(); } catch { }
                 _listener = CreateListener(Port, "+");
                 try
@@ -181,23 +184,38 @@ namespace ExpressPackingMonitoring.Services
                     throw new InvalidOperationException($"Web 服务监听 http://+:{Port}/ 失败，请检查端口占用、URL ACL 或防火墙权限。", retryException);
                 }
             }
+
+            if (allowAccessSetup && !accessConfigured && !HasExpectedFirewallRule(Port))
+            {
+                try
+                {
+                    ConfigureLanAccess(Port, includeUrlAcl: false);
+                }
+                catch
+                {
+                    try { _listener.Stop(); } catch { }
+                    throw;
+                }
+            }
             _listenTask = Task.Run(() => ListenLoop(_cts.Token));
         }
 
         /// <summary>
         /// 注册 URL ACL 和防火墙规则，需要管理员权限时会弹出 UAC 提示。
         /// </summary>
-        private static void RegisterUrlAcl(int port)
+        private static void ConfigureLanAccess(int port, bool includeUrlAcl)
         {
             using WindowsIdentity identity = WindowsIdentity.GetCurrent();
             string userSid = identity.User?.Value;
             if (string.IsNullOrWhiteSpace(userSid))
                 throw new InvalidOperationException("无法获取当前用户 SID，不能配置局域网服务监听权限。");
 
-            RunElevatedCmd(BuildAccessSetupCommand(port, userSid), "配置局域网服务访问权限");
+            RunElevatedCmd(BuildAccessSetupCommand(port, userSid, includeUrlAcl), "配置局域网服务访问权限");
         }
 
-        internal static string BuildAccessSetupCommand(int port, string userSid)
+        internal const string FirewallRuleName = "快递打包监控 Web服务";
+
+        internal static string BuildAccessSetupCommand(int port, string userSid, bool includeUrlAcl = true)
         {
             if (port <= 0 || port > 65535)
                 throw new ArgumentOutOfRangeException(nameof(port));
@@ -205,8 +223,108 @@ namespace ExpressPackingMonitoring.Services
                 throw new ArgumentException("用户 SID 不能为空。", nameof(userSid));
 
             string url = $"http://+:{port}/";
-            return $"netsh http add urlacl url={url} sddl=\"D:(A;;GX;;;{userSid})\" && "
-                + $"netsh advfirewall firewall add rule name=\"快递打包监控 Web服务\" dir=in action=allow protocol=TCP localport={port}";
+            string firewallCommand = BuildFirewallSetupCommand(port);
+            if (!includeUrlAcl)
+                return firewallCommand;
+
+            string urlAclCommand = $"(netsh http delete urlacl url={url} >nul 2>&1 & "
+                + $"netsh http add urlacl url={url} sddl=\"D:(A;;GX;;;{userSid})\")";
+            return $"{urlAclCommand} && ({firewallCommand})";
+        }
+
+        internal static string BuildFirewallSetupCommand(int port)
+        {
+            if (port <= 0 || port > 65535)
+                throw new ArgumentOutOfRangeException(nameof(port));
+
+            return $"netsh advfirewall firewall delete rule name=\"{FirewallRuleName}\" >nul 2>&1 & "
+                + $"netsh advfirewall firewall add rule name=\"{FirewallRuleName}\" dir=in action=allow protocol=TCP localport={port}";
+        }
+
+        internal static bool HasExpectedFirewallRule(int port)
+        {
+            if (port <= 0 || port > 65535)
+                return false;
+
+            object policyObject = null;
+            try
+            {
+                Type policyType = Type.GetTypeFromProgID("HNetCfg.FwPolicy2");
+                if (policyType == null)
+                    return false;
+
+                policyObject = Activator.CreateInstance(policyType);
+                dynamic policy = policyObject;
+                foreach (dynamic rule in policy.Rules)
+                {
+                    try
+                    {
+                        if (string.Equals((string)rule.Name, FirewallRuleName, StringComparison.Ordinal)
+                            && (bool)rule.Enabled
+                            && (int)rule.Direction == 1
+                            && (int)rule.Action == 1
+                            && (int)rule.Protocol == 6
+                            && (((int)rule.Profiles & 7) == 7 || (int)rule.Profiles == int.MaxValue)
+                            && FirewallPortsContain((string)rule.LocalPorts, port))
+                        {
+                            return true;
+                        }
+                    }
+                    catch
+                    {
+                        // 忽略无法读取的第三方或损坏规则，继续检查同名规则。
+                    }
+                    finally
+                    {
+                        try
+                        {
+                            if (Marshal.IsComObject(rule))
+                                Marshal.FinalReleaseComObject(rule);
+                        }
+                        catch { }
+                    }
+                }
+                return false;
+            }
+            catch (Exception ex)
+            {
+                RuntimeLog.Warn("Web", $"Unable to inspect Windows Firewall rule: {ex.Message}");
+                return false;
+            }
+            finally
+            {
+                try
+                {
+                    if (policyObject != null && Marshal.IsComObject(policyObject))
+                        Marshal.FinalReleaseComObject(policyObject);
+                }
+                catch { }
+            }
+        }
+
+        internal static bool FirewallPortsContain(string localPorts, int port)
+        {
+            if (string.IsNullOrWhiteSpace(localPorts))
+                return false;
+
+            foreach (string entry in localPorts.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (entry is "*" or "Any")
+                    return true;
+                if (int.TryParse(entry, out int singlePort) && singlePort == port)
+                    return true;
+
+                string[] range = entry.Split('-', 2, StringSplitOptions.TrimEntries);
+                if (range.Length == 2
+                    && int.TryParse(range[0], out int start)
+                    && int.TryParse(range[1], out int end)
+                    && port >= start
+                    && port <= end)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private static void RunElevatedCmd(string arguments, string actionName)

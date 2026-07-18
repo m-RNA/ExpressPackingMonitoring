@@ -110,9 +110,12 @@ namespace ExpressPackingMonitoring.UI
         public MainWindow()
         {
             InitializeComponent();
-#if DEBUG
-            RuntimeLog.Warn("CameraBarcodeCompare", "摄像头对照调试模式已启用：摄像头仅记录判定，不会触发录制；扫码枪保持真实执行");
-#endif
+            if (CameraBarcodeRuntimeOptions.ShadowMode)
+            {
+                RuntimeLog.Warn(
+                    "CameraBarcodeCompare",
+                    "摄像头对照调试模式已启用：摄像头仅记录判定，不会触发录制；扫码枪保持真实执行");
+            }
             BtnCopyMonitorAddress.Click += BtnCopyMonitorAddress_Click;
             BtnCopyMonitorAddress.PreviewMouseLeftButtonUp += BtnCopyMonitorAddress_PreviewMouseLeftButtonUp;
             BtnSwitchWorkstation.Click += BtnSwitchWorkstation_Click;

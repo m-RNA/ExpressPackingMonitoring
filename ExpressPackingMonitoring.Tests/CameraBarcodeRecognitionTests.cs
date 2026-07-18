@@ -88,6 +88,19 @@ public sealed class CameraBarcodeRecognitionTests
     }
 
     [Fact]
+    public void StabilityTracker_FirstReappearanceAfterRearmDelayUnlocksSameCode()
+    {
+        var tracker = Confirm(trackingNumber: "YT123456789012");
+
+        tracker.Observe(null, Start.AddSeconds(0.5));
+        CameraBarcodeObservation candidate = tracker.Observe("YT123456789012", Start.AddSeconds(3.5));
+        CameraBarcodeObservation confirmed = tracker.Observe("YT123456789012", Start.AddSeconds(3.75));
+
+        Assert.Equal("YT123456789012", candidate.CandidateCode);
+        Assert.Equal("YT123456789012", confirmed.ConfirmedCode);
+    }
+
+    [Fact]
     public void StabilityTracker_DifferentCodeCanConfirmWithoutWaitingForOldCodeToRearm()
     {
         var tracker = Confirm(trackingNumber: "YT123456789012");
@@ -185,11 +198,51 @@ public sealed class CameraBarcodeRecognitionTests
         Assert.Equal(BarcodeRecordingDecisionAction.Switch, decision.Action);
     }
 
+    [Theory]
+    [InlineData("CLEAR", "ClearInput", "ClearCommand")]
+    [InlineData("SHIP", "SwitchToShipping", "ShippingCommand")]
+    [InlineData("BACK", "SwitchToReturn", "ReturnCommand")]
+    [InlineData("START", "ToggleRecording", "StartCommand")]
+    [InlineData("STOP", "Stop", "StopCommand")]
+    public void RecordingDecisionPolicy_CommandsHaveExecutableDecisions(
+        string scan,
+        string expectedAction,
+        string expectedReason)
+    {
+        BarcodeRecordingDecision decision = BarcodeRecordingDecisionPolicy.Evaluate(
+            scan,
+            fromCamera: false,
+            canProcess: true,
+            isRecording: false,
+            recordingOrderId: "",
+            sameBarcodeStopEnabled: false,
+            inputOnCooldown: false,
+            "^[a-zA-Z0-9-]{12,25}$");
+
+        Assert.Equal(expectedAction, decision.Action.ToString());
+        Assert.Equal(expectedReason, decision.Reason.ToString());
+    }
+
+    [Theory]
+    [InlineData(new[] { "--camera-barcode-shadow" }, null, true)]
+    [InlineData(new string[0], "true", true)]
+    [InlineData(new string[0], "0", false)]
+    [InlineData(new[] { "--other-option" }, null, false)]
+    public void RuntimeOptions_ShadowModeRequiresExplicitOptIn(
+        string[] arguments,
+        string? environmentValue,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            CameraBarcodeRuntimeOptions.IsShadowModeEnabled(arguments, environmentValue));
+    }
+
     [Fact]
     public void Decoder_GuideRegionRecognizesCode128()
     {
         using Mat frame = CreateFrameWithBarcode("YT123456789012", BarcodeFormat.CODE_128, inGuide: true);
-        var decoder = new CameraBarcodeFrameDecoder();
+        using var decoder = new CameraBarcodeFrameDecoder();
 
         Assert.Equal("YT123456789012", decoder.DecodeGuideRegion(frame));
     }
@@ -199,7 +252,7 @@ public sealed class CameraBarcodeRecognitionTests
     {
         Rect guide = CameraBarcodeFrameDecoder.GetGuideRect(1280, 720);
 
-        Assert.Equal(new Rect(64, 36, 1152, 648), guide);
+        Assert.Equal(new Rect(96, 54, 1088, 612), guide);
         Assert.True(guide.Width < 1280);
         Assert.True(guide.Height < 720);
     }
@@ -212,7 +265,7 @@ public sealed class CameraBarcodeRecognitionTests
             BarcodeFormat.CODE_128,
             inGuide: false,
             rotate90: true);
-        var decoder = new CameraBarcodeFrameDecoder();
+        using var decoder = new CameraBarcodeFrameDecoder();
 
         Assert.Null(decoder.DecodeGuideRegion(frame));
         Assert.Equal("SF123456789012", decoder.DecodeFullFrame(frame));
@@ -222,7 +275,7 @@ public sealed class CameraBarcodeRecognitionTests
     public void Decoder_GuideRegionRecognizesRotatedBarcode()
     {
         using Mat frame = CreateFrameWithBarcode("JD123456789012", BarcodeFormat.CODE_128, inGuide: true, rotate90: true);
-        var decoder = new CameraBarcodeFrameDecoder();
+        using var decoder = new CameraBarcodeFrameDecoder();
 
         Assert.Equal("JD123456789012", decoder.DecodeGuideRegion(frame));
     }
@@ -231,7 +284,7 @@ public sealed class CameraBarcodeRecognitionTests
     public void Decoder_DoesNotAcceptEanProductBarcode()
     {
         using Mat frame = CreateFrameWithBarcode("6901234567892", BarcodeFormat.EAN_13, inGuide: true);
-        var decoder = new CameraBarcodeFrameDecoder();
+        using var decoder = new CameraBarcodeFrameDecoder();
 
         Assert.Null(decoder.DecodeGuideRegion(frame));
         Assert.Null(decoder.DecodeFullFrame(frame));
@@ -241,10 +294,42 @@ public sealed class CameraBarcodeRecognitionTests
     public void Decoder_DoesNotAcceptUpcProductBarcode()
     {
         using Mat frame = CreateFrameWithBarcode("012345678905", BarcodeFormat.UPC_A, inGuide: true);
-        var decoder = new CameraBarcodeFrameDecoder();
+        using var decoder = new CameraBarcodeFrameDecoder();
 
         Assert.Null(decoder.DecodeGuideRegion(frame));
         Assert.Null(decoder.DecodeFullFrame(frame));
+    }
+
+    [Fact]
+    public void Decoder_ReusesLargePixelBuffersForStableFrameSize()
+    {
+        using Mat frame = CreateFrameWithBarcode("YT123456789012", BarcodeFormat.CODE_128, inGuide: true);
+        using var decoder = new CameraBarcodeFrameDecoder();
+
+        Assert.Equal("YT123456789012", decoder.DecodeGuideRegion(frame));
+        int allocationsAfterWarmup = decoder.PixelBufferAllocationCount;
+        Assert.Equal("YT123456789012", decoder.DecodeGuideRegion(frame));
+
+        Assert.Equal(1, allocationsAfterWarmup);
+        Assert.Equal(allocationsAfterWarmup, decoder.PixelBufferAllocationCount);
+    }
+
+    [Fact]
+    public void Decoder_RepeatedDecodesAvoidPerFrameLargeManagedAllocations()
+    {
+        using Mat frame = CreateFrameWithBarcode("YT123456789012", BarcodeFormat.CODE_128, inGuide: true);
+        using var decoder = new CameraBarcodeFrameDecoder();
+        Assert.Equal("YT123456789012", decoder.DecodeGuideRegion(frame));
+
+        const int iterations = 8;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int index = 0; index < iterations; index++)
+            Assert.Equal("YT123456789012", decoder.DecodeGuideRegion(frame));
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.True(
+            allocated < 4_000_000,
+            $"Repeated decoding allocated {allocated:N0} managed bytes; large per-frame buffers may have returned.");
     }
 
     [Fact]

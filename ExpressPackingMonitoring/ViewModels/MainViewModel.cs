@@ -635,12 +635,14 @@ namespace ExpressPackingMonitoring.ViewModels
 
             _ = dispatcher.BeginInvoke(new Action(() =>
             {
-#if DEBUG
-                LogBarcodeRecordingComparison(code, fromCamera: true, dryRun: true);
-#else
+                if (CameraBarcodeRuntimeOptions.ShadowMode)
+                {
+                    LogBarcodeRecordingComparison(code, fromCamera: true, dryRun: true);
+                    return;
+                }
+
                 if (CanSubmitCameraBarcode())
                     HandleScan(code, fromCamera: true);
-#endif
             }));
         }
 
@@ -878,66 +880,74 @@ namespace ExpressPackingMonitoring.ViewModels
         private async void HandleScan(string scanResult, bool fromCamera)
         {
             NotifyUserActivity();
-            if (IsBusy || _isDisposed || _shutdownRequested) { ScanInputText = ""; return; }
-            if (string.IsNullOrWhiteSpace(scanResult)) return;
-            string upperResult = scanResult.ToUpper().Trim();
-#if DEBUG
-            LogBarcodeRecordingComparison(upperResult, fromCamera, dryRun: false);
-#endif
-            
-            // 立即清空扫码框，防止重复触发
-            ScanInputText = ""; 
+            BarcodeRecordingDecision decision = EvaluateBarcodeRecordingDecision(scanResult, fromCamera);
+            if (CameraBarcodeRuntimeOptions.ShadowMode)
+                LogBarcodeRecordingComparison(decision, fromCamera, dryRun: false);
 
-            // 摄像头持续识别同一面单时不会重复提交；开启同码停录后，只有单号连续消失
-            // 满 3 秒并重新稳定识别，才会再次进入下方的同码停录流程。扫码枪行为不变。
-            if (fromCamera
-                && CameraBarcodeCandidatePolicy.ShouldIgnoreCurrentRecordingCode(
-                    upperResult,
-                    _recordingOrderId,
-                    IsRecording,
-                    Config.EnableSameBarcodeStopRecording))
+            if (decision.Reason == BarcodeRecordingDecisionReason.CannotProcess)
             {
-                RuntimeLog.Info("CameraBarcode", $"Ignored current recording barcode while same-code stop is disabled: {upperResult}");
+                ScanInputText = "";
                 return;
             }
+            if (decision.Reason == BarcodeRecordingDecisionReason.EmptyInput)
+                return;
 
-            if (_isInputOnCooldown)
+            string upperResult = decision.NormalizedValue;
+            // 立即清空扫码框，防止重复触发
+            ScanInputText = "";
+
+            switch (decision.Reason)
             {
-                if (IsOrderScan(upperResult))
-                {
+                case BarcodeRecordingDecisionReason.CameraCurrentCodeIgnored:
+                    RuntimeLog.Info("CameraBarcode", $"Ignored current recording barcode while same-code stop is disabled: {upperResult}");
+                    return;
+                case BarcodeRecordingDecisionReason.CooldownOrderQueued:
                     _pendingScanDuringCooldown = upperResult;
                     RuntimeLog.Info("Scan", $"Scan queued during cooldown: {upperResult}");
                     ShowToast("扫码过快，已保留最后一个单号");
-                }
-                return;
-            }
-
-            // 指令处理
-            if (upperResult.Contains("CLEAR") || upperResult.Contains("清除")) { ShowToast("提示：扫码框已清除"); return; }
-            if (upperResult.Contains("SHIP") || upperResult.Contains("发货") || upperResult.Contains("FAHUO")) { CurrentMode = "发货"; StartInputCooldown(); ShowToast("切换为发货模式"); Speak(DefaultSpeechCatalog.SwitchToShipping); return; }
-            if (upperResult.Contains("BACK") || upperResult.Contains("退货") || upperResult.Contains("TUIHUO")) { CurrentMode = "退货"; StartInputCooldown(); ShowToast("切换为退货模式"); Speak(DefaultSpeechCatalog.SwitchToReturn); return; }
-            if (upperResult.Contains("START") || upperResult.Contains("开始录制")) { ToggleRecording(); return; }
-            if (upperResult.Contains("STOP") || upperResult.Contains("停止录制")) { _ = SafeStopRecordingAsync(true, mergeAfterStop: true); return; }
-
-            // 同码停录先比对当前录制单号，再走普通单号规则，避免手动生成的 MAN_ 单号被正则拦截
-            if (IsRecording && Config.EnableSameBarcodeStopRecording)
-            {
-                string recordingOrderId = (_recordingOrderId ?? "").ToUpper().Trim();
-
-                if (string.IsNullOrWhiteSpace(recordingOrderId))
-                {
+                    return;
+                case BarcodeRecordingDecisionReason.CooldownIgnored:
+                    return;
+                case BarcodeRecordingDecisionReason.ClearCommand:
+                    ShowToast("提示：扫码框已清除");
+                    return;
+                case BarcodeRecordingDecisionReason.ShippingCommand:
+                    CurrentMode = "发货";
+                    StartInputCooldown();
+                    ShowToast("切换为发货模式");
+                    Speak(DefaultSpeechCatalog.SwitchToShipping);
+                    return;
+                case BarcodeRecordingDecisionReason.ReturnCommand:
+                    CurrentMode = "退货";
+                    StartInputCooldown();
+                    ShowToast("切换为退货模式");
+                    Speak(DefaultSpeechCatalog.SwitchToReturn);
+                    return;
+                case BarcodeRecordingDecisionReason.StartCommand:
+                    ToggleRecording();
+                    return;
+                case BarcodeRecordingDecisionReason.StopCommand:
+                    _ = SafeStopRecordingAsync(true, mergeAfterStop: true);
+                    return;
+                case BarcodeRecordingDecisionReason.RecordingOrderMissing:
                     ShowToast("当前录像未绑定单号，无法同码停录");
                     SpeakWarning(DefaultSpeechCatalog.RecordingHasNoOrderNumber);
                     return;
-                }
-
-                if (upperResult != recordingOrderId)
-                {
+                case BarcodeRecordingDecisionReason.RecordingOrderMismatch:
                     ShowToast($"警告：单号不一致：{upperResult}");
                     SpeakWarning(DefaultSpeechCatalog.OrderNumberMismatch);
                     return;
-                }
+                case BarcodeRecordingDecisionReason.InvalidOrderNumber:
+                    PublishScannerAlert(
+                        $"invalid-order-number:{upperResult}",
+                        "非法单号，已拦截",
+                        DefaultSpeechCatalog.InvalidOrderNumber);
+                    return;
+            }
 
+            // 同码停录由统一决策器确认，避免影子日志与真实流程分别维护一套规则。
+            if (decision.Reason == BarcodeRecordingDecisionReason.SameCodeMatched)
+            {
                 if (!await _recorderLock.WaitAsync(0))
                 {
                     ShowToast("录制状态正在切换，请稍后再试");
@@ -968,20 +978,6 @@ namespace ExpressPackingMonitoring.ViewModels
                 }
                 return;
             }
-
-            // 正则验证
-            try
-            {
-                if (!System.Text.RegularExpressions.Regex.IsMatch(upperResult, Config.OrderIdRegex))
-                {
-                    PublishScannerAlert(
-                        $"invalid-order-number:{upperResult}",
-                        "非法单号，已拦截",
-                        DefaultSpeechCatalog.InvalidOrderNumber);
-                    return;
-                }
-            }
-            catch { }
 
             Debug.WriteLine($"[Zoom] 扫码事件触发: ID={upperResult}, ZoomEnabled={Config.EnableSmartZoom}, Delay={Config.ZoomDelaySeconds}");
             StartInputCooldown();
@@ -1066,10 +1062,26 @@ namespace ExpressPackingMonitoring.ViewModels
             }
         }
 
-#if DEBUG
         private void LogBarcodeRecordingComparison(string scanResult, bool fromCamera, bool dryRun)
         {
-            BarcodeRecordingDecision decision = BarcodeRecordingDecisionPolicy.Evaluate(
+            BarcodeRecordingDecision decision = EvaluateBarcodeRecordingDecision(scanResult, fromCamera);
+            LogBarcodeRecordingComparison(decision, fromCamera, dryRun);
+        }
+
+        private void LogBarcodeRecordingComparison(
+            BarcodeRecordingDecision decision,
+            bool fromCamera,
+            bool dryRun)
+        {
+            string source = fromCamera ? "摄像头" : "扫码枪";
+            string execution = dryRun ? "仅判定不执行" : "进入真实流程";
+            RuntimeLog.Info(
+                "CameraBarcodeCompare",
+                $"来源={source}, 单号={decision.NormalizedValue}, 判定={GetBarcodeDecisionText(decision.Action)}, 原因={BarcodeRecordingDecisionPolicy.GetReasonText(decision.Reason)}, 执行={execution}, 当前录制={IsRecording}, 当前单号={_recordingOrderId}, 同码停录={Config.EnableSameBarcodeStopRecording}, 冷却中={_isInputOnCooldown}");
+        }
+
+        private BarcodeRecordingDecision EvaluateBarcodeRecordingDecision(string scanResult, bool fromCamera) =>
+            BarcodeRecordingDecisionPolicy.Evaluate(
                 scanResult,
                 fromCamera,
                 canProcess: fromCamera
@@ -1081,22 +1093,18 @@ namespace ExpressPackingMonitoring.ViewModels
                 _isInputOnCooldown,
                 Config.OrderIdRegex);
 
-            string source = fromCamera ? "摄像头" : "扫码枪";
-            string execution = dryRun ? "仅判定不执行" : "进入真实流程";
-            RuntimeLog.Info(
-                "CameraBarcodeCompare",
-                $"来源={source}, 单号={scanResult}, 判定={GetBarcodeDecisionText(decision.Action)}, 原因={decision.Reason}, 执行={execution}, 当前录制={IsRecording}, 当前单号={_recordingOrderId}, 同码停录={Config.EnableSameBarcodeStopRecording}, 冷却中={_isInputOnCooldown}");
-        }
-
         private static string GetBarcodeDecisionText(BarcodeRecordingDecisionAction action) => action switch
         {
             BarcodeRecordingDecisionAction.Queue => "等待处理",
             BarcodeRecordingDecisionAction.Start => "开始录制",
             BarcodeRecordingDecisionAction.Stop => "停止录制",
             BarcodeRecordingDecisionAction.Switch => "切换录制",
+            BarcodeRecordingDecisionAction.ClearInput => "清除输入",
+            BarcodeRecordingDecisionAction.SwitchToShipping => "切换发货模式",
+            BarcodeRecordingDecisionAction.SwitchToReturn => "切换退货模式",
+            BarcodeRecordingDecisionAction.ToggleRecording => "切换录制状态",
             _ => "忽略"
         };
-#endif
 
         private async void StartInputCooldown()
         {

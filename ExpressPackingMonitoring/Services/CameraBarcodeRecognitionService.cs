@@ -25,10 +25,36 @@ internal enum BarcodeRecordingDecisionAction
     Queue,
     Start,
     Stop,
-    Switch
+    Switch,
+    ClearInput,
+    SwitchToShipping,
+    SwitchToReturn,
+    ToggleRecording
 }
 
-internal sealed record BarcodeRecordingDecision(BarcodeRecordingDecisionAction Action, string Reason);
+internal enum BarcodeRecordingDecisionReason
+{
+    Ready,
+    CannotProcess,
+    EmptyInput,
+    CameraCurrentCodeIgnored,
+    CooldownOrderQueued,
+    CooldownIgnored,
+    ClearCommand,
+    ShippingCommand,
+    ReturnCommand,
+    StartCommand,
+    StopCommand,
+    RecordingOrderMissing,
+    RecordingOrderMismatch,
+    SameCodeMatched,
+    InvalidOrderNumber
+}
+
+internal sealed record BarcodeRecordingDecision(
+    BarcodeRecordingDecisionAction Action,
+    BarcodeRecordingDecisionReason Reason,
+    string NormalizedValue);
 
 internal static class BarcodeRecordingDecisionPolicy
 {
@@ -43,11 +69,11 @@ internal static class BarcodeRecordingDecisionPolicy
         string? orderIdRegex)
     {
         if (!canProcess)
-            return new BarcodeRecordingDecision(BarcodeRecordingDecisionAction.Ignore, "程序忙碌或正在关闭");
+            return Create(BarcodeRecordingDecisionAction.Ignore, BarcodeRecordingDecisionReason.CannotProcess, value);
 
         string normalized = (value ?? "").Trim().ToUpperInvariant();
         if (normalized.Length == 0)
-            return new BarcodeRecordingDecision(BarcodeRecordingDecisionAction.Ignore, "空输入");
+            return Create(BarcodeRecordingDecisionAction.Ignore, BarcodeRecordingDecisionReason.EmptyInput, normalized);
 
         if (fromCamera
             && CameraBarcodeCandidatePolicy.ShouldIgnoreCurrentRecordingCode(
@@ -56,58 +82,104 @@ internal static class BarcodeRecordingDecisionPolicy
                 isRecording,
                 sameBarcodeStopEnabled))
         {
-            return new BarcodeRecordingDecision(BarcodeRecordingDecisionAction.Ignore, "未开启同码停录，摄像头忽略当前录制单号");
+            return Create(BarcodeRecordingDecisionAction.Ignore, BarcodeRecordingDecisionReason.CameraCurrentCodeIgnored, normalized);
         }
 
         if (inputOnCooldown)
         {
             return IsOrderScan(normalized, orderIdRegex)
-                ? new BarcodeRecordingDecision(BarcodeRecordingDecisionAction.Queue, "扫码冷却中，保留最后一个单号")
-                : new BarcodeRecordingDecision(BarcodeRecordingDecisionAction.Ignore, "扫码冷却中");
+                ? Create(BarcodeRecordingDecisionAction.Queue, BarcodeRecordingDecisionReason.CooldownOrderQueued, normalized)
+                : Create(BarcodeRecordingDecisionAction.Ignore, BarcodeRecordingDecisionReason.CooldownIgnored, normalized);
         }
 
         if (normalized.Contains("CLEAR") || normalized.Contains("清除"))
-            return new BarcodeRecordingDecision(BarcodeRecordingDecisionAction.Ignore, "清除输入指令");
+            return Create(BarcodeRecordingDecisionAction.ClearInput, BarcodeRecordingDecisionReason.ClearCommand, normalized);
         if (normalized.Contains("SHIP") || normalized.Contains("发货") || normalized.Contains("FAHUO"))
-            return new BarcodeRecordingDecision(BarcodeRecordingDecisionAction.Ignore, "切换发货模式指令");
+            return Create(BarcodeRecordingDecisionAction.SwitchToShipping, BarcodeRecordingDecisionReason.ShippingCommand, normalized);
         if (normalized.Contains("BACK") || normalized.Contains("退货") || normalized.Contains("TUIHUO"))
-            return new BarcodeRecordingDecision(BarcodeRecordingDecisionAction.Ignore, "切换退货模式指令");
+            return Create(BarcodeRecordingDecisionAction.SwitchToReturn, BarcodeRecordingDecisionReason.ReturnCommand, normalized);
         if (normalized.Contains("START") || normalized.Contains("开始录制"))
-        {
-            return new BarcodeRecordingDecision(
-                isRecording ? BarcodeRecordingDecisionAction.Stop : BarcodeRecordingDecisionAction.Start,
-                "开始录制切换指令");
-        }
+            return Create(BarcodeRecordingDecisionAction.ToggleRecording, BarcodeRecordingDecisionReason.StartCommand, normalized);
         if (normalized.Contains("STOP") || normalized.Contains("停止录制"))
-        {
-            return new BarcodeRecordingDecision(
-                isRecording ? BarcodeRecordingDecisionAction.Stop : BarcodeRecordingDecisionAction.Ignore,
-                isRecording ? "停止录制指令" : "停止指令到达时未在录制");
-        }
+            return Create(BarcodeRecordingDecisionAction.Stop, BarcodeRecordingDecisionReason.StopCommand, normalized);
 
         if (isRecording && sameBarcodeStopEnabled)
         {
             string current = (recordingOrderId ?? "").Trim().ToUpperInvariant();
             if (current.Length == 0)
-                return new BarcodeRecordingDecision(BarcodeRecordingDecisionAction.Ignore, "当前录像未绑定单号");
+                return Create(BarcodeRecordingDecisionAction.Ignore, BarcodeRecordingDecisionReason.RecordingOrderMissing, normalized);
             if (!string.Equals(normalized, current, StringComparison.Ordinal))
-                return new BarcodeRecordingDecision(BarcodeRecordingDecisionAction.Ignore, "同码停录模式下单号不一致");
+                return Create(BarcodeRecordingDecisionAction.Ignore, BarcodeRecordingDecisionReason.RecordingOrderMismatch, normalized);
 
-            return new BarcodeRecordingDecision(BarcodeRecordingDecisionAction.Stop, "同码停录匹配");
+            return Create(BarcodeRecordingDecisionAction.Stop, BarcodeRecordingDecisionReason.SameCodeMatched, normalized);
         }
 
         if (!IsOrderScan(normalized, orderIdRegex))
-            return new BarcodeRecordingDecision(BarcodeRecordingDecisionAction.Ignore, "非法单号");
+            return Create(BarcodeRecordingDecisionAction.Ignore, BarcodeRecordingDecisionReason.InvalidOrderNumber, normalized);
 
         return isRecording
-            ? new BarcodeRecordingDecision(BarcodeRecordingDecisionAction.Switch, "停止当前录像并开始新单号")
-            : new BarcodeRecordingDecision(BarcodeRecordingDecisionAction.Start, "开始新单号录像");
+            ? Create(BarcodeRecordingDecisionAction.Switch, BarcodeRecordingDecisionReason.Ready, normalized)
+            : Create(BarcodeRecordingDecisionAction.Start, BarcodeRecordingDecisionReason.Ready, normalized);
     }
+
+    internal static string GetReasonText(BarcodeRecordingDecisionReason reason) => reason switch
+    {
+        BarcodeRecordingDecisionReason.CannotProcess => "程序忙碌或正在关闭",
+        BarcodeRecordingDecisionReason.EmptyInput => "空输入",
+        BarcodeRecordingDecisionReason.CameraCurrentCodeIgnored => "未开启同码停录，摄像头忽略当前录制单号",
+        BarcodeRecordingDecisionReason.CooldownOrderQueued => "扫码冷却中，保留最后一个单号",
+        BarcodeRecordingDecisionReason.CooldownIgnored => "扫码冷却中",
+        BarcodeRecordingDecisionReason.ClearCommand => "清除输入指令",
+        BarcodeRecordingDecisionReason.ShippingCommand => "切换发货模式指令",
+        BarcodeRecordingDecisionReason.ReturnCommand => "切换退货模式指令",
+        BarcodeRecordingDecisionReason.StartCommand => "开始录制切换指令",
+        BarcodeRecordingDecisionReason.StopCommand => "停止录制指令",
+        BarcodeRecordingDecisionReason.RecordingOrderMissing => "当前录像未绑定单号",
+        BarcodeRecordingDecisionReason.RecordingOrderMismatch => "同码停录模式下单号不一致",
+        BarcodeRecordingDecisionReason.SameCodeMatched => "同码停录匹配",
+        BarcodeRecordingDecisionReason.InvalidOrderNumber => "非法单号",
+        _ => "通过录制规则"
+    };
+
+    private static BarcodeRecordingDecision Create(
+        BarcodeRecordingDecisionAction action,
+        BarcodeRecordingDecisionReason reason,
+        string? value) => new(action, reason, (value ?? "").Trim().ToUpperInvariant());
 
     private static bool IsOrderScan(string value, string? orderIdRegex)
     {
         try { return Regex.IsMatch(value, orderIdRegex ?? ""); }
         catch { return true; }
+    }
+}
+
+internal static class CameraBarcodeRuntimeOptions
+{
+    internal const string ShadowModeArgument = "--camera-barcode-shadow";
+    internal const string ShadowModeEnvironmentVariable = "EPM_CAMERA_BARCODE_SHADOW";
+
+    public static bool ShadowMode { get; private set; }
+
+    public static void Initialize(IEnumerable<string>? arguments)
+    {
+        ShadowMode = IsShadowModeEnabled(
+            arguments,
+            Environment.GetEnvironmentVariable(ShadowModeEnvironmentVariable));
+    }
+
+    internal static bool IsShadowModeEnabled(IEnumerable<string>? arguments, string? environmentValue)
+    {
+        if (arguments?.Any(argument => string.Equals(
+                argument,
+                ShadowModeArgument,
+                StringComparison.OrdinalIgnoreCase)) == true)
+        {
+            return true;
+        }
+
+        return string.Equals(environmentValue, "1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(environmentValue, "true", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(environmentValue, "yes", StringComparison.OrdinalIgnoreCase);
     }
 }
 
@@ -219,17 +291,27 @@ internal sealed class CameraBarcodeStabilityTracker
         {
             if (string.Equals(code, normalized, StringComparison.Ordinal))
             {
+                if (!_missingLockedCodesSince.TryGetValue(code, out DateTimeOffset missingSince)
+                    || now - missingSince < RearmDelay)
+                {
+                    _missingLockedCodesSince.Remove(code);
+                    continue;
+                }
+
+                // 运动门控会在空画面稳定后暂停解码，因此重新出现的这一帧可能是
+                // 消失期间的下一次观察。先按实际经过时间解锁，再让它成为新候选。
+                _lockedCodes.Remove(code);
                 _missingLockedCodesSince.Remove(code);
                 continue;
             }
 
-            if (!_missingLockedCodesSince.TryGetValue(code, out DateTimeOffset missingSince))
+            if (!_missingLockedCodesSince.TryGetValue(code, out DateTimeOffset firstMissingAt))
             {
                 _missingLockedCodesSince[code] = now;
                 continue;
             }
 
-            if (now - missingSince >= RearmDelay)
+            if (now - firstMissingAt >= RearmDelay)
             {
                 _lockedCodes.Remove(code);
                 _missingLockedCodesSince.Remove(code);
@@ -252,10 +334,12 @@ internal sealed class CameraBarcodeStabilityTracker
     }
 }
 
-internal sealed class CameraBarcodeFrameDecoder
+internal sealed class CameraBarcodeFrameDecoder : IDisposable
 {
-    internal const double GuideWidthRatio = 0.9;
-    internal const double GuideHeightRatio = 0.9;
+    internal const double GuideWidthRatio = 0.85;
+    internal const double GuideHeightRatio = 0.85;
+    internal const int MaxDecodeDimension = 1440;
+    internal const int MaxDecodePixels = 1_200_000;
 
     private static readonly HashSet<BarcodeFormat> AllowedFormats =
     [
@@ -266,13 +350,19 @@ internal sealed class CameraBarcodeFrameDecoder
 
     private readonly BarcodeReaderGeneric _reader = new()
     {
-        AutoRotate = true,
+        AutoRotate = false,
         Options = new DecodingOptions
         {
             TryHarder = true,
             PossibleFormats = AllowedFormats.ToList()
         }
     };
+    private readonly DecodeWorkspace _guideWorkspace = new();
+    private readonly DecodeWorkspace _fullFrameWorkspace = new();
+    private bool _disposed;
+
+    internal int PixelBufferAllocationCount =>
+        _guideWorkspace.Buffers.AllocationCount + _fullFrameWorkspace.Buffers.AllocationCount;
 
     public string? DecodeGuideRegion(Mat frame)
     {
@@ -283,11 +373,11 @@ internal sealed class CameraBarcodeFrameDecoder
         if (guide.Width <= 0 || guide.Height <= 0)
             return null;
 
-        using Mat cropped = frame.Clone(guide);
-        return Decode(cropped);
+        using Mat cropped = new(frame, guide);
+        return Decode(cropped, _guideWorkspace);
     }
 
-    public string? DecodeFullFrame(Mat frame) => Decode(frame);
+    public string? DecodeFullFrame(Mat frame) => Decode(frame, _fullFrameWorkspace);
 
     internal static Rect GetGuideRect(int width, int height)
     {
@@ -296,38 +386,179 @@ internal sealed class CameraBarcodeFrameDecoder
         return new Rect((width - guideWidth) / 2, (height - guideHeight) / 2, guideWidth, guideHeight);
     }
 
-    private string? Decode(Mat frame)
+    private string? Decode(Mat frame, DecodeWorkspace workspace)
     {
         if (frame == null || frame.IsDisposed || frame.Empty())
             return null;
 
-        using Mat gray = new();
+        if (_disposed)
+            return null;
+
         switch (frame.Channels())
         {
             case 1:
-                frame.CopyTo(gray);
+                frame.CopyTo(workspace.Gray);
                 break;
             case 3:
-                Cv2.CvtColor(frame, gray, ColorConversionCodes.BGR2GRAY);
+                Cv2.CvtColor(frame, workspace.Gray, ColorConversionCodes.BGR2GRAY);
                 break;
             case 4:
-                Cv2.CvtColor(frame, gray, ColorConversionCodes.BGRA2GRAY);
+                Cv2.CvtColor(frame, workspace.Gray, ColorConversionCodes.BGRA2GRAY);
                 break;
             default:
                 return null;
         }
 
-        using Mat? continuous = gray.IsContinuous() ? null : gray.Clone();
-        Mat source = continuous ?? gray;
-        byte[] pixels = new byte[checked(source.Width * source.Height)];
-        Marshal.Copy(source.Data, pixels, 0, pixels.Length);
+        Mat source = PrepareDecodeSize(workspace.Gray, workspace.Scaled);
+        if (!source.IsContinuous())
+        {
+            source.CopyTo(workspace.Continuous);
+            source = workspace.Continuous;
+        }
 
-        Result? result = _reader.Decode(pixels, source.Width, source.Height, RGBLuminanceSource.BitmapFormat.Gray8);
+        int length = checked(source.Width * source.Height);
+        DecodeBuffers buffers = workspace.Buffers;
+        buffers.EnsureSize(length);
+        Marshal.Copy(source.Data, buffers.Pixels, 0, length);
+
+        Result? result = null;
+        for (int orientation = 0; orientation < 4 && result == null; orientation++)
+        {
+            var luminance = new ReusableGrayLuminanceSource(
+                buffers.Pixels,
+                buffers.OrientationScratch,
+                source.Width,
+                source.Height,
+                orientation);
+            result = _reader.Decode(luminance);
+        }
         if (result == null || !AllowedFormats.Contains(result.BarcodeFormat))
             return null;
 
         string normalized = (result.Text ?? "").Trim().ToUpperInvariant();
         return normalized.Length == 0 ? null : normalized;
+    }
+
+    private Mat PrepareDecodeSize(Mat gray, Mat scaled)
+    {
+        double dimensionScale = (double)MaxDecodeDimension / Math.Max(gray.Width, gray.Height);
+        double pixelScale = Math.Sqrt((double)MaxDecodePixels / (gray.Width * (double)gray.Height));
+        double scale = Math.Min(1, Math.Min(dimensionScale, pixelScale));
+        if (scale >= 0.999)
+            return gray;
+
+        int width = Math.Max(1, (int)Math.Round(gray.Width * scale));
+        int height = Math.Max(1, (int)Math.Round(gray.Height * scale));
+        Cv2.Resize(gray, scaled, new OpenCvSharp.Size(width, height), interpolation: InterpolationFlags.Area);
+        return scaled;
+    }
+
+    private sealed class DecodeWorkspace : IDisposable
+    {
+        public Mat Gray { get; } = new();
+        public Mat Scaled { get; } = new();
+        public Mat Continuous { get; } = new();
+        public DecodeBuffers Buffers { get; } = new();
+
+        public void Dispose()
+        {
+            Gray.Dispose();
+            Scaled.Dispose();
+            Continuous.Dispose();
+        }
+    }
+
+    private sealed class DecodeBuffers
+    {
+        public byte[] Pixels { get; private set; } = [];
+        public byte[] OrientationScratch { get; private set; } = [];
+        public int AllocationCount { get; private set; }
+
+        public void EnsureSize(int length)
+        {
+            if (Pixels.Length == length && OrientationScratch.Length == length)
+                return;
+
+            Pixels = GC.AllocateUninitializedArray<byte>(length);
+            OrientationScratch = GC.AllocateUninitializedArray<byte>(length);
+            AllocationCount++;
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+        _guideWorkspace.Dispose();
+        _fullFrameWorkspace.Dispose();
+    }
+}
+
+internal sealed class ReusableGrayLuminanceSource : LuminanceSource
+{
+    private readonly byte[] _pixels;
+    private readonly byte[] _orientationScratch;
+    private readonly int _sourceWidth;
+    private readonly int _sourceHeight;
+    private readonly int _orientation;
+
+    public ReusableGrayLuminanceSource(
+        byte[] pixels,
+        byte[] orientationScratch,
+        int sourceWidth,
+        int sourceHeight,
+        int orientation)
+        : base(
+            orientation % 2 == 0 ? sourceWidth : sourceHeight,
+            orientation % 2 == 0 ? sourceHeight : sourceWidth)
+    {
+        _pixels = pixels;
+        _orientationScratch = orientationScratch;
+        _sourceWidth = sourceWidth;
+        _sourceHeight = sourceHeight;
+        _orientation = orientation;
+    }
+
+    public override byte[] getRow(int y, byte[] row)
+    {
+        if ((uint)y >= (uint)Height)
+            throw new ArgumentOutOfRangeException(nameof(y));
+        if (row == null || row.Length < Width)
+            row = new byte[Width];
+
+        for (int x = 0; x < Width; x++)
+            row[x] = GetPixel(x, y);
+        return row;
+    }
+
+    public override byte[] Matrix
+    {
+        get
+        {
+            if (_orientation == 0)
+                return _pixels;
+
+            int index = 0;
+            for (int y = 0; y < Height; y++)
+            {
+                for (int x = 0; x < Width; x++)
+                    _orientationScratch[index++] = GetPixel(x, y);
+            }
+            return _orientationScratch;
+        }
+    }
+
+    private byte GetPixel(int x, int y)
+    {
+        (int sourceX, int sourceY) = _orientation switch
+        {
+            1 => (_sourceWidth - 1 - y, x),
+            2 => (_sourceWidth - 1 - x, _sourceHeight - 1 - y),
+            3 => (y, _sourceHeight - 1 - x),
+            _ => (x, y)
+        };
+        return _pixels[sourceY * _sourceWidth + sourceX];
     }
 }
 
@@ -449,6 +680,7 @@ internal sealed class CameraBarcodeRecognitionService : IDisposable
     private long _droppedFrames;
     private int _generation;
     private volatile bool _disposed;
+    private int _workerResourcesDisposed;
 
     public event Action<CameraBarcodeRecognitionStatus>? StatusChanged;
     public event Action<string>? BarcodeConfirmed;
@@ -634,7 +866,28 @@ internal sealed class CameraBarcodeRecognitionService : IDisposable
             _pendingFrame = null;
         }
         pending?.Dispose();
-        try { _workerTask.Wait(1000); } catch { }
+        bool completed = false;
+        try { completed = _workerTask.Wait(1000); } catch { completed = _workerTask.IsCompleted; }
+        if (completed)
+        {
+            DisposeWorkerResources();
+        }
+        else
+        {
+            RuntimeLog.Warn("CameraBarcode", "Recognition worker is still stopping; native decoder cleanup deferred");
+            _ = _workerTask.ContinueWith(
+                _ => DisposeWorkerResources(),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+    }
+
+    private void DisposeWorkerResources()
+    {
+        if (Interlocked.Exchange(ref _workerResourcesDisposed, 1) != 0)
+            return;
+        _decoder.Dispose();
         _motionGate.Dispose();
         _pendingSignal.Dispose();
         _cts.Dispose();

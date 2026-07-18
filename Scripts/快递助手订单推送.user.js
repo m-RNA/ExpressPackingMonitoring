@@ -32,6 +32,8 @@
     const DEFAULT_ADDRESS = `${DEFAULT_HOST}:${DEFAULT_PORT}`;
     const INSTALL_MONITOR_ADDRESS = '';
     const DISCOVERY_DONE_KEY = 'monitor_auto_discovery_done';
+    const DISCOVERY_LAST_ATTEMPT_KEY = 'monitor_auto_discovery_last_attempt';
+    const DISCOVERY_RETRY_DELAY_MS = 60 * 1000;
     const DISCOVERY_TIMEOUT = 700;
     const DISCOVERY_BATCH_SIZE = 32;
     const ORDER_LOOKUP_RECONNECT_MS = 250;
@@ -366,6 +368,7 @@
     }
 
     async function findMonitorAddress(showProgress) {
+        GM_setValue(DISCOVERY_LAST_ATTEMPT_KEY, Date.now());
         const saved = getMonitorAddress();
         const port = saved.port;
         const directCandidates = [saved.host, '127.0.0.1', 'localhost']
@@ -407,8 +410,18 @@
     }
 
     let monitorDiscoveryPromise = null;
+    function shouldAttemptMonitorDiscovery(force, discoveryDone, lastAttempt, now) {
+        if (force || !discoveryDone) return true;
+        const elapsed = Number(now ?? Date.now()) - Number(lastAttempt || 0);
+        return elapsed >= DISCOVERY_RETRY_DELAY_MS;
+    }
+
     async function ensureMonitorAddress(auto) {
-        const shouldDiscover = auto || !GM_getValue(DISCOVERY_DONE_KEY, false);
+        const shouldDiscover = shouldAttemptMonitorDiscovery(
+            auto,
+            GM_getValue(DISCOVERY_DONE_KEY, false),
+            GM_getValue(DISCOVERY_LAST_ATTEMPT_KEY, 0),
+            Date.now());
         if (!shouldDiscover) return true;
 
         if (!monitorDiscoveryPromise) {
