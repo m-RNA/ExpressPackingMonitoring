@@ -10,8 +10,9 @@ $dataRoot = Join-Path $runRoot "data"
 $fixtureVideo = Join-Path $runRoot "fixture.mp4"
 $hostStdout = Join-Path $runRoot "host.stdout.log"
 $hostStderr = Join-Path $runRoot "host.stderr.log"
-$hostProject = Join-Path $repoRoot "Tools\ExpressPackingMonitoring.AutomationHost\ExpressPackingMonitoring.AutomationHost.csproj"
 $releaseTest = Join-Path $repoRoot "Tools\Test-Release.ps1"
+$buildArtifacts = Join-Path $repoRoot "TestResults\ReleaseBuild\$Configuration"
+$configurationSegment = $Configuration.ToLowerInvariant()
 $hostProcess = $null
 
 function Invoke-Checked {
@@ -61,7 +62,7 @@ try {
     Write-Host "[2/7] Running an isolated WPF startup and shutdown smoke test..."
     $wpfDataRoot = Join-Path $runRoot "wpf-data"
     New-Item -ItemType Directory -Force -Path $wpfDataRoot | Out-Null
-    $appExecutable = Join-Path $repoRoot "ExpressPackingMonitoring\bin\$Configuration\net8.0-windows10.0.19041.0\win-x64\ExpressPackingMonitoring.exe"
+    $appExecutable = Join-Path $buildArtifacts "bin\ExpressPackingMonitoring\$($configurationSegment)_win-x64\ExpressPackingMonitoring.exe"
     if (-not (Test-Path $appExecutable)) { throw "Built WPF executable not found: $appExecutable" }
     $previousUserDataDir = $env:EPM_USER_DATA_DIR
     $previousInstanceScope = $env:EPM_INSTANCE_SCOPE
@@ -138,10 +139,10 @@ try {
     Write-Host "[5/7] Starting an isolated monitor Web server..."
     $port = Get-FreeTcpPort
     $baseUrl = "http://127.0.0.1:$port/"
-    $hostArguments = @(
-        "run", "--project", $hostProject, "-c", $Configuration, "--no-build", "--",
-        "$port", $dataRoot, $fixtureVideo)
-    $hostProcess = Start-Process -FilePath "dotnet" -ArgumentList $hostArguments -PassThru -WindowStyle Hidden `
+    $hostExecutable = Join-Path $buildArtifacts "bin\ExpressPackingMonitoring.AutomationHost\$($configurationSegment)_win-x64\ExpressPackingMonitoring.AutomationHost.exe"
+    if (-not (Test-Path $hostExecutable)) { throw "Built automation host not found: $hostExecutable" }
+    $hostArguments = @("$port", $dataRoot, $fixtureVideo)
+    $hostProcess = Start-Process -FilePath $hostExecutable -ArgumentList $hostArguments -PassThru -WindowStyle Hidden `
         -RedirectStandardOutput $hostStdout -RedirectStandardError $hostStderr
     Wait-ForWebServer -Url $baseUrl
 

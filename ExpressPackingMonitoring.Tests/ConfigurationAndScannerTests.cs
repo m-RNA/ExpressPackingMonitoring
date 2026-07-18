@@ -4,6 +4,7 @@ using ExpressPackingMonitoring.Input;
 using ExpressPackingMonitoring.Logging;
 using ExpressPackingMonitoring.Services;
 using ExpressPackingMonitoring.ViewModels;
+using System.Text.Json;
 using Xunit;
 
 namespace ExpressPackingMonitoring.Tests;
@@ -14,6 +15,14 @@ public sealed class ConfigurationAndScannerTests
     public void AppConfig_MaximizesSpeechVolumeByDefault()
     {
         Assert.True(new AppConfig().MaximizeVolumeForSpeech);
+    }
+
+    [Fact]
+    public void AppConfig_LegacyJsonEnablesMaximumSpeechVolumeByDefault()
+    {
+        AppConfig config = JsonSerializer.Deserialize<AppConfig>("{}")!;
+
+        Assert.True(config.MaximizeVolumeForSpeech);
     }
 
     [Fact]

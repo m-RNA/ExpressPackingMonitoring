@@ -51,9 +51,7 @@ public sealed class LocalizationTests
     [Fact]
     public void WpfViews_AllStaticChineseTextHasEnglishResource()
     {
-        string projectPath = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "..", "..", "..", "..", "ExpressPackingMonitoring"));
+        string projectPath = Path.Combine(FindRepositoryRoot(), "ExpressPackingMonitoring");
         string[] views = Directory.GetFiles(projectPath, "*.xaml", SearchOption.AllDirectories)
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}Themes{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
             .Where(path => !path.EndsWith($"{Path.DirectorySeparatorChar}App.xaml", StringComparison.OrdinalIgnoreCase))
@@ -76,9 +74,7 @@ public sealed class LocalizationTests
     [Fact]
     public void ToastLiterals_AllHaveEnglishResources()
     {
-        string projectPath = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "..", "..", "..", "..", "ExpressPackingMonitoring"));
+        string projectPath = Path.Combine(FindRepositoryRoot(), "ExpressPackingMonitoring");
         string[] sourceFiles = Directory.GetFiles(projectPath, "*.cs", SearchOption.AllDirectories)
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
             .ToArray();
@@ -96,6 +92,22 @@ public sealed class LocalizationTests
             .ToArray();
 
         Assert.True(missing.Length == 0, "Missing English toast resources: " + string.Join(" | ", missing));
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        foreach (string startPath in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+        {
+            var directory = new DirectoryInfo(Path.GetFullPath(startPath));
+            while (directory != null)
+            {
+                if (File.Exists(Path.Combine(directory.FullName, "ExpressPackingMonitoring.sln")))
+                    return directory.FullName;
+                directory = directory.Parent;
+            }
+        }
+
+        throw new DirectoryNotFoundException("ExpressPackingMonitoring repository root was not found.");
     }
 
     [Fact]

@@ -8,11 +8,18 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $solution = Join-Path $repoRoot "ExpressPackingMonitoring.sln"
 $testsProject = Join-Path $repoRoot "ExpressPackingMonitoring.Tests\ExpressPackingMonitoring.Tests.csproj"
 $webPage = Join-Path $repoRoot "ExpressPackingMonitoring\Web\index.html"
+$artifactsRoot = Join-Path $repoRoot "TestResults\ReleaseBuild\$Configuration"
 
 $requiredCoreTests = @(
     "CameraLifecycleTests.PreviewSessionGate_StaleCallbackCannotReleaseAwakenedSession",
     "CameraLifecycleTests.CameraFrameReadySignal_WakeRequiresNewSessionFrame",
     "CameraLifecycleTests.CameraFrameReadySignal_RecordingStartTimesOutWithoutFrame",
+    "CameraBarcodeRecognitionTests.StabilityTracker_FirstReappearanceAfterRearmDelayUnlocksSameCode",
+    "CameraBarcodeRecognitionTests.RecordingDecisionPolicy_ScannerStillSwitchesRecordingInContinuousMode",
+    "CameraBarcodeRecognitionTests.RuntimeOptions_ShadowModeRequiresExplicitOptIn",
+    "CameraBarcodeRecognitionTests.Decoder_RepeatedDecodesAvoidPerFrameLargeManagedAllocations",
+    "CameraBarcodeRecognitionTests.RecognitionService_RecordingGateBlocksFullFrameFallback",
+    "ConfigurationAndScannerTests.AppConfig_LegacyJsonEnablesMaximumSpeechVolumeByDefault",
     "ConfigurationAndScannerTests.IsFastSequence_DistinguishesScannerAndManualTyping",
     "ConfigurationAndScannerTests.ShouldAlertPrintedRefund_AlertsEnabledShippingAndReturnScans",
     "ConfigurationAndScannerTests.ShouldAlertPrintedRefund_UsesRefundStatus",
@@ -46,8 +53,13 @@ if (-not (Test-Path $webPage)) {
     throw "Web page not found: $webPage"
 }
 
+if (Test-Path $artifactsRoot) {
+    Remove-Item -LiteralPath $artifactsRoot -Recurse -Force
+}
+New-Item -ItemType Directory -Force -Path $artifactsRoot | Out-Null
+
 Write-Host "Discovering required core business and recovery tests..."
-$testList = (& dotnet test $testsProject -c $Configuration --nologo --list-tests 2>&1 | Out-String)
+$testList = (& dotnet test $testsProject -c $Configuration --nologo --list-tests --artifacts-path $artifactsRoot 2>&1 | Out-String)
 if ($LASTEXITCODE -ne 0) {
     throw "Test discovery failed with exit code $LASTEXITCODE`n$testList"
 }
@@ -58,7 +70,7 @@ foreach ($requiredTest in $requiredCoreTests) {
 }
 
 Write-Host "Running complete release test suite..."
-Invoke-DotNet -Arguments @("test", $testsProject, "-c", $Configuration, "--nologo", "--no-restore")
+Invoke-DotNet -Arguments @("test", $testsProject, "-c", $Configuration, "--nologo", "--no-restore", "--artifacts-path", $artifactsRoot)
 
 Write-Host "Checking Web JavaScript syntax..."
 $node = Get-Command node -ErrorAction SilentlyContinue
@@ -88,6 +100,6 @@ finally {
 }
 
 Write-Host "Building complete release solution..."
-Invoke-DotNet -Arguments @("build", $solution, "-c", $Configuration, "--nologo", "--no-restore")
+Invoke-DotNet -Arguments @("build", $solution, "-c", $Configuration, "--nologo", "--artifacts-path", $artifactsRoot)
 
 Write-Host "Release automated validation passed."

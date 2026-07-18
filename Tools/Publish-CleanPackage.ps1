@@ -585,11 +585,22 @@ if (-not $SkipTtsCacheGeneration -and $publishedTtsCacheFiles.Count -eq 0) {
 
 $launcherExe = Join-Path $outputFullPath "ExpressPackingMonitoring.exe"
 $appExe = Join-Path $appPublishDir "ExpressPackingMonitoring.exe"
+$requiredAppRuntimeFiles = @(
+    "zxing.dll",
+    "OpenCvSharp.dll",
+    "OpenCvSharp.WpfExtensions.dll",
+    "OpenCvSharpExtern.dll"
+)
 if (-not (Test-Path $launcherExe)) {
     throw "Clean package validation failed: missing root launcher"
 }
 if (-not (Test-Path $appExe)) {
     throw "Clean package validation failed: missing app\ExpressPackingMonitoring.exe"
+}
+foreach ($runtimeFile in $requiredAppRuntimeFiles) {
+    if (-not (Test-Path (Join-Path $appPublishDir $runtimeFile))) {
+        throw "Clean package validation failed: missing camera barcode runtime dependency app\$runtimeFile"
+    }
 }
 
 $normalizedVersion = Get-NormalizedReleaseVersion $packageVersion
@@ -701,6 +712,19 @@ else {
     if (-not (Test-ZipContainsEntry -ZipFile $appPatchZipPath -EntryName "patch_manifest.json")) {
         throw "AppPatch package validation failed: missing patch_manifest.json"
     }
+    foreach ($runtimeFile in $requiredAppRuntimeFiles) {
+        $baselineRuntimeFile = Join-Path ([System.IO.Path]::GetFullPath($BaselineAppDir)) $runtimeFile
+        $currentRuntimeFile = Join-Path $appPublishDir $runtimeFile
+        $runtimeChanged = -not (Test-Path $baselineRuntimeFile)
+        if (-not $runtimeChanged) {
+            $baselineRuntimeHash = (Get-FileHash -LiteralPath $baselineRuntimeFile -Algorithm SHA256).Hash
+            $currentRuntimeHash = (Get-FileHash -LiteralPath $currentRuntimeFile -Algorithm SHA256).Hash
+            $runtimeChanged = -not [string]::Equals($baselineRuntimeHash, $currentRuntimeHash, [System.StringComparison]::OrdinalIgnoreCase)
+        }
+        if ($runtimeChanged -and -not (Test-ZipContainsEntry -ZipFile $appPatchZipPath -EntryName "files/$runtimeFile")) {
+            throw "AppPatch package validation failed: missing changed camera barcode runtime dependency files/$runtimeFile"
+        }
+    }
 
     $appPatchHash = (Get-FileHash -LiteralPath $appPatchZipPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $appPatchSize = (Get-Item -LiteralPath $appPatchZipPath).Length
@@ -782,6 +806,11 @@ if (-not (Test-ZipContainsEntry -ZipFile $zipFullPath -EntryName "ExpressPacking
 }
 if (-not (Test-ZipContainsEntry -ZipFile $zipFullPath -EntryName "app/ExpressPackingMonitoring.exe")) {
     throw "Full zip validation failed: missing app/ExpressPackingMonitoring.exe"
+}
+foreach ($runtimeFile in $requiredAppRuntimeFiles) {
+    if (-not (Test-ZipContainsEntry -ZipFile $zipFullPath -EntryName "app/$runtimeFile")) {
+        throw "Full zip validation failed: missing camera barcode runtime dependency app/$runtimeFile"
+    }
 }
 
 Write-Host "Clean package created: $outputFullPath"
