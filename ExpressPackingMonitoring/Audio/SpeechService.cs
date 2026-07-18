@@ -12,6 +12,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using EdgeTTS;
+using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using Windows.Media.SpeechSynthesis;
 using SherpaOnnx;
@@ -68,6 +69,7 @@ namespace ExpressPackingMonitoring.Audio
         public int TtsCacheMaxSizeMB { get; set; } = 500;
 
         public bool EnableSoundPrompt { get; set; } = true;
+        public bool MaximizeVolumeForSpeech { get; set; } = true;
         public bool EnableAiTts { get; set; } = true;
         public string AiTtsEngine { get; set; } = "Edge";
         public int AiTtsSpeakerId { get; set; } = 51;
@@ -268,6 +270,8 @@ namespace ExpressPackingMonitoring.Audio
 
                     try
                     {
+                        MaximizeSystemPlaybackVolume();
+
                         if (req.IsWarning && req.PlayWarningTonePerRepeat && req.RepeatCount > 1)
                         {
                             for (int i = 0; i < req.RepeatCount; i++)
@@ -319,6 +323,24 @@ namespace ExpressPackingMonitoring.Audio
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Debug.WriteLine($"[SpeechService] Thread error: {ex.Message}"); }
+        }
+
+        private void MaximizeSystemPlaybackVolume()
+        {
+            if (!MaximizeVolumeForSpeech)
+                return;
+
+            try
+            {
+                using var enumerator = new MMDeviceEnumerator();
+                using MMDevice device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+                device.AudioEndpointVolume.Mute = false;
+                device.AudioEndpointVolume.MasterVolumeLevelScalar = 1.0f;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[SpeechService] Maximize playback volume failed: {ex.Message}");
+            }
         }
 
         private void SpeakRequestText(string text, SpeechRequest request)

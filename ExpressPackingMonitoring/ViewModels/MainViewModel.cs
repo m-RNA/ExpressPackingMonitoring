@@ -539,6 +539,7 @@ namespace ExpressPackingMonitoring.ViewModels
             _speechService = new SpeechService
             {
                 EnableSoundPrompt = Config.EnableSoundPrompt,
+                MaximizeVolumeForSpeech = Config.MaximizeVolumeForSpeech,
                 EnableAiTts = Config.EnableAiTts,
                 AiTtsEngine = Config.AiTtsEngine,
                 AiTtsSpeakerId = Config.AiTtsSpeakerId,
@@ -1698,6 +1699,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     if (_speechService != null)
                     {
                         _speechService.EnableSoundPrompt = Config.EnableSoundPrompt;
+                        _speechService.MaximizeVolumeForSpeech = Config.MaximizeVolumeForSpeech;
                         _speechService.EnableAiTts = Config.EnableAiTts;
                         _speechService.AiTtsEngine = Config.AiTtsEngine;
                         _speechService.AiTtsSpeakerId = Config.AiTtsSpeakerId;

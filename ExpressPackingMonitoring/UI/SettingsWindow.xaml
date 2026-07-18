@@ -1692,6 +1692,25 @@
                                     </Grid>
 
                                     <Grid Style="{StaticResource SettingRowStyle}"
+                                          IsEnabled="{Binding IsChecked, ElementName=SoundPromptCheckBox, TargetNullValue=False}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="24"/>
+                                            <ColumnDefinition Width="260"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="播报音量最大" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="每次播报前取消静音并将电脑音量调到最大"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <CheckBox Grid.Column="2"
+                                                  IsChecked="{Binding Config.MaximizeVolumeForSpeech}"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left"
+                                                  Style="{StaticResource ToggleSwitchStyle}"/>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}"
                                           ToolTip="系统语音不需要网络；联网语音声音更自然；离线语音使用本地模型，需要额外运行依赖"
                                           IsEnabled="{Binding IsChecked, ElementName=SoundPromptCheckBox, TargetNullValue=False}">
                                         <Grid.ColumnDefinitions>

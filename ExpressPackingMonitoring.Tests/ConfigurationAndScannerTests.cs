@@ -11,6 +11,12 @@ namespace ExpressPackingMonitoring.Tests;
 public sealed class ConfigurationAndScannerTests
 {
     [Fact]
+    public void AppConfig_MaximizesSpeechVolumeByDefault()
+    {
+        Assert.True(new AppConfig().MaximizeVolumeForSpeech);
+    }
+
+    [Fact]
     public void BuildPreviewOrderNotice_IncludesOrderDetailsAndRefundException()
     {
         var orderInfo = new OrderInfo

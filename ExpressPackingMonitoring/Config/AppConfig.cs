@@ -106,6 +106,7 @@ namespace ExpressPackingMonitoring.Config
         public double MotionDetectThreshold { get; set; } = 15.0;
         public string OrderIdRegex { get; set; } = "^[a-zA-Z0-9-]{12,25}$";
         public bool EnableSoundPrompt { get; set; } = true;
+        public bool MaximizeVolumeForSpeech { get; set; } = true;
         public double TimeoutWarningSeconds { get; set; } = 10.0;
         public string Theme { get; set; } = "Auto";
         public string Language { get; set; } = AppLanguage.Auto;

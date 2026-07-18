@@ -1242,6 +1242,7 @@ namespace ExpressPackingMonitoring.UI
                 _previewSpeechService = new SpeechService
                 {
                     EnableSoundPrompt = true,
+                    MaximizeVolumeForSpeech = Config.MaximizeVolumeForSpeech,
                     EnableAiTts = Config.EnableAiTts,
                     AiTtsEngine = Config.AiTtsEngine,
                     AiTtsSpeakerId = Config.AiTtsSpeakerId,
@@ -1263,6 +1264,7 @@ namespace ExpressPackingMonitoring.UI
             {
                 // 更新参数
                 _previewSpeechService.EnableAiTts = Config.EnableAiTts;
+                _previewSpeechService.MaximizeVolumeForSpeech = Config.MaximizeVolumeForSpeech;
                 _previewSpeechService.AiTtsEngine = Config.AiTtsEngine;
                 _previewSpeechService.AiTtsSpeakerId = Config.AiTtsSpeakerId;
                 _previewSpeechService.AiTtsWarningSpeakerId = Config.AiTtsWarningSpeakerId;

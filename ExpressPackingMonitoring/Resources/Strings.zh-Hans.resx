@@ -33,6 +33,7 @@
   <data name="摄像头" xml:space="preserve"><value>摄像头</value></data>
   <data name="麦克风" xml:space="preserve"><value>麦克风</value></data>
   <data name="语音提醒" xml:space="preserve"><value>语音提醒</value></data>
+  <data name="播报音量最大" xml:space="preserve"><value>播报音量最大</value></data>
   <data name="摄像头监控工位" xml:space="preserve"><value>摄像头监控工位</value></data>
   <data name="快递单打印工位" xml:space="preserve"><value>快递单打印工位</value></data>
   <data name="录像列表" xml:space="preserve"><value>录像列表</value></data>
@@ -173,6 +174,7 @@
   <data name="静止超时" xml:space="preserve"><value>静止超时</value></data>
   <data name="开机自启动" xml:space="preserve"><value>开机自启动</value></data>
   <data name="开启后，超时、停录和订单信息会用语音提醒" xml:space="preserve"><value>开启后，超时、停录和订单信息会用语音提醒</value></data>
+  <data name="每次播报前取消静音并将电脑音量调到最大" xml:space="preserve"><value>每次播报前取消静音并将电脑音量调到最大</value></data>
   <data name="开启后放大和恢复时会有平滑动画" xml:space="preserve"><value>开启后放大和恢复时会有平滑动画</value></data>
   <data name="开始合并" xml:space="preserve"><value>开始合并</value></data>
   <data name="开始录制后等待多久再放大" xml:space="preserve"><value>开始录制后等待多久再放大</value></data>
