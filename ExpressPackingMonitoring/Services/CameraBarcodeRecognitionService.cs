@@ -234,14 +234,14 @@ internal sealed class CameraBarcodeStabilityTracker
     private readonly Dictionary<string, DateTimeOffset> _missingLockedCodesSince = new(StringComparer.Ordinal);
     private string _candidateCode = "";
     private DateTimeOffset _candidateFirstSeen;
-    private DateTimeOffset _candidateLastSeen;
-    private TimeSpan _candidateRequiredPresence;
+    private TimeSpan _candidateConfirmationWindow;
+    private int _candidateRequiredHits;
     private int _candidateHits;
 
     public CameraBarcodeObservation Observe(
         string? code,
         DateTimeOffset now,
-        TimeSpan requiredPresence = default,
+        TimeSpan intermittentConfirmationWindow = default,
         TimeSpan rearmDelay = default)
     {
         RearmMissingCodes(
@@ -252,11 +252,13 @@ internal sealed class CameraBarcodeStabilityTracker
         string normalized = (code ?? "").Trim().ToUpperInvariant();
         if (normalized.Length == 0)
         {
-            if (_candidateRequiredPresence > TimeSpan.Zero)
+            if (_candidateRequiredHits == 2)
                 ClearCandidate();
             else
                 ExpireCandidate(now);
-            return new CameraBarcodeObservation(_candidateCode);
+            return new CameraBarcodeObservation(
+                _candidateCode,
+                KeepDecoding: _candidateRequiredHits >= 3);
         }
 
         if (_lockedCodes.ContainsKey(normalized))
@@ -268,28 +270,30 @@ internal sealed class CameraBarcodeStabilityTracker
             return new CameraBarcodeObservation();
         }
 
+        int requiredHits = intermittentConfirmationWindow > TimeSpan.Zero ? 3 : 2;
+        TimeSpan confirmationWindow = intermittentConfirmationWindow > TimeSpan.Zero
+            ? intermittentConfirmationWindow
+            : ConfirmationWindow;
         if (!string.Equals(_candidateCode, normalized, StringComparison.Ordinal)
-            || now - _candidateLastSeen > ConfirmationWindow)
+            || _candidateRequiredHits != requiredHits
+            || now - _candidateFirstSeen > _candidateConfirmationWindow)
         {
             _candidateCode = normalized;
             _candidateFirstSeen = now;
-            _candidateLastSeen = now;
-            _candidateRequiredPresence = requiredPresence > TimeSpan.Zero
-                ? requiredPresence
-                : TimeSpan.Zero;
+            _candidateConfirmationWindow = confirmationWindow;
+            _candidateRequiredHits = requiredHits;
             _candidateHits = 1;
             return new CameraBarcodeObservation(
                 _candidateCode,
-                KeepDecoding: _candidateRequiredPresence > TimeSpan.Zero);
+                KeepDecoding: _candidateRequiredHits >= 3);
         }
 
-        _candidateLastSeen = now;
         _candidateHits++;
-        if (_candidateHits < 2 || now - _candidateFirstSeen < _candidateRequiredPresence)
+        if (_candidateHits < _candidateRequiredHits)
         {
             return new CameraBarcodeObservation(
                 _candidateCode,
-                KeepDecoding: _candidateRequiredPresence > TimeSpan.Zero);
+                KeepDecoding: _candidateRequiredHits >= 3);
         }
 
         _lockedCodes[normalized] = now;
@@ -347,7 +351,7 @@ internal sealed class CameraBarcodeStabilityTracker
 
     private void ExpireCandidate(DateTimeOffset now)
     {
-        if (_candidateCode.Length > 0 && now - _candidateLastSeen >= ConfirmationWindow)
+        if (_candidateCode.Length > 0 && now - _candidateFirstSeen > _candidateConfirmationWindow)
             ClearCandidate();
     }
 
@@ -355,8 +359,8 @@ internal sealed class CameraBarcodeStabilityTracker
     {
         _candidateCode = "";
         _candidateFirstSeen = default;
-        _candidateLastSeen = default;
-        _candidateRequiredPresence = TimeSpan.Zero;
+        _candidateConfirmationWindow = TimeSpan.Zero;
+        _candidateRequiredHits = 0;
         _candidateHits = 0;
     }
 }
@@ -689,7 +693,7 @@ internal sealed class CameraBarcodeRecognitionService : IDisposable
 
     private readonly Func<string, bool> _candidateValidator;
     private readonly Func<bool>? _fullFrameAllowed;
-    private readonly Func<string, TimeSpan>? _confirmationDurationProvider;
+    private readonly Func<string, TimeSpan>? _intermittentConfirmationWindowProvider;
     private readonly Func<TimeSpan>? _rearmDelayProvider;
     private readonly CameraBarcodeFrameDecoder _decoder = new();
     private readonly CameraBarcodeMotionGate _motionGate = new();
@@ -718,12 +722,12 @@ internal sealed class CameraBarcodeRecognitionService : IDisposable
     public CameraBarcodeRecognitionService(
         Func<string, bool> candidateValidator,
         Func<bool>? fullFrameAllowed = null,
-        Func<string, TimeSpan>? confirmationDurationProvider = null,
+        Func<string, TimeSpan>? intermittentConfirmationWindowProvider = null,
         Func<TimeSpan>? rearmDelayProvider = null)
     {
         _candidateValidator = candidateValidator ?? throw new ArgumentNullException(nameof(candidateValidator));
         _fullFrameAllowed = fullFrameAllowed;
-        _confirmationDurationProvider = confirmationDurationProvider;
+        _intermittentConfirmationWindowProvider = intermittentConfirmationWindowProvider;
         _rearmDelayProvider = rearmDelayProvider;
         _workerTask = Task.Run(ProcessLoopAsync);
     }
@@ -844,12 +848,12 @@ internal sealed class CameraBarcodeRecognitionService : IDisposable
                 return;
 
             CameraBarcodeObservation observation;
-            TimeSpan requiredPresence = code == null
+            TimeSpan intermittentConfirmationWindow = code == null
                 ? TimeSpan.Zero
-                : _confirmationDurationProvider?.Invoke(code) ?? TimeSpan.Zero;
+                : _intermittentConfirmationWindowProvider?.Invoke(code) ?? TimeSpan.Zero;
             TimeSpan rearmDelay = _rearmDelayProvider?.Invoke() ?? TimeSpan.Zero;
             lock (_trackerLock)
-                observation = _stabilityTracker.Observe(code, now, requiredPresence, rearmDelay);
+                observation = _stabilityTracker.Observe(code, now, intermittentConfirmationWindow, rearmDelay);
 
             Volatile.Write(
                 ref _forceDecodeUntilUtcTicks,

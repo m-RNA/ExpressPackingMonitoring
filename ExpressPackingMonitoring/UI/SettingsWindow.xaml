@@ -2367,7 +2367,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="同码确认时间" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="同码重新出现后，摄像头需连续识别多久才停录"
+                                            <TextBlock Text="同码重新出现后，在该时间内识别到 3 次即可停录"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <StackPanel Grid.Column="2">

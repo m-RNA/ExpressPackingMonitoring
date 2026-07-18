@@ -269,7 +269,7 @@
   <data name="越高越清晰，文件也越大" xml:space="preserve"><value>The higher it is, the clearer it is and the larger the file is.</value></data>
   <data name="再次扫描同一单号才停止录像，扫到其他单号不停止" xml:space="preserve"><value>Scan the same order number again to stop recording. Scan other order numbers and it will not stop.</value></data>
   <data name="原单号离开画面多久后，才允许摄像头再次确认" xml:space="preserve"><value>How long the original code must leave the frame before the camera can confirm it again</value></data>
-  <data name="同码重新出现后，摄像头需连续识别多久才停录" xml:space="preserve"><value>How long the camera must continuously recognize the same code after it reappears before stopping</value></data>
+  <data name="同码重新出现后，在该时间内识别到 3 次即可停录" xml:space="preserve"><value>Stop after the same code is recognized 3 times within this window after reappearing</value></data>
   <data name="在线警告声音" xml:space="preserve"><value>Online warning sound</value></data>
   <data name="在线普通声音" xml:space="preserve"><value>Online normal voice</value></data>
   <data name="长时间不用时关闭摄像头" xml:space="preserve"><value>Turn off the camera when not in use for an extended period of time</value></data>

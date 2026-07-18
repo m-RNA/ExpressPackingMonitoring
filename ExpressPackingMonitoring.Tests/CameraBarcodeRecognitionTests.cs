@@ -37,53 +37,92 @@ public sealed class CameraBarcodeRecognitionTests
     }
 
     [Fact]
-    public void StabilityTracker_RequiredPresenceWaitsForTwoContinuousSeconds()
+    public void StabilityTracker_StartConfirmationRestartsAfterMissedDetection()
     {
         var tracker = new CameraBarcodeStabilityTracker();
-        TimeSpan requiredPresence = TimeSpan.FromSeconds(2);
 
-        tracker.Observe("YT123456789012", Start, requiredPresence);
-        tracker.Observe("YT123456789012", Start.AddSeconds(0.5), requiredPresence);
-        tracker.Observe("YT123456789012", Start.AddSeconds(1), requiredPresence);
-        tracker.Observe("YT123456789012", Start.AddSeconds(1.5), requiredPresence);
-        CameraBarcodeObservation early = tracker.Observe(
+        tracker.Observe("YT123456789012", Start);
+        tracker.Observe(null, Start.AddMilliseconds(100));
+        CameraBarcodeObservation restarted = tracker.Observe(
             "YT123456789012",
-            Start.AddSeconds(1.75),
-            requiredPresence);
+            Start.AddMilliseconds(250));
         CameraBarcodeObservation confirmed = tracker.Observe(
             "YT123456789012",
-            Start.AddSeconds(2),
-            requiredPresence);
+            Start.AddMilliseconds(500));
 
-        Assert.Equal("YT123456789012", early.CandidateCode);
-        Assert.True(early.KeepDecoding);
-        Assert.Empty(early.ConfirmedCode);
+        Assert.Equal("YT123456789012", restarted.CandidateCode);
+        Assert.Empty(restarted.ConfirmedCode);
         Assert.Equal("YT123456789012", confirmed.ConfirmedCode);
     }
 
     [Fact]
-    public void StabilityTracker_RequiredPresenceRestartsAfterMissedDetection()
+    public void StabilityTracker_IntermittentWindowConfirmsOnThirdHit()
     {
         var tracker = new CameraBarcodeStabilityTracker();
-        TimeSpan requiredPresence = TimeSpan.FromSeconds(2);
+        TimeSpan confirmationWindow = TimeSpan.FromSeconds(2);
 
-        tracker.Observe("YT123456789012", Start, requiredPresence);
-        tracker.Observe("YT123456789012", Start.AddSeconds(1.5), requiredPresence);
-        tracker.Observe(null, Start.AddSeconds(1.75), requiredPresence);
-        tracker.Observe("YT123456789012", Start.AddSeconds(2), requiredPresence);
-        tracker.Observe("YT123456789012", Start.AddSeconds(2.5), requiredPresence);
-        tracker.Observe("YT123456789012", Start.AddSeconds(3), requiredPresence);
-        tracker.Observe("YT123456789012", Start.AddSeconds(3.5), requiredPresence);
-        CameraBarcodeObservation early = tracker.Observe(
+        tracker.Observe("YT123456789012", Start, confirmationWindow);
+        CameraBarcodeObservation secondHit = tracker.Observe(
             "YT123456789012",
-            Start.AddSeconds(3.75),
-            requiredPresence);
+            Start.AddSeconds(0.75),
+            confirmationWindow);
+        CameraBarcodeObservation thirdHit = tracker.Observe(
+            "YT123456789012",
+            Start.AddSeconds(1.5),
+            confirmationWindow);
+
+        Assert.Equal("YT123456789012", secondHit.CandidateCode);
+        Assert.True(secondHit.KeepDecoding);
+        Assert.Empty(secondHit.ConfirmedCode);
+        Assert.Equal("YT123456789012", thirdHit.ConfirmedCode);
+    }
+
+    [Fact]
+    public void StabilityTracker_IntermittentWindowKeepsHitsAcrossMissedDetections()
+    {
+        var tracker = new CameraBarcodeStabilityTracker();
+        TimeSpan confirmationWindow = TimeSpan.FromSeconds(2);
+
+        tracker.Observe("YT123456789012", Start, confirmationWindow);
+        CameraBarcodeObservation missed = tracker.Observe(
+            null,
+            Start.AddSeconds(0.5),
+            confirmationWindow);
+        tracker.Observe(
+            "YT123456789012",
+            Start.AddSeconds(1),
+            confirmationWindow);
+        tracker.Observe(null, Start.AddSeconds(1.25), confirmationWindow);
         CameraBarcodeObservation confirmed = tracker.Observe(
             "YT123456789012",
-            Start.AddSeconds(4),
-            requiredPresence);
+            Start.AddSeconds(1.75),
+            confirmationWindow);
 
-        Assert.Empty(early.ConfirmedCode);
+        Assert.Equal("YT123456789012", missed.CandidateCode);
+        Assert.True(missed.KeepDecoding);
+        Assert.Equal("YT123456789012", confirmed.ConfirmedCode);
+    }
+
+    [Fact]
+    public void StabilityTracker_IntermittentWindowRestartsAfterWindowExpires()
+    {
+        var tracker = new CameraBarcodeStabilityTracker();
+        TimeSpan confirmationWindow = TimeSpan.FromSeconds(1.5);
+
+        tracker.Observe("YT123456789012", Start, confirmationWindow);
+        tracker.Observe("YT123456789012", Start.AddSeconds(0.5), confirmationWindow);
+        CameraBarcodeObservation restarted = tracker.Observe(
+            "YT123456789012",
+            Start.AddSeconds(1.6),
+            confirmationWindow);
+        tracker.Observe("YT123456789012", Start.AddSeconds(1.9), confirmationWindow);
+        CameraBarcodeObservation confirmed = tracker.Observe(
+            "YT123456789012",
+            Start.AddSeconds(2.2),
+            confirmationWindow);
+
+        Assert.Equal("YT123456789012", restarted.CandidateCode);
+        Assert.Empty(restarted.ConfirmedCode);
         Assert.Equal("YT123456789012", confirmed.ConfirmedCode);
     }
 
