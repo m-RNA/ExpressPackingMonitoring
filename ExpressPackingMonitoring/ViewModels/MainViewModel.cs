@@ -1011,17 +1011,19 @@ namespace ExpressPackingMonitoring.ViewModels
                     System.Diagnostics.Debug.WriteLine($"[OrderInfo] 查询结果: {(orderInfo != null ? $"命中 买家=[{orderInfo.BuyerMessage}] 卖家=[{orderInfo.SellerMemo}] 商品=[{orderInfo.ProductInfo}]" : "未命中")}");
                 if (Config.EnableOrderInfoAnnounce && orderInfo != null)
                 {
-                    if (Config.AnnounceBuyerMessage && !string.IsNullOrWhiteSpace(orderInfo.BuyerMessage))
+                    foreach (AlertSpeechFollowup announcement in BuildOrderInfoSpeechFollowups(
+                                 orderInfo,
+                                 Config.EnableOrderInfoAnnounce,
+                                 Config.AnnounceBuyerMessage,
+                                 Config.AnnounceSellerMemo,
+                                 Config.AnnounceProductInfo))
                     {
-                        SpeakWithRemarkTone(DefaultSpeechCatalog.CreateBuyerMessageAnnouncement(orderInfo.BuyerMessage), cancelPrevious: false);
-                    }
-                    if (Config.AnnounceSellerMemo && !string.IsNullOrWhiteSpace(orderInfo.SellerMemo))
-                    {
-                        SpeakWithRemarkTone(DefaultSpeechCatalog.CreateSellerMemoAnnouncement(orderInfo.SellerMemo), cancelPrevious: false);
-                    }
-                    if (Config.AnnounceProductInfo && !string.IsNullOrWhiteSpace(orderInfo.ProductInfo))
-                    {
-                        Speak(DefaultSpeechCatalog.CreateProductAnnouncement(orderInfo.ProductInfo), cancelPrevious: false);
+                        PublishVoice(
+                            announcement.Text,
+                            announcement.VoiceStyle,
+                            announcement.Sound,
+                            repeatCount: 1,
+                            interruptCurrent: false);
                     }
                 }
 
@@ -1230,7 +1232,13 @@ namespace ExpressPackingMonitoring.ViewModels
                 SpeechRepeatCount = 3,
                 DisplayDuration = TimeSpan.FromSeconds(12),
                 DeduplicationKey = $"printed-refund:{check.TrackingNumber}:{check.AlertId}",
-                DeduplicationWindow = TimeSpan.FromMinutes(1)
+                DeduplicationWindow = TimeSpan.FromMinutes(1),
+                FollowupSpeech = BuildOrderInfoSpeechFollowups(
+                    orderInfo,
+                    Config.EnableOrderInfoAnnounce,
+                    Config.AnnounceBuyerMessage,
+                    Config.AnnounceSellerMemo,
+                    Config.AnnounceProductInfo)
             });
         }
 
@@ -1392,6 +1400,44 @@ namespace ExpressPackingMonitoring.ViewModels
             }
 
             return string.Join(Environment.NewLine, lines);
+        }
+
+        internal static IReadOnlyList<AlertSpeechFollowup> BuildOrderInfoSpeechFollowups(
+            OrderInfo orderInfo,
+            bool announcementsEnabled,
+            bool announceBuyerMessage,
+            bool announceSellerMemo,
+            bool announceProductInfo)
+        {
+            if (!announcementsEnabled || orderInfo == null)
+                return Array.Empty<AlertSpeechFollowup>();
+
+            var announcements = new List<AlertSpeechFollowup>();
+            if (announceBuyerMessage && !string.IsNullOrWhiteSpace(orderInfo.BuyerMessage))
+            {
+                announcements.Add(new AlertSpeechFollowup
+                {
+                    Text = DefaultSpeechCatalog.CreateBuyerMessageAnnouncement(orderInfo.BuyerMessage),
+                    Sound = AlertSound.Remark
+                });
+            }
+            if (announceSellerMemo && !string.IsNullOrWhiteSpace(orderInfo.SellerMemo))
+            {
+                announcements.Add(new AlertSpeechFollowup
+                {
+                    Text = DefaultSpeechCatalog.CreateSellerMemoAnnouncement(orderInfo.SellerMemo),
+                    Sound = AlertSound.Remark
+                });
+            }
+            if (announceProductInfo && !string.IsNullOrWhiteSpace(orderInfo.ProductInfo))
+            {
+                announcements.Add(new AlertSpeechFollowup
+                {
+                    Text = DefaultSpeechCatalog.CreateProductAnnouncement(orderInfo.ProductInfo),
+                    Sound = AlertSound.None
+                });
+            }
+            return announcements;
         }
 
         private static void AddPreviewOrderLine(List<string> lines, string resourceKey, string value)

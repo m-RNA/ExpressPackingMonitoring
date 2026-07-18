@@ -283,6 +283,39 @@ public sealed class ConfigurationAndScannerTests
     }
 
     [Fact]
+    public void BuildOrderInfoSpeechFollowups_PreservesBuyerAndSellerRemarksAfterRefundAlert()
+    {
+        var orderInfo = new OrderInfo
+        {
+            BuyerMessage = "放门口",
+            SellerMemo = "检查颜色",
+            ProductInfo = "蓝色外套",
+            IsPrintedRefund = true,
+            RefundStatus = "SUCCESS"
+        };
+
+        IReadOnlyList<AlertSpeechFollowup> followups = MainViewModel.BuildOrderInfoSpeechFollowups(
+            orderInfo,
+            announcementsEnabled: true,
+            announceBuyerMessage: true,
+            announceSellerMemo: true,
+            announceProductInfo: false);
+
+        Assert.Collection(
+            followups,
+            buyer =>
+            {
+                Assert.Contains("放门口", buyer.Text);
+                Assert.Equal(AlertSound.Remark, buyer.Sound);
+            },
+            seller =>
+            {
+                Assert.Contains("检查颜色", seller.Text);
+                Assert.Equal(AlertSound.Remark, seller.Sound);
+            });
+    }
+
+    [Fact]
     public void AlertService_CriticalAlertBlocksNormalAlertUntilDisplayEnds()
     {
         DateTime now = new(2026, 7, 11, 12, 0, 0, DateTimeKind.Utc);
@@ -355,7 +388,12 @@ public sealed class ConfigurationAndScannerTests
             Priority = AlertPriority.Critical,
             Sound = AlertSound.IndustrialAlarm,
             SoundRepeatCount = 1,
-            SpeechRepeatCount = 3
+            SpeechRepeatCount = 3,
+            FollowupSpeech =
+            [
+                new AlertSpeechFollowup { Text = "买家留言，放门口", Sound = AlertSound.Remark },
+                new AlertSpeechFollowup { Text = "卖家备注，检查颜色", Sound = AlertSound.Remark }
+            ]
         };
 
         Assert.Equal(AlertPublishResult.Accepted, alerts.Publish(refundAlert));
@@ -363,6 +401,9 @@ public sealed class ConfigurationAndScannerTests
         Assert.Equal(AlertSound.IndustrialAlarm, playedRequest.Sound);
         Assert.Equal(1, playedRequest.SoundRepeatCount);
         Assert.Equal(3, playedRequest.SpeechRepeatCount);
+        Assert.Equal(2, playedRequest.FollowupSpeech.Count);
+        Assert.Equal("买家留言，放门口", playedRequest.FollowupSpeech[0].Text);
+        Assert.Equal("卖家备注，检查颜色", playedRequest.FollowupSpeech[1].Text);
     }
 
     [Fact]

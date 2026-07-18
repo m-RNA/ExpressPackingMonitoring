@@ -30,6 +30,7 @@ namespace ExpressPackingMonitoring.Audio
         public bool UseIndustrialAlarm { get; set; }
         public bool PlayWarningTone { get; set; }
         public int AlertToneRepeatCount { get; set; } = 1;
+        public IReadOnlyList<AlertSpeechFollowup> FollowupSpeech { get; set; } = Array.Empty<AlertSpeechFollowup>();
     }
 
     public class SpeechService : IDisposable
@@ -302,6 +303,8 @@ namespace ExpressPackingMonitoring.Audio
                         }
 
                         SpeakRequestText(fullText, req);
+                        if (!_speechCancelRequested && !_isDisposed)
+                            SpeakFollowupSpeech(req.FollowupSpeech);
                     }
                     catch (Exception ex)
                     {
@@ -324,6 +327,35 @@ namespace ExpressPackingMonitoring.Audio
                 SpeakWithAiTts(text, request.IsWarning, request.PreferImmediateAiGeneration);
             else
                 SpeakWithWindowsTts(text, request.IsWarning);
+        }
+
+        private void SpeakFollowupSpeech(IReadOnlyList<AlertSpeechFollowup> followups)
+        {
+            if (followups == null || followups.Count == 0)
+                return;
+
+            foreach (AlertSpeechFollowup followup in followups)
+            {
+                if (_speechCancelRequested || _isDisposed)
+                    return;
+                if (followup == null || string.IsNullOrWhiteSpace(followup.Text))
+                    continue;
+
+                if (followup.Sound == AlertSound.Remark)
+                    PlayRemarkToneBlocking();
+                else if (followup.Sound == AlertSound.Warning)
+                    PlayWarningAlertToneBlocking();
+                else if (followup.Sound == AlertSound.IndustrialAlarm)
+                    PlayIndustrialAlarmBlocking();
+
+                if (_speechCancelRequested || _isDisposed)
+                    return;
+
+                SpeakRequestText(followup.Text, new SpeechRequest
+                {
+                    IsWarning = followup.VoiceStyle == AlertVoiceStyle.Warning
+                });
+            }
         }
 
         private bool SpeakWithWindowsTts(string text, bool isWarning)
@@ -1308,7 +1340,8 @@ namespace ExpressPackingMonitoring.Audio
                     request.SpeechText,
                     request.SpeechRepeatCount,
                     request.SoundRepeatCount,
-                    request.Sound == AlertSound.IndustrialAlarm);
+                    request.Sound == AlertSound.IndustrialAlarm,
+                    request.FollowupSpeech);
                 return;
             }
 
@@ -1326,7 +1359,12 @@ namespace ExpressPackingMonitoring.Audio
             });
         }
 
-        private void SpeakCriticalWarning(string text, int repeatCount, int soundRepeatCount, bool useIndustrialAlarm)
+        private void SpeakCriticalWarning(
+            string text,
+            int repeatCount,
+            int soundRepeatCount,
+            bool useIndustrialAlarm,
+            IReadOnlyList<AlertSpeechFollowup> followupSpeech)
         {
             if (!EnableSoundPrompt) return;
 
@@ -1342,7 +1380,8 @@ namespace ExpressPackingMonitoring.Audio
                 RepeatCount = Math.Max(1, repeatCount),
                 AlertToneRepeatCount = Math.Max(1, soundRepeatCount),
                 UseIndustrialAlarm = useIndustrialAlarm,
-                PlayWarningTonePerRepeat = false
+                PlayWarningTonePerRepeat = false,
+                FollowupSpeech = followupSpeech ?? Array.Empty<AlertSpeechFollowup>()
             }))
             {
                 Interlocked.Decrement(ref _criticalWarningCount);

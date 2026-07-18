@@ -23,6 +23,13 @@ namespace ExpressPackingMonitoring.Services
         Warning
     }
 
+    public sealed class AlertSpeechFollowup
+    {
+        public string Text { get; init; } = string.Empty;
+        public AlertVoiceStyle VoiceStyle { get; init; } = AlertVoiceStyle.Normal;
+        public AlertSound Sound { get; init; } = AlertSound.None;
+    }
+
     public sealed class AlertRequest
     {
         public string Message { get; init; } = string.Empty;
@@ -36,6 +43,7 @@ namespace ExpressPackingMonitoring.Services
         public TimeSpan DisplayDuration { get; init; } = TimeSpan.FromMilliseconds(2500);
         public string DeduplicationKey { get; init; } = string.Empty;
         public TimeSpan DeduplicationWindow { get; init; } = TimeSpan.FromSeconds(3);
+        public IReadOnlyList<AlertSpeechFollowup> FollowupSpeech { get; init; } = Array.Empty<AlertSpeechFollowup>();
     }
 
     public enum AlertPublishResult
