@@ -55,16 +55,20 @@ internal static class PrintToolInstallGuide
 
         string host = uri.Host;
         if (host.Any(c => char.IsWhiteSpace(c) || c is '/' or '\\')) return script;
+        string customized = script.Replace(
+            "const INSTALL_MONITOR_ADDRESS = '';",
+            $"const INSTALL_MONITOR_ADDRESS = '{uri.Authority}';",
+            StringComparison.Ordinal);
         string directive = $"// @connect      {host}";
-        if (script.Contains(directive, StringComparison.Ordinal)) return script;
+        if (customized.Contains(directive, StringComparison.Ordinal)) return customized;
 
         const string marker = "// @connect      localhost";
-        int markerIndex = script.IndexOf(marker, StringComparison.Ordinal);
-        if (markerIndex < 0) return script;
-        int lineEnd = script.IndexOf('\n', markerIndex);
-        if (lineEnd < 0) return script + Environment.NewLine + directive;
-        string newline = script.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-        return script.Insert(lineEnd + 1, directive + newline);
+        int markerIndex = customized.IndexOf(marker, StringComparison.Ordinal);
+        if (markerIndex < 0) return customized;
+        int lineEnd = customized.IndexOf('\n', markerIndex);
+        if (lineEnd < 0) return customized + Environment.NewLine + directive;
+        string newline = customized.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        return customized.Insert(lineEnd + 1, directive + newline);
     }
 
     private static string Render(string monitorAddress, string scriptLink)

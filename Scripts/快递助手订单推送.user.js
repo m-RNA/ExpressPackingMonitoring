@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         订单备注播报插件
 // @namespace    https://github.com/ExpressPackingMonitoring
-// @version      2.4
+// @version      2.5
 // @description  从快递助手批量打印页面提取订单备注和打印后退款状态，发送到监控工位，打包时自动播报或报警。
 // @author       ExpressPackingMonitoring
 // @icon         https://raw.githubusercontent.com/m-RNA/ExpressPackingMonitoring/main/ExpressPackingMonitoring/app.ico
@@ -30,6 +30,7 @@
     const DEFAULT_HOST = '127.0.0.1';
     const DEFAULT_PORT = 5280;
     const DEFAULT_ADDRESS = `${DEFAULT_HOST}:${DEFAULT_PORT}`;
+    const INSTALL_MONITOR_ADDRESS = '';
     const DISCOVERY_DONE_KEY = 'monitor_auto_discovery_done';
     const DISCOVERY_TIMEOUT = 700;
     const DISCOVERY_BATCH_SIZE = 32;
@@ -48,7 +49,7 @@
     const REFUND_WORKER_OPEN_COOLDOWN_MS = 10 * 60 * 1000;
     const IS_REFUND_WORKER = new URL(location.href).searchParams.get(REFUND_WORKER_PARAM) === '1';
     const REFUND_WORKER_TOKEN = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const CHANGELOG = 'v2.4：退款核验页心跳调整为 30 秒，便于长时间挂机验证';
+    const CHANGELOG = 'v2.5：修复上位机地址自动探测与失效地址恢复';
     const DEBUG_LOG = false;
 
     let lastUserActivityAt = Date.now();
@@ -276,12 +277,9 @@
         const legacyPort = GM_getValue('monitor_port', '');
         if (legacyHost || legacyPort) return formatAddress(normalizeAddress(legacyHost || DEFAULT_HOST, legacyPort || DEFAULT_PORT));
 
+        if (INSTALL_MONITOR_ADDRESS) return formatAddress(normalizeAddress(INSTALL_MONITOR_ADDRESS, DEFAULT_PORT));
+
         return DEFAULT_ADDRESS;
-    }
-    function hasSavedMonitorAddress() {
-        return Boolean(String(GM_getValue('monitor_address', '')).trim() ||
-            String(GM_getValue('monitor_host', '')).trim() ||
-            String(GM_getValue('monitor_port', '')).trim());
     }
     function getMonitorAddress() {
         return normalizeAddress(getMonitorAddressText(), DEFAULT_PORT);
@@ -314,7 +312,7 @@
 
     function getHostPrefix(host) {
         const match = String(host || '').match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.\d{1,3}$/);
-        return match ? `${match[1]}.${match[2]}.${match[3]}` : '';
+        return match && match[1] !== '127' ? `${match[1]}.${match[2]}.${match[3]}` : '';
     }
 
     async function getWebRtcLocalPrefixes() {
@@ -332,7 +330,14 @@
 
         return new Promise(resolve => {
             const pc = new PeerConnection({ iceServers: [] });
-            const done = () => {
+            let settled = false;
+            const done = async () => {
+                if (settled) return;
+                settled = true;
+                try {
+                    const stats = await pc.getStats();
+                    stats.forEach(report => collect(report.address || report.ip));
+                } catch (e) { /* ignore */ }
                 try { pc.close(); } catch (e) { /* ignore */ }
                 resolve(Array.from(prefixes));
             };
@@ -342,6 +347,7 @@
                     return;
                 }
                 collect(event.candidate.candidate);
+                collect(event.candidate.address);
             };
             try {
                 pc.createDataChannel('monitor-discovery');
@@ -361,11 +367,8 @@
 
     async function findMonitorAddress(showProgress) {
         const saved = getMonitorAddress();
-        const hasSaved = hasSavedMonitorAddress();
         const port = saved.port;
-        const directCandidates = (hasSaved && !showProgress
-            ? [saved.host]
-            : [saved.host, '127.0.0.1', 'localhost'])
+        const directCandidates = [saved.host, '127.0.0.1', 'localhost']
             .filter((host, index, arr) => host && arr.indexOf(host) === index);
 
         for (const host of directCandidates) {
@@ -376,17 +379,11 @@
             }
         }
 
-        // 已绑定的监控端离线时不自动改绑，避免多监控端局域网串台。
-        // 用户仍可通过油猴菜单的“自动探测上位机地址”显式改绑。
-        if (hasSaved && !showProgress) return '';
-
         const prefixes = new Set();
         const savedPrefix = getHostPrefix(saved.host);
         if (savedPrefix) prefixes.add(savedPrefix);
         for (const prefix of await getWebRtcLocalPrefixes()) prefixes.add(prefix);
-        if (prefixes.size === 0) {
-            ['192.168.0', '192.168.1', '192.168.31', '10.0.0'].forEach(prefix => prefixes.add(prefix));
-        }
+        ['192.168.0', '192.168.1', '192.168.2', '192.168.31', '10.0.0'].forEach(prefix => prefixes.add(prefix));
 
         for (const prefix of prefixes) {
             for (let start = 1; start <= 254; start += DISCOVERY_BATCH_SIZE) {
@@ -438,7 +435,7 @@
         GM_registerMenuCommand('自动探测上位机地址', async () => {
             showNotification('正在自动探测上位机地址...');
             const found = await findMonitorAddress(true);
-            showNotification(found ? `已自动填入：${found}` : '未找到上位机，请确认已开启 Web 服务并在同一局域网');
+            showNotification(found ? `已自动填入：${found}` : '未找到上位机，请确认 Web 服务已开启，并允许浏览器访问本地网络');
         });
         GM_registerMenuCommand('发送测试订单', async () => {
             await sendTestOrder();

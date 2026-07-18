@@ -413,6 +413,13 @@ namespace ExpressPackingMonitoring.Services
 
             ctx.Response.Headers["Access-Control-Allow-Origin"] = origin;
             ctx.Response.Headers["Vary"] = "Origin";
+            if (string.Equals(
+                    ctx.Request.Headers["Access-Control-Request-Private-Network"],
+                    "true",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                ctx.Response.Headers["Access-Control-Allow-Private-Network"] = "true";
+            }
         }
 
         private static bool RequiresAccessKey(string path)

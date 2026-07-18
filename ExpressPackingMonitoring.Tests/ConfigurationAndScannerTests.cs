@@ -128,13 +128,14 @@ public sealed class ConfigurationAndScannerTests
     [Fact]
     public void AddMonitorConnectPermission_AddsExactHostWithoutDuplicatingWildcardPermission()
     {
-        const string script = "// ==UserScript==\n// @connect      localhost\n// @connect      *\n// ==/UserScript==";
+        const string script = "// ==UserScript==\n// @connect      localhost\n// @connect      *\n// ==/UserScript==\nconst INSTALL_MONITOR_ADDRESS = '';";
 
         string customized = PrintToolInstallGuide.AddMonitorConnectPermission(script, "192.168.2.239:5280");
         string repeated = PrintToolInstallGuide.AddMonitorConnectPermission(customized, "http://192.168.2.239:5280");
 
         Assert.Contains("// @connect      192.168.2.239", customized);
         Assert.Contains("// @connect      *", customized);
+        Assert.Contains("const INSTALL_MONITOR_ADDRESS = '192.168.2.239:5280';", customized);
         Assert.Equal(customized, repeated);
     }
 
