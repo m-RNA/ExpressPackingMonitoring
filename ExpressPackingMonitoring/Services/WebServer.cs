@@ -10,6 +10,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -188,10 +189,24 @@ namespace ExpressPackingMonitoring.Services
         /// </summary>
         private static void RegisterUrlAcl(int port)
         {
+            using WindowsIdentity identity = WindowsIdentity.GetCurrent();
+            string userSid = identity.User?.Value;
+            if (string.IsNullOrWhiteSpace(userSid))
+                throw new InvalidOperationException("无法获取当前用户 SID，不能配置局域网服务监听权限。");
+
+            RunElevatedCmd(BuildAccessSetupCommand(port, userSid), "配置局域网服务访问权限");
+        }
+
+        internal static string BuildAccessSetupCommand(int port, string userSid)
+        {
+            if (port <= 0 || port > 65535)
+                throw new ArgumentOutOfRangeException(nameof(port));
+            if (string.IsNullOrWhiteSpace(userSid))
+                throw new ArgumentException("用户 SID 不能为空。", nameof(userSid));
+
             string url = $"http://+:{port}/";
-            string command = $"netsh http add urlacl url={url} user=Everyone && "
+            return $"netsh http add urlacl url={url} sddl=\"D:(A;;GX;;;{userSid})\" && "
                 + $"netsh advfirewall firewall add rule name=\"快递打包监控 Web服务\" dir=in action=allow protocol=TCP localport={port}";
-            RunElevatedCmd(command, "配置局域网服务访问权限");
         }
 
         private static void RunElevatedCmd(string arguments, string actionName)

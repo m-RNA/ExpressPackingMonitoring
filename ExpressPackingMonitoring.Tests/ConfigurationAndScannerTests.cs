@@ -91,6 +91,35 @@ public sealed class ConfigurationAndScannerTests
         Assert.DoesNotContain("\n", customized.Replace("\r\n", "", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void BuildAccessSetupCommand_UsesLanguageIndependentUserSid()
+    {
+        string command = WebServer.BuildAccessSetupCommand(5280, "S-1-5-21-1000");
+
+        Assert.Contains("url=http://+:5280/", command);
+        Assert.Contains("sddl=\"D:(A;;GX;;;S-1-5-21-1000)\"", command);
+        Assert.Contains("localport=5280", command);
+        Assert.DoesNotContain("user=Everyone", command, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, true)]
+    public void ShouldRepairLanAccessAtStartup_RequiresCompletedSetupAndEnabledService(
+        bool setupCompleted,
+        bool webServerEnabled,
+        bool expected)
+    {
+        var config = new AppConfig
+        {
+            FirstUseWizardCompleted = setupCompleted,
+            EnableWebServer = webServerEnabled
+        };
+
+        Assert.Equal(expected, MainViewModel.ShouldRepairLanAccessAtStartup(config));
+    }
+
 
     [Fact]
     public void NormalizeAfterLoad_ResolvesConflictingScannerModesAndBounds()

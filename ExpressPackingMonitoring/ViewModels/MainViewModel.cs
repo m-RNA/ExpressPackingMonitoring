@@ -1541,7 +1541,7 @@ namespace ExpressPackingMonitoring.ViewModels
             }
         }
 
-        public void RunFirstUseSetupWizardIfNeeded(System.Windows.Window owner)
+        public async void RunFirstUseSetupWizardIfNeeded(System.Windows.Window owner)
         {
             if (Config.FirstUseWizardCompleted || _isDisposed)
                 return;
@@ -1592,6 +1592,13 @@ namespace ExpressPackingMonitoring.ViewModels
                         _globalKeyHook.Start();
                     else
                         _globalKeyHook.Stop();
+                }
+
+                if (Config.EnableWebServer)
+                {
+                    ShowToast("正在应用局域网服务设置...");
+                    if (!await RestartWebServerAsync(allowAccessSetup: true))
+                        return;
                 }
 
                 ShowToast(wizard.WasSkipped ? "已跳过配置向导" : "配置向导已完成");
@@ -1799,10 +1806,16 @@ namespace ExpressPackingMonitoring.ViewModels
             _videoTask = Task.Run(() => VideoProcessLoop(_cts.Token), _cts.Token);
             Task.Run(CheckDiskAndCleanup);
             Task.Run(CameraIdleWatchdog);
-            _ = RestartWebServerAsync(allowAccessSetup: false);
+            // 新用户先完成首次配置向导，再请求局域网权限；已有用户则在权限缺失时自动修复。
+            _ = RestartWebServerAsync(allowAccessSetup: ShouldRepairLanAccessAtStartup(Config));
 
             // 启动时自动将上次断电残留的 MKV 转换为 MP4
             _mkvRecoveryTask = Task.Run(RecoverOrphanedMkvAsync);
+        }
+
+        internal static bool ShouldRepairLanAccessAtStartup(AppConfig config)
+        {
+            return config?.FirstUseWizardCompleted == true && config.EnableWebServer;
         }
 
         private async Task RecoverOrphanedMkvAsync()
