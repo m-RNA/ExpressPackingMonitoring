@@ -477,4 +477,11 @@
   <data name="Main.PreviewSellerMemo" xml:space="preserve"><value>Seller note: {0}</value></data>
   <data name="Main.PreviewProduct" xml:space="preserve"><value>Product: {0}</value></data>
   <data name="Main.PreviewException" xml:space="preserve"><value>Exception: {0}</value></data>
+  <data name="高峰时段不休眠" xml:space="preserve"><value>Keep camera awake during peak hours</value></data>
+  <data name="达到空闲超时时才检查，两个时段默认留空" xml:space="preserve"><value>Checked only when the idle timeout is reached; both periods are empty by default</value></data>
+  <data name="时段 1" xml:space="preserve"><value>Period 1</value></data>
+  <data name="时段 2" xml:space="preserve"><value>Period 2</value></data>
+  <data name="时间格式为 HH:mm" xml:space="preserve"><value>Time format: HH:mm</value></data>
+  <data name="时间格式错误" xml:space="preserve"><value>Invalid time format</value></data>
+  <data name="不休眠时段 {0} 请填写完整的 HH:mm 开始和结束时间，或全部留空" xml:space="preserve"><value>Enter both the HH:mm start and end times for no-sleep period {0}, or leave both empty</value></data>
 </root>

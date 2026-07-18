@@ -104,6 +104,10 @@ namespace ExpressPackingMonitoring.Config
         public double CameraBarcodeRearmSeconds { get; set; } = 3.0;
         public double CameraSameBarcodeConfirmationSeconds { get; set; } = 1.5;
         public double CameraIdleMinutes { get; set; } = 5.0;
+        public string CameraIdleNoSleepStart1 { get; set; } = "";
+        public string CameraIdleNoSleepEnd1 { get; set; } = "";
+        public string CameraIdleNoSleepStart2 { get; set; } = "";
+        public string CameraIdleNoSleepEnd2 { get; set; } = "";
 
         public double MotionDetectThreshold { get; set; } = 15.0;
         public string OrderIdRegex { get; set; } = "^[a-zA-Z0-9-]{12,25}$";
@@ -329,6 +333,64 @@ namespace ExpressPackingMonitoring.Config
             }
 
             return changed;
+        }
+
+        internal bool IsCameraIdleNoSleepTime(DateTime now)
+        {
+            TimeSpan timeOfDay = now.TimeOfDay;
+            return IsTimeInCameraIdlePeriod(timeOfDay, CameraIdleNoSleepStart1, CameraIdleNoSleepEnd1)
+                || IsTimeInCameraIdlePeriod(timeOfDay, CameraIdleNoSleepStart2, CameraIdleNoSleepEnd2);
+        }
+
+        internal static bool TryNormalizeCameraIdlePeriod(
+            string? startText,
+            string? endText,
+            out string normalizedStart,
+            out string normalizedEnd)
+        {
+            normalizedStart = startText?.Trim() ?? "";
+            normalizedEnd = endText?.Trim() ?? "";
+
+            if (normalizedStart.Length == 0 && normalizedEnd.Length == 0)
+                return true;
+
+            if (!TryParseTimeOfDay(normalizedStart, out TimeSpan start)
+                || !TryParseTimeOfDay(normalizedEnd, out TimeSpan end)
+                || start == end)
+            {
+                return false;
+            }
+
+            normalizedStart = start.ToString(@"hh\:mm", System.Globalization.CultureInfo.InvariantCulture);
+            normalizedEnd = end.ToString(@"hh\:mm", System.Globalization.CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        private static bool IsTimeInCameraIdlePeriod(TimeSpan timeOfDay, string? startText, string? endText)
+        {
+            if (!TryNormalizeCameraIdlePeriod(startText, endText, out string normalizedStart, out string normalizedEnd)
+                || normalizedStart.Length == 0)
+            {
+                return false;
+            }
+
+            TryParseTimeOfDay(normalizedStart, out TimeSpan start);
+            TryParseTimeOfDay(normalizedEnd, out TimeSpan end);
+            return start < end
+                ? timeOfDay >= start && timeOfDay < end
+                : timeOfDay >= start || timeOfDay < end;
+        }
+
+        private static bool TryParseTimeOfDay(string text, out TimeSpan value)
+        {
+            string[] formats = [@"h\:mm", @"hh\:mm"];
+            return TimeSpan.TryParseExact(
+                    text,
+                    formats,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out value)
+                && value >= TimeSpan.Zero
+                && value < TimeSpan.FromDays(1);
         }
 
         internal static void ApplyFirstUseDefaults(AppConfig config)

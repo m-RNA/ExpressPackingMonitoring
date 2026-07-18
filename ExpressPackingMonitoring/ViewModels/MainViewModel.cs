@@ -2638,10 +2638,13 @@ namespace ExpressPackingMonitoring.ViewModels
                 if (IsRecording || _isCameraSleeping) continue;
 
                 double idleMinutes = (DateTime.Now - _lastActivityTime).TotalMinutes;
-                if (idleMinutes >= Config.CameraIdleMinutes)
+                if (idleMinutes >= Config.CameraIdleMinutes && !Config.IsCameraIdleNoSleepTime(DateTime.Now))
                 {
                     await Application.Current.Dispatcher.InvokeAsync(() => {
-                        if (_isCameraSleeping || IsRecording || _isSetupWizardActive) return; // 再次检查防止竞态
+                        if (_isCameraSleeping
+                            || IsRecording
+                            || _isSetupWizardActive
+                            || Config.IsCameraIdleNoSleepTime(DateTime.Now)) return; // 再次检查防止竞态和跨入保护时段
                         if (!StopCamera())
                         {
                             ShowToast("摄像头未能进入休眠，请重新插拔后重试");

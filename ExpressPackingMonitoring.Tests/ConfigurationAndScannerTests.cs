@@ -26,6 +26,74 @@ public sealed class ConfigurationAndScannerTests
     }
 
     [Fact]
+    public void AppConfig_CameraIdleNoSleepPeriodsAreEmptyByDefault()
+    {
+        AppConfig config = JsonSerializer.Deserialize<AppConfig>("{}")!;
+
+        Assert.Equal("", config.CameraIdleNoSleepStart1);
+        Assert.Equal("", config.CameraIdleNoSleepEnd1);
+        Assert.Equal("", config.CameraIdleNoSleepStart2);
+        Assert.Equal("", config.CameraIdleNoSleepEnd2);
+        Assert.False(config.IsCameraIdleNoSleepTime(new DateTime(2026, 7, 18, 14, 0, 0)));
+    }
+
+    [Theory]
+    [InlineData(12, 44, false)]
+    [InlineData(12, 45, true)]
+    [InlineData(19, 29, true)]
+    [InlineData(19, 30, false)]
+    [InlineData(20, 30, true)]
+    [InlineData(22, 44, true)]
+    [InlineData(22, 45, false)]
+    public void CameraIdleNoSleepPeriods_BlockOnlyInsideConfiguredRanges(int hour, int minute, bool expected)
+    {
+        var config = new AppConfig
+        {
+            CameraIdleNoSleepStart1 = "12:45",
+            CameraIdleNoSleepEnd1 = "19:30",
+            CameraIdleNoSleepStart2 = "20:30",
+            CameraIdleNoSleepEnd2 = "22:45"
+        };
+
+        Assert.Equal(expected, config.IsCameraIdleNoSleepTime(new DateTime(2026, 7, 18, hour, minute, 0)));
+    }
+
+    [Theory]
+    [InlineData(22, 59, true)]
+    [InlineData(0, 30, true)]
+    [InlineData(1, 0, false)]
+    public void CameraIdleNoSleepPeriod_SupportsCrossingMidnight(int hour, int minute, bool expected)
+    {
+        var config = new AppConfig
+        {
+            CameraIdleNoSleepStart1 = "22:30",
+            CameraIdleNoSleepEnd1 = "01:00"
+        };
+
+        Assert.Equal(expected, config.IsCameraIdleNoSleepTime(new DateTime(2026, 7, 18, hour, minute, 0)));
+    }
+
+    [Theory]
+    [InlineData("", "", true, "", "")]
+    [InlineData(" 8:05 ", " 9:30 ", true, "08:05", "09:30")]
+    [InlineData("08:00", "", false, "08:00", "")]
+    [InlineData("25:00", "26:00", false, "25:00", "26:00")]
+    [InlineData("08:00", "08:00", false, "08:00", "08:00")]
+    public void TryNormalizeCameraIdlePeriod_ValidatesAndNormalizesTimeRange(
+        string start,
+        string end,
+        bool expected,
+        string expectedStart,
+        string expectedEnd)
+    {
+        bool actual = AppConfig.TryNormalizeCameraIdlePeriod(start, end, out string normalizedStart, out string normalizedEnd);
+
+        Assert.Equal(expected, actual);
+        Assert.Equal(expectedStart, normalizedStart);
+        Assert.Equal(expectedEnd, normalizedEnd);
+    }
+
+    [Fact]
     public void BuildPreviewOrderNotice_IncludesOrderDetailsAndRefundException()
     {
         var orderInfo = new OrderInfo

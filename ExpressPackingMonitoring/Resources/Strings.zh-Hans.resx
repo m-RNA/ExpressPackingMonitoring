@@ -477,4 +477,11 @@
   <data name="Main.PreviewSellerMemo" xml:space="preserve"><value>卖家备注：{0}</value></data>
   <data name="Main.PreviewProduct" xml:space="preserve"><value>商品：{0}</value></data>
   <data name="Main.PreviewException" xml:space="preserve"><value>异常：{0}</value></data>
+  <data name="高峰时段不休眠" xml:space="preserve"><value>高峰时段不休眠</value></data>
+  <data name="达到空闲超时时才检查，两个时段默认留空" xml:space="preserve"><value>达到空闲超时时才检查，两个时段默认留空</value></data>
+  <data name="时段 1" xml:space="preserve"><value>时段 1</value></data>
+  <data name="时段 2" xml:space="preserve"><value>时段 2</value></data>
+  <data name="时间格式为 HH:mm" xml:space="preserve"><value>时间格式为 HH:mm</value></data>
+  <data name="时间格式错误" xml:space="preserve"><value>时间格式错误</value></data>
+  <data name="不休眠时段 {0} 请填写完整的 HH:mm 开始和结束时间，或全部留空" xml:space="preserve"><value>不休眠时段 {0} 请填写完整的 HH:mm 开始和结束时间，或全部留空</value></data>
 </root>

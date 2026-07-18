@@ -768,6 +768,9 @@ namespace ExpressPackingMonitoring.UI
             Keyboard.ClearFocus();
             SyncSelectedMicToConfig();
 
+            if (!ValidateCameraIdleNoSleepPeriods())
+                return false;
+
             // 0. 验证音频
             if (Config.EnableAudioRecording && string.IsNullOrEmpty(Config.AudioDeviceName))
             {
@@ -864,6 +867,57 @@ namespace ExpressPackingMonitoring.UI
                 }
             }
             return applied;
+        }
+
+        private bool ValidateCameraIdleNoSleepPeriods()
+        {
+            if (!TryNormalizeCameraIdleNoSleepPeriod(
+                    1,
+                    Config.CameraIdleNoSleepStart1,
+                    Config.CameraIdleNoSleepEnd1,
+                    out string start1,
+                    out string end1))
+            {
+                return false;
+            }
+
+            if (!TryNormalizeCameraIdleNoSleepPeriod(
+                    2,
+                    Config.CameraIdleNoSleepStart2,
+                    Config.CameraIdleNoSleepEnd2,
+                    out string start2,
+                    out string end2))
+            {
+                return false;
+            }
+
+            Config.CameraIdleNoSleepStart1 = start1;
+            Config.CameraIdleNoSleepEnd1 = end1;
+            Config.CameraIdleNoSleepStart2 = start2;
+            Config.CameraIdleNoSleepEnd2 = end2;
+            return true;
+        }
+
+        private bool TryNormalizeCameraIdleNoSleepPeriod(
+            int periodNumber,
+            string start,
+            string end,
+            out string normalizedStart,
+            out string normalizedEnd)
+        {
+            if (AppConfig.TryNormalizeCameraIdlePeriod(start, end, out normalizedStart, out normalizedEnd))
+                return true;
+
+            string message = string.Format(
+                CultureInfo.CurrentCulture,
+                AppLanguage.Translate("不休眠时段 {0} 请填写完整的 HH:mm 开始和结束时间，或全部留空"),
+                periodNumber);
+            MessageBox.Show(
+                message,
+                AppLanguage.Translate("时间格式错误"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return false;
         }
 
         private async void RunSetupWizard_Click(object sender, RoutedEventArgs e)
