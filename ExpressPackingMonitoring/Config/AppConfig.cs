@@ -101,6 +101,8 @@ namespace ExpressPackingMonitoring.Config
         public bool EnableCameraIdle { get; set; } = true;
         public bool EnableCameraBarcodeRecognition { get; set; } = false;
         public bool EnableSameBarcodeStopRecording { get; set; } = false;
+        public double CameraBarcodeRearmSeconds { get; set; } = 3.0;
+        public double CameraSameBarcodeConfirmationSeconds { get; set; } = 1.5;
         public double CameraIdleMinutes { get; set; } = 5.0;
 
         public double MotionDetectThreshold { get; set; } = 15.0;
@@ -275,6 +277,26 @@ namespace ExpressPackingMonitoring.Config
             if (config.EnableGlobalKeyboard && config.EnableScannerAutoSubmit)
             {
                 config.EnableGlobalKeyboard = false;
+                changed = true;
+            }
+
+            double normalizedCameraBarcodeRearmSeconds = System.Math.Clamp(
+                config.CameraBarcodeRearmSeconds,
+                1.0,
+                30.0);
+            if (System.Math.Abs(config.CameraBarcodeRearmSeconds - normalizedCameraBarcodeRearmSeconds) > 0.001)
+            {
+                config.CameraBarcodeRearmSeconds = normalizedCameraBarcodeRearmSeconds;
+                changed = true;
+            }
+
+            double normalizedCameraSameBarcodeConfirmationSeconds = System.Math.Clamp(
+                config.CameraSameBarcodeConfirmationSeconds,
+                0.5,
+                10.0);
+            if (System.Math.Abs(config.CameraSameBarcodeConfirmationSeconds - normalizedCameraSameBarcodeConfirmationSeconds) > 0.001)
+            {
+                config.CameraSameBarcodeConfirmationSeconds = normalizedCameraSameBarcodeConfirmationSeconds;
                 changed = true;
             }
 

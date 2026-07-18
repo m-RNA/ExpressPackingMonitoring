@@ -170,6 +170,8 @@
   <data name="缓存包含在线播放转码、剪辑预览图和剪辑下载文件，超出上限后会自动清理最旧文件" xml:space="preserve"><value>The cache contains online playback transcoding, clip previews, and clip download files. The oldest files will be automatically cleared after the upper limit is exceeded.</value></data>
   <data name="建议与普通播报使用不同角色，便于区分警告提示" xml:space="preserve"><value>It is recommended to use different roles from ordinary broadcasts to facilitate the differentiation of warning prompts.</value></data>
   <data name="仅限同码停录" xml:space="preserve"><value>Only stop recording with the same code</value></data>
+  <data name="同码消失时间" xml:space="preserve"><value>Same-code disappearance time</value></data>
+  <data name="同码确认时间" xml:space="preserve"><value>Same-code confirmation time</value></data>
   <data name="警告播报声线" xml:space="preserve"><value>Warning voice</value></data>
   <data name="静止超时" xml:space="preserve"><value>Motion timeout</value></data>
   <data name="开机自启动" xml:space="preserve"><value>Start at boot</value></data>
@@ -266,6 +268,8 @@
   <data name="越高越流畅，也更占空间" xml:space="preserve"><value>The higher it is, the smoother it is, and it also takes up more space.</value></data>
   <data name="越高越清晰，文件也越大" xml:space="preserve"><value>The higher it is, the clearer it is and the larger the file is.</value></data>
   <data name="再次扫描同一单号才停止录像，扫到其他单号不停止" xml:space="preserve"><value>Scan the same order number again to stop recording. Scan other order numbers and it will not stop.</value></data>
+  <data name="原单号离开画面多久后，才允许摄像头再次确认" xml:space="preserve"><value>How long the original code must leave the frame before the camera can confirm it again</value></data>
+  <data name="同码重新出现后，摄像头需连续识别多久才停录" xml:space="preserve"><value>How long the camera must continuously recognize the same code after it reappears before stopping</value></data>
   <data name="在线警告声音" xml:space="preserve"><value>Online warning sound</value></data>
   <data name="在线普通声音" xml:space="preserve"><value>Online normal voice</value></data>
   <data name="长时间不用时关闭摄像头" xml:space="preserve"><value>Turn off the camera when not in use for an extended period of time</value></data>

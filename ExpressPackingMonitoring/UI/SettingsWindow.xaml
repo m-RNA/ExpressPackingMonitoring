@@ -2261,7 +2261,7 @@
                                                   Style="{StaticResource ToggleSwitchStyle}"/>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowLastStyle}">
+                                    <Grid Style="{StaticResource SettingRowStyle}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="24"/>
@@ -2271,11 +2271,70 @@
                                             <TextBlock Text="仅限同码停录" Style="{StaticResource FieldLabelStyle}"/>
                                             <TextBlock Text="再次扫描同一单号才停止录像，扫到其他单号不停止" Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
-                                        <CheckBox Grid.Column="2"
+                                        <CheckBox x:Name="SameBarcodeStopCheckBox"
+                                                  Grid.Column="2"
                                                   IsChecked="{Binding Config.EnableSameBarcodeStopRecording}"
                                                   VerticalAlignment="Center"
                                                   HorizontalAlignment="Left"
                                                   Style="{StaticResource ToggleSwitchStyle}"/>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowStyle}"
+                                          IsEnabled="{Binding IsChecked, ElementName=SameBarcodeStopCheckBox, TargetNullValue=False}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="24"/>
+                                            <ColumnDefinition Width="260"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="同码消失时间" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="原单号离开画面多久后，才允许摄像头再次确认"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <Grid>
+                                                <TextBlock Text="更短" Style="{StaticResource SliderEndLabelStyle}" HorizontalAlignment="Left"/>
+                                                <TextBlock Text="{Binding ElementName=CameraBarcodeRearmSlider, Path=Value, StringFormat={}{0:F1} 秒}"
+                                                           Style="{StaticResource SliderValueTextStyle}"
+                                                           HorizontalAlignment="Center"/>
+                                                <TextBlock Text="更长" Style="{StaticResource SliderEndLabelStyle}" HorizontalAlignment="Right"/>
+                                            </Grid>
+                                            <Slider x:Name="CameraBarcodeRearmSlider"
+                                                    Style="{StaticResource SettingsSliderStyle}"
+                                                    Minimum="1"
+                                                    Maximum="30"
+                                                    TickFrequency="0.5"
+                                                    Value="{Binding Config.CameraBarcodeRearmSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <Grid Style="{StaticResource SettingRowLastStyle}"
+                                          IsEnabled="{Binding IsChecked, ElementName=SameBarcodeStopCheckBox, TargetNullValue=False}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="24"/>
+                                            <ColumnDefinition Width="260"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="同码确认时间" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="同码重新出现后，摄像头需连续识别多久才停录"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <Grid>
+                                                <TextBlock Text="更短" Style="{StaticResource SliderEndLabelStyle}" HorizontalAlignment="Left"/>
+                                                <TextBlock Text="{Binding ElementName=CameraSameBarcodeConfirmationSlider, Path=Value, StringFormat={}{0:F1} 秒}"
+                                                           Style="{StaticResource SliderValueTextStyle}"
+                                                           HorizontalAlignment="Center"/>
+                                                <TextBlock Text="更长" Style="{StaticResource SliderEndLabelStyle}" HorizontalAlignment="Right"/>
+                                            </Grid>
+                                            <Slider x:Name="CameraSameBarcodeConfirmationSlider"
+                                                    Style="{StaticResource SettingsSliderStyle}"
+                                                    Minimum="0.5"
+                                                    Maximum="10"
+                                                    TickFrequency="0.5"
+                                                    Value="{Binding Config.CameraSameBarcodeConfirmationSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                        </StackPanel>
                                     </Grid>
                                 </StackPanel>
                             </Border>

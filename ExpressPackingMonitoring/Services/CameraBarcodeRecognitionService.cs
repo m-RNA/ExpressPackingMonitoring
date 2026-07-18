@@ -229,7 +229,7 @@ internal static class CameraBarcodeCandidatePolicy
 internal sealed class CameraBarcodeStabilityTracker
 {
     private static readonly TimeSpan ConfirmationWindow = TimeSpan.FromSeconds(1.5);
-    private static readonly TimeSpan RearmDelay = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan DefaultRearmDelay = TimeSpan.FromSeconds(3);
     private readonly Dictionary<string, DateTimeOffset> _lockedCodes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTimeOffset> _missingLockedCodesSince = new(StringComparer.Ordinal);
     private string _candidateCode = "";
@@ -241,9 +241,13 @@ internal sealed class CameraBarcodeStabilityTracker
     public CameraBarcodeObservation Observe(
         string? code,
         DateTimeOffset now,
-        TimeSpan requiredPresence = default)
+        TimeSpan requiredPresence = default,
+        TimeSpan rearmDelay = default)
     {
-        RearmMissingCodes(now, code);
+        RearmMissingCodes(
+            now,
+            code,
+            rearmDelay > TimeSpan.Zero ? rearmDelay : DefaultRearmDelay);
 
         string normalized = (code ?? "").Trim().ToUpperInvariant();
         if (normalized.Length == 0)
@@ -303,7 +307,10 @@ internal sealed class CameraBarcodeStabilityTracker
         ClearCandidate();
     }
 
-    private void RearmMissingCodes(DateTimeOffset now, string? observedCode)
+    private void RearmMissingCodes(
+        DateTimeOffset now,
+        string? observedCode,
+        TimeSpan rearmDelay)
     {
         string normalized = (observedCode ?? "").Trim().ToUpperInvariant();
         foreach (string code in _lockedCodes.Keys.ToArray())
@@ -311,7 +318,7 @@ internal sealed class CameraBarcodeStabilityTracker
             if (string.Equals(code, normalized, StringComparison.Ordinal))
             {
                 if (!_missingLockedCodesSince.TryGetValue(code, out DateTimeOffset missingSince)
-                    || now - missingSince < RearmDelay)
+                    || now - missingSince < rearmDelay)
                 {
                     _missingLockedCodesSince.Remove(code);
                     continue;
@@ -330,7 +337,7 @@ internal sealed class CameraBarcodeStabilityTracker
                 continue;
             }
 
-            if (now - firstMissingAt >= RearmDelay)
+            if (now - firstMissingAt >= rearmDelay)
             {
                 _lockedCodes.Remove(code);
                 _missingLockedCodesSince.Remove(code);
@@ -683,6 +690,7 @@ internal sealed class CameraBarcodeRecognitionService : IDisposable
     private readonly Func<string, bool> _candidateValidator;
     private readonly Func<bool>? _fullFrameAllowed;
     private readonly Func<string, TimeSpan>? _confirmationDurationProvider;
+    private readonly Func<TimeSpan>? _rearmDelayProvider;
     private readonly CameraBarcodeFrameDecoder _decoder = new();
     private readonly CameraBarcodeMotionGate _motionGate = new();
     private readonly CameraBarcodeStabilityTracker _stabilityTracker = new();
@@ -710,11 +718,13 @@ internal sealed class CameraBarcodeRecognitionService : IDisposable
     public CameraBarcodeRecognitionService(
         Func<string, bool> candidateValidator,
         Func<bool>? fullFrameAllowed = null,
-        Func<string, TimeSpan>? confirmationDurationProvider = null)
+        Func<string, TimeSpan>? confirmationDurationProvider = null,
+        Func<TimeSpan>? rearmDelayProvider = null)
     {
         _candidateValidator = candidateValidator ?? throw new ArgumentNullException(nameof(candidateValidator));
         _fullFrameAllowed = fullFrameAllowed;
         _confirmationDurationProvider = confirmationDurationProvider;
+        _rearmDelayProvider = rearmDelayProvider;
         _workerTask = Task.Run(ProcessLoopAsync);
     }
 
@@ -837,8 +847,9 @@ internal sealed class CameraBarcodeRecognitionService : IDisposable
             TimeSpan requiredPresence = code == null
                 ? TimeSpan.Zero
                 : _confirmationDurationProvider?.Invoke(code) ?? TimeSpan.Zero;
+            TimeSpan rearmDelay = _rearmDelayProvider?.Invoke() ?? TimeSpan.Zero;
             lock (_trackerLock)
-                observation = _stabilityTracker.Observe(code, now, requiredPresence);
+                observation = _stabilityTracker.Observe(code, now, requiredPresence, rearmDelay);
 
             Volatile.Write(
                 ref _forceDecodeUntilUtcTicks,

@@ -608,8 +608,9 @@ namespace ExpressPackingMonitoring.ViewModels
                 () => !IsRecording && CanSubmitCameraBarcode(),
                 code => Config.EnableSameBarcodeStopRecording
                     && CameraBarcodeCandidatePolicy.IsCurrentRecordingCode(code, _recordingOrderId, IsRecording)
-                        ? TimeSpan.FromSeconds(2)
-                        : TimeSpan.Zero);
+                        ? TimeSpan.FromSeconds(Config.CameraSameBarcodeConfirmationSeconds)
+                        : TimeSpan.Zero,
+                () => TimeSpan.FromSeconds(Config.CameraBarcodeRearmSeconds));
             _cameraBarcodeRecognition.StatusChanged += OnCameraBarcodeStatusChanged;
             _cameraBarcodeRecognition.BarcodeConfirmed += OnCameraBarcodeConfirmed;
         }

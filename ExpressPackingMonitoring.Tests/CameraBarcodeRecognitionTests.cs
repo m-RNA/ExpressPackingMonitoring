@@ -152,6 +152,23 @@ public sealed class CameraBarcodeRecognitionTests
     }
 
     [Fact]
+    public void StabilityTracker_CustomRearmDelayControlsWhenSameCodeCanReturn()
+    {
+        var tracker = Confirm(trackingNumber: "YT123456789012");
+        TimeSpan rearmDelay = TimeSpan.FromSeconds(5);
+
+        tracker.Observe(null, Start.AddSeconds(0.5), rearmDelay: rearmDelay);
+        tracker.Observe(null, Start.AddSeconds(5.4), rearmDelay: rearmDelay);
+        CameraBarcodeObservation candidate = tracker.Observe(
+            "YT123456789012",
+            Start.AddSeconds(5.5),
+            rearmDelay: rearmDelay);
+
+        Assert.Equal("YT123456789012", candidate.CandidateCode);
+        Assert.Empty(candidate.ConfirmedCode);
+    }
+
+    [Fact]
     public void StabilityTracker_DifferentCodeCanConfirmWithoutWaitingForOldCodeToRearm()
     {
         var tracker = Confirm(trackingNumber: "YT123456789012");
@@ -483,7 +500,25 @@ public sealed class CameraBarcodeRecognitionTests
         Assert.NotNull(config);
         Assert.False(config.EnableCameraBarcodeRecognition);
         Assert.Equal(0, config.CameraBarcodeSetupVersion);
+        Assert.Equal(3.0, config.CameraBarcodeRearmSeconds);
+        Assert.Equal(1.5, config.CameraSameBarcodeConfirmationSeconds);
         Assert.True(config.EnableGlobalKeyboard);
+    }
+
+    [Fact]
+    public void NormalizeAfterLoad_ClampsCameraSameCodeTimingSettings()
+    {
+        var config = new AppConfig
+        {
+            CameraBarcodeRearmSeconds = 0,
+            CameraSameBarcodeConfirmationSeconds = 100
+        };
+
+        bool changed = AppConfig.NormalizeAfterLoad(config);
+
+        Assert.True(changed);
+        Assert.Equal(1.0, config.CameraBarcodeRearmSeconds);
+        Assert.Equal(10.0, config.CameraSameBarcodeConfirmationSeconds);
     }
 
     [Fact]
