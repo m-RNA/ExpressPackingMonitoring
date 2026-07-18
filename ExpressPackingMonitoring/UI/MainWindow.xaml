@@ -362,14 +362,36 @@
                                                FontSize="22"
                                                FontWeight="Bold"
                                                LineHeight="31"
-                                               TextWrapping="Wrap"/>
+                                               Margin="0,0,0,4"
+                                               TextWrapping="Wrap">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding PreviewOrderRemarkText}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                     <TextBlock Text="{Binding PreviewOrderDetailText}"
                                                Foreground="White"
                                                FontSize="15"
                                                FontWeight="SemiBold"
                                                LineHeight="22"
-                                               Margin="0,4,0,0"
-                                               TextWrapping="Wrap"/>
+                                               TextWrapping="Wrap">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding PreviewOrderDetailText}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
