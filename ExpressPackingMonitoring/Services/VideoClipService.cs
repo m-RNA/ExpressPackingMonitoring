@@ -107,6 +107,24 @@ namespace ExpressPackingMonitoring.Services
             };
         }
 
+        public ClipPreviewFrameResult CreateThumbnail(long videoId)
+        {
+            var record = GetAvailableRecord(videoId);
+            string sourcePath = ResolveClipSourcePath(record);
+            double duration = ResolveDuration(record);
+            double seconds = Math.Clamp(duration * 0.1, 0.5, 3.0);
+            seconds = ClampPreviewSecond(RoundToTenth(seconds), duration);
+            string path = EnsurePreviewFrame(videoId, sourcePath, seconds, duration, "thumbnail");
+
+            return new ClipPreviewFrameResult
+            {
+                Success = true,
+                VideoDuration = duration,
+                Seconds = seconds,
+                Url = "/api/clip-previews/" + Uri.EscapeDataString(Path.GetFileName(path))
+            };
+        }
+
         public void PrewarmPreviewFrames(long videoId, double startSeconds, double endSeconds, string previewSide = "")
         {
             ThrowIfDisposed();

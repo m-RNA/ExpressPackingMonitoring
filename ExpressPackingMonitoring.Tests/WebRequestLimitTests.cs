@@ -78,4 +78,16 @@ public sealed class WebRequestLimitTests
         Assert.DoesNotContain("/clip/frame", html);
         Assert.DoesNotContain("/clip/prewarm", html);
     }
+
+    [Fact]
+    public void VideoList_UsesLazyThumbnailsAndSourceBadges()
+    {
+        string html = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Web", "index.html"));
+
+        Assert.Contains("thumb.loading='lazy'", html);
+        Assert.Contains("v.thumbnailUrl", html);
+        Assert.Contains("?'其他设备':'PC'", html);
+        Assert.Contains(".mobile-connect-toggle,.install-card{display:none}", html);
+        Assert.DoesNotContain("status.textContent=v.exists?'文件存在':'文件丢失'", html);
+    }
 }

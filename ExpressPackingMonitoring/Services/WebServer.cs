@@ -572,6 +572,8 @@ namespace ExpressPackingMonitoring.Services
                             HandleClipPreview(ctx, path);
                         else if (method == "POST" && path.StartsWith("/api/videos/") && path.EndsWith("/clip"))
                             HandleStartClip(ctx, path);
+                        else if (method == "GET" && path.StartsWith("/api/videos/") && path.EndsWith("/thumbnail"))
+                            HandleVideoThumbnail(ctx, path);
                         else if (path.StartsWith("/api/videos/") && path.EndsWith("/play"))
                             HandlePlay(ctx, path);
                         else
@@ -1550,6 +1552,7 @@ namespace ExpressPackingMonitoring.Services
                 duration = TimeSpan.FromSeconds(r.DurationSeconds).ToString(@"mm\:ss"),
                 exists = File.Exists(r.FilePath),
                 playUrl = $"/api/videos/{r.Id}/play?compat=1",
+                thumbnailUrl = $"/api/videos/{r.Id}/thumbnail",
                 remote = true
             });
 
@@ -2104,6 +2107,30 @@ namespace ExpressPackingMonitoring.Services
             ctx.Response.ContentLength64 = fs.Length;
             fs.CopyTo(ctx.Response.OutputStream);
             ctx.Response.OutputStream.Close();
+        }
+
+        private void HandleVideoThumbnail(HttpListenerContext ctx, string path)
+        {
+            try
+            {
+                if (!TryFindVideoId(path, "/thumbnail", out long id))
+                {
+                    SendJson(ctx, 400, new { errorCode = "invalid_video_id", error = "视频 ID 无效" });
+                    return;
+                }
+
+                ClipPreviewFrameResult result = _clipService.CreateThumbnail(id);
+                HandleServeClipPreview(ctx, result.Url);
+            }
+            catch (FileNotFoundException)
+            {
+                SendJson(ctx, 404, new { errorCode = "file_not_found", error = "录像文件不存在" });
+            }
+            catch (Exception ex)
+            {
+                Log($"HandleVideoThumbnail 异常: {ex.Message}");
+                SendJson(ctx, 500, new { errorCode = "thumbnail_failed", error = "预览图生成失败" });
+            }
         }
 
         private static T ReadJsonBody<T>(HttpListenerContext ctx)
