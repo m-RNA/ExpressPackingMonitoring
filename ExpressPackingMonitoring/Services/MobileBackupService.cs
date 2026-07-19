@@ -141,18 +141,25 @@ internal sealed class MobileBackupService
         uploadId = NormalizeSha256(uploadId);
         ArgumentNullException.ThrowIfNull(request);
         ValidateCompleteRequest(request);
+        IReadOnlyList<MobileBackupSessionRequest> sessions = request.GetSessions();
         string fileSha256 = NormalizeSha256(request.FileSha256);
         if (!string.Equals(uploadId, fileSha256, StringComparison.Ordinal))
             throw new MobileBackupValidationException("upload_sha256_mismatch", "上传任务与完整文件 SHA256 不一致");
 
         lock (GetUploadLock(uploadId))
         {
-            VideoRecord? completed = _database.GetVideoBySourceSession(request.SourceDeviceId, request.SessionId);
-            if (completed != null)
+            var existingRecords = sessions
+                .Select(session => _database.GetVideoBySourceSession(request.SourceDeviceId, session.SessionId))
+                .ToList();
+            foreach (VideoRecord? completed in existingRecords.Where(record => record != null))
             {
-                if (!string.Equals(completed.ContentSha256, fileSha256, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(completed!.ContentSha256, fileSha256, StringComparison.OrdinalIgnoreCase))
                     throw new MobileBackupValidationException("session_conflict", "该设备录像 ID 已绑定其他文件");
-                return new MobileBackupCompleteResult("verified", fileSha256, completed.Id, true);
+            }
+            if (existingRecords.All(record => record != null))
+            {
+                long[] completedIds = existingRecords.Select(record => record!.Id).ToArray();
+                return new MobileBackupCompleteResult("verified", fileSha256, completedIds[0], completedIds, true);
             }
 
             string finalPath;
@@ -197,23 +204,35 @@ internal sealed class MobileBackupService
                 fileSize = new FileInfo(finalPath).Length;
             }
 
-            string trackingNumber = request.TrackingNumber?.Trim().ToUpperInvariant() ?? "";
-            OrderInfo? orderInfo = string.IsNullOrEmpty(trackingNumber) ? null : _orderInfoResolver(trackingNumber);
-            DateTime localStartTime = request.StartedAt.ToLocalTime().DateTime;
-            long recordId = _database.InsertMobileBackupRecord(
-                trackingNumber,
-                finalPath,
-                fileSize,
-                localStartTime,
-                request.DurationMilliseconds / 1000.0,
-                request.SourceDeviceId,
-                request.SourceDeviceName,
-                request.SessionId,
-                fileSha256,
-                orderInfo);
+            var recordIds = new List<long>(sessions.Count);
+            for (int index = 0; index < sessions.Count; index++)
+            {
+                MobileBackupSessionRequest session = sessions[index];
+                VideoRecord? existing = existingRecords[index];
+                if (existing != null)
+                {
+                    recordIds.Add(existing.Id);
+                    continue;
+                }
+
+                string trackingNumber = session.TrackingNumber?.Trim().ToUpperInvariant() ?? "";
+                OrderInfo? orderInfo = string.IsNullOrEmpty(trackingNumber) ? null : _orderInfoResolver(trackingNumber);
+                DateTime localStartTime = session.StartedAt.ToLocalTime().DateTime;
+                recordIds.Add(_database.InsertMobileBackupRecord(
+                    trackingNumber,
+                    finalPath,
+                    fileSize,
+                    localStartTime,
+                    session.DurationMilliseconds / 1000.0,
+                    request.SourceDeviceId,
+                    request.SourceDeviceName,
+                    session.SessionId,
+                    fileSha256,
+                    orderInfo));
+            }
 
             DeleteStateFile(uploadId);
-            return new MobileBackupCompleteResult("verified", fileSha256, recordId, false);
+            return new MobileBackupCompleteResult("verified", fileSha256, recordIds[0], recordIds, false);
         }
     }
 
@@ -326,18 +345,24 @@ internal sealed class MobileBackupService
 
     private static void ValidateCompleteRequest(MobileBackupCompleteRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.SessionId) || request.SessionId.Trim().Length > 128)
-            throw new MobileBackupValidationException("invalid_session_id", "sessionId 不能为空且最多 128 个字符");
         if (string.IsNullOrWhiteSpace(request.SourceDeviceId) || request.SourceDeviceId.Trim().Length > 128)
             throw new MobileBackupValidationException("invalid_source_device_id", "来源设备 ID 不能为空且最多 128 个字符");
         if (string.IsNullOrWhiteSpace(request.SourceDeviceName) || request.SourceDeviceName.Trim().Length > 100)
             throw new MobileBackupValidationException("invalid_source_device_name", "来源设备名称不能为空且最多 100 个字符");
-        if ((request.TrackingNumber?.Trim().Length ?? 0) > 100)
-            throw new MobileBackupValidationException("invalid_tracking_number", "面单号最多 100 个字符");
-        if (request.StartedAt == default)
-            throw new MobileBackupValidationException("invalid_started_at", "startedAt 不能为空");
-        if (request.DurationMilliseconds <= 0 || request.DurationMilliseconds > TimeSpan.FromDays(2).TotalMilliseconds)
-            throw new MobileBackupValidationException("invalid_duration", "录像时长必须大于 0 且不超过 48 小时");
+        IReadOnlyList<MobileBackupSessionRequest> sessions = request.GetSessions();
+        if (sessions.Count == 0 || sessions.Count > 500)
+            throw new MobileBackupValidationException("invalid_sessions", "录像片段数量必须在 1 到 500 之间");
+        foreach (MobileBackupSessionRequest session in sessions)
+        {
+            if (string.IsNullOrWhiteSpace(session.SessionId) || session.SessionId.Trim().Length > 128)
+                throw new MobileBackupValidationException("invalid_session_id", "sessionId 不能为空且最多 128 个字符");
+            if ((session.TrackingNumber?.Trim().Length ?? 0) > 100)
+                throw new MobileBackupValidationException("invalid_tracking_number", "面单号最多 100 个字符");
+            if (session.StartedAt == default)
+                throw new MobileBackupValidationException("invalid_started_at", "startedAt 不能为空");
+            if (session.DurationMilliseconds <= 0 || session.DurationMilliseconds > TimeSpan.FromDays(2).TotalMilliseconds)
+                throw new MobileBackupValidationException("invalid_duration", "录像时长必须大于 0 且不超过 48 小时");
+        }
     }
 }
 
@@ -357,11 +382,40 @@ internal sealed class MobileBackupCompleteRequest
     public long DurationMilliseconds { get; set; }
     public string SourceDeviceId { get; set; } = "";
     public string SourceDeviceName { get; set; } = "";
+    public List<MobileBackupSessionRequest> Sessions { get; set; } = new();
+
+    public IReadOnlyList<MobileBackupSessionRequest> GetSessions()
+    {
+        if (Sessions.Count > 0) return Sessions;
+        return new[]
+        {
+            new MobileBackupSessionRequest
+            {
+                SessionId = SessionId,
+                TrackingNumber = TrackingNumber,
+                StartedAt = StartedAt,
+                DurationMilliseconds = DurationMilliseconds
+            }
+        };
+    }
+}
+
+internal sealed class MobileBackupSessionRequest
+{
+    public string SessionId { get; set; } = "";
+    public string TrackingNumber { get; set; } = "";
+    public DateTimeOffset StartedAt { get; set; }
+    public long DurationMilliseconds { get; set; }
 }
 
 internal sealed record MobileBackupCreateResult(string UploadId, long Offset, int ChunkSize, bool FileReady);
 
-internal sealed record MobileBackupCompleteResult(string Status, string FileSha256, long RecordId, bool AlreadyCompleted);
+internal sealed record MobileBackupCompleteResult(
+    string Status,
+    string FileSha256,
+    long RecordId,
+    IReadOnlyList<long> RecordIds,
+    bool AlreadyCompleted);
 
 internal sealed class MobileBackupUploadState
 {

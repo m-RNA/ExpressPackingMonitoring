@@ -12,7 +12,9 @@ internal static class MobileConnectionService
     public static string BuildAccessUrl(string address, bool requireAccessKey, string? accessKey)
     {
         string url = WorkstationNetwork.ToUrl(address).TrimEnd('/');
-        if (!requireAccessKey || string.IsNullOrWhiteSpace(accessKey))
+        // App pairing always needs the key for mobile-backup-v1, even when the
+        // browser-facing video page itself does not require authentication.
+        if (string.IsNullOrWhiteSpace(accessKey))
             return url;
 
         return $"{url}/?key={Uri.EscapeDataString(accessKey.Trim())}";

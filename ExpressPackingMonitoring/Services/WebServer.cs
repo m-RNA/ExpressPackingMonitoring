@@ -639,10 +639,17 @@ namespace ExpressPackingMonitoring.Services
             SendJson(ctx, 200, new
             {
                 protocol = MobileBackupService.ProtocolVersion,
+                version = 1,
                 computerId = _mobileBackupComputerId,
                 computerName = _mobileBackupComputerName,
                 maxChunkBytes = MobileBackupService.ChunkSizeBytes,
                 supportedFormats = new[] { "video/mp4" },
+                features = new
+                {
+                    videoLibrary = true,
+                    rangePlayback = true,
+                    multipleSessionsPerFile = true
+                },
                 retryPolicy = new
                 {
                     chunkMaxAttempts = 5,
@@ -725,6 +732,7 @@ namespace ExpressPackingMonitoring.Services
                     status = result.Status,
                     fileSha256 = result.FileSha256,
                     recordId = result.RecordId,
+                    recordIds = result.RecordIds,
                     alreadyCompleted = result.AlreadyCompleted,
                     message = "电脑校验完成，备份成功"
                 });
@@ -1525,12 +1533,17 @@ namespace ExpressPackingMonitoring.Services
                 filePath = r.FilePath ?? "",
                 videoCodec = r.VideoCodec ?? "",
                 sourceType = r.SourceType ?? "pc",
+                sourceDeviceId = r.SourceDeviceId ?? "",
                 sourceDeviceName = r.SourceDeviceName ?? "",
+                sourceSessionId = r.SourceSessionId ?? "",
+                contentSha256 = r.ContentSha256 ?? "",
                 sizeMB = Math.Round(r.FileSizeBytes / 1048576.0, 1),
                 startTime = r.StartTime.ToString("yyyy-MM-dd HH:mm:ss"),
                 durationSec = Math.Round(r.DurationSeconds, 0),
                 duration = TimeSpan.FromSeconds(r.DurationSeconds).ToString(@"mm\:ss"),
-                exists = File.Exists(r.FilePath)
+                exists = File.Exists(r.FilePath),
+                playUrl = $"/api/videos/{r.Id}/play?compat=1",
+                remote = true
             });
 
             SendJson(ctx, 200, new { total = result.Total, page, pageSize, data = paged });

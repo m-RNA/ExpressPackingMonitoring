@@ -13,6 +13,7 @@ public sealed class MobileConnectionTests
 {
     [Theory]
     [InlineData(false, "", "http://192.168.1.20:5280")]
+    [InlineData(false, "abc 123", "http://192.168.1.20:5280/?key=abc%20123")]
     [InlineData(true, "abc 123", "http://192.168.1.20:5280/?key=abc%20123")]
     public void AccessUrlMatchesProtectionSettings(bool requireAccessKey, string accessKey, string expected)
     {

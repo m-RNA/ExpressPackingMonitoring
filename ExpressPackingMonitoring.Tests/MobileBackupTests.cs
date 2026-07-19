@@ -186,6 +186,56 @@ public sealed class MobileBackupTests
     }
 
     [Fact]
+    public void OnePhysicalFileCanCreateMultipleLogicalSessionRecords()
+    {
+        string directory = CreateTempDirectory();
+        try
+        {
+            byte[] file = Encoding.UTF8.GetBytes("multi session physical video");
+            string sha = Sha256(file);
+            using var database = new VideoDatabase(Path.Combine(directory, "videos.db"));
+            var service = CreateService(database, directory);
+            service.CreateOrResume(CreateRequest(sha, file.Length));
+            service.AppendChunk(sha, 0, file.Length - 1, file.Length, file, sha);
+            var request = new MobileBackupCompleteRequest
+            {
+                FileSha256 = sha,
+                SourceDeviceId = "phone-multi",
+                SourceDeviceName = "打包手机",
+                Sessions = new List<MobileBackupSessionRequest>
+                {
+                    new()
+                    {
+                        SessionId = "segment-1", TrackingNumber = "TRACK-1",
+                        StartedAt = new DateTimeOffset(2026, 7, 19, 10, 0, 0, TimeSpan.FromHours(8)),
+                        DurationMilliseconds = 5000
+                    },
+                    new()
+                    {
+                        SessionId = "segment-2", TrackingNumber = "TRACK-2",
+                        StartedAt = new DateTimeOffset(2026, 7, 19, 10, 0, 5, TimeSpan.FromHours(8)),
+                        DurationMilliseconds = 6000
+                    }
+                }
+            };
+
+            MobileBackupCompleteResult completed = service.Complete(sha, request);
+            MobileBackupCompleteResult repeated = service.Complete(sha, request);
+
+            Assert.Equal(2, completed.RecordIds.Count);
+            Assert.True(repeated.AlreadyCompleted);
+            Assert.Equal(completed.RecordIds, repeated.RecordIds);
+            Assert.Equal(
+                database.GetVideoById(completed.RecordIds[0]).FilePath,
+                database.GetVideoById(completed.RecordIds[1]).FilePath);
+        }
+        finally
+        {
+            DeleteTempDirectory(directory);
+        }
+    }
+
+    [Fact]
     public void LaterOrderPushEnrichesOldExternalVideoWithoutPendingFlag()
     {
         string directory = CreateTempDirectory();
@@ -253,6 +303,8 @@ public sealed class MobileBackupTests
             using HttpResponseMessage capabilities = await client.GetAsync("/api/mobile-backup/capabilities", cancellationToken);
             using JsonDocument capabilityJson = JsonDocument.Parse(await capabilities.Content.ReadAsStringAsync(cancellationToken));
             Assert.Equal("mobile-backup-v1", capabilityJson.RootElement.GetProperty("protocol").GetString());
+            Assert.Equal(1, capabilityJson.RootElement.GetProperty("version").GetInt32());
+            Assert.True(capabilityJson.RootElement.GetProperty("features").GetProperty("videoLibrary").GetBoolean());
             Assert.Equal(4 * 1024 * 1024, capabilityJson.RootElement.GetProperty("maxChunkBytes").GetInt32());
 
             byte[] file = Encoding.UTF8.GetBytes("http upload payload");
@@ -277,6 +329,14 @@ public sealed class MobileBackupTests
             using JsonDocument completeJson = JsonDocument.Parse(completeBody);
             Assert.Equal("电脑校验完成，备份成功", completeJson.RootElement.GetProperty("message").GetString());
             Assert.Equal("verified", completeJson.RootElement.GetProperty("status").GetString());
+
+            using HttpResponseMessage videos = await client.GetAsync("/api/videos?size=50", cancellationToken);
+            using JsonDocument videoJson = JsonDocument.Parse(await videos.Content.ReadAsStringAsync(cancellationToken));
+            JsonElement video = videoJson.RootElement.GetProperty("data")[0];
+            Assert.Equal("phone-http", video.GetProperty("sourceDeviceId").GetString());
+            Assert.Equal("http-session", video.GetProperty("sourceSessionId").GetString());
+            Assert.Equal(sha, video.GetProperty("contentSha256").GetString());
+            Assert.Contains("/play?compat=1", video.GetProperty("playUrl").GetString(), StringComparison.Ordinal);
         }
         finally
         {
