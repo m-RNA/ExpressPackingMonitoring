@@ -2404,7 +2404,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private void UpdateConnectedClients(IReadOnlyList<ConnectedClientInfo> clients)
         {
             if (_isDisposed) return;
-            int count = clients?.Count ?? 0;
+            int count = ConnectedClientRegistry.CountDistinctAddresses(clients);
             HasConnectedDevices = count > 0;
             ConnectedDeviceText = count > 0
                 ? AppLanguage.Format("Main.ConnectedDevices", count)

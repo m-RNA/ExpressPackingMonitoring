@@ -89,6 +89,14 @@ internal sealed class ConnectedClientRegistry : IDisposable
         return SnapshotCore();
     }
 
+    internal static int CountDistinctAddresses(IEnumerable<ConnectedClientInfo>? clients)
+    {
+        return (clients ?? Array.Empty<ConnectedClientInfo>())
+            .Select(client => NormalizeRemoteAddress(client.RemoteAddress))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+    }
+
     internal void PruneExpired()
     {
         if (_disposed) return;
@@ -156,6 +164,15 @@ internal sealed class ConnectedClientRegistry : IDisposable
     }
 
     private static string BuildKey(string clientType, string clientId) => $"{clientType}:{clientId}";
+
+    private static string NormalizeRemoteAddress(string? value)
+    {
+        string address = value?.Trim() ?? "unknown";
+        if (System.Net.IPAddress.TryParse(address, out System.Net.IPAddress? parsed)
+            && parsed.IsIPv4MappedToIPv6)
+            return parsed.MapToIPv4().ToString();
+        return address;
+    }
 
     public void Dispose()
     {

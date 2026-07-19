@@ -28,6 +28,18 @@ public sealed class ConnectedClientTests
     }
 
     [Fact]
+    public void ConnectedDeviceCountDeduplicatesClientsByRemoteAddress()
+    {
+        using var registry = new ConnectedClientRegistry(startCleanupTimer: false);
+        registry.Heartbeat(Heartbeat("desktop-001", "web-desktop", "电脑网页"), "::ffff:192.168.1.20");
+        registry.Heartbeat(Heartbeat("script-001", "userscript", "快递端油猴脚本"), "192.168.1.20");
+        registry.Heartbeat(Heartbeat("mobile-001", "web-mobile", "手机网页"), "192.168.1.21");
+
+        Assert.Equal(3, registry.GetSnapshot().Count);
+        Assert.Equal(2, ConnectedClientRegistry.CountDistinctAddresses(registry.GetSnapshot()));
+    }
+
+    [Fact]
     public void RegistryExpiresAndActivelyDisconnectsClients()
     {
         var clock = new MutableTimeProvider();

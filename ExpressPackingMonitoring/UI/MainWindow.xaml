@@ -664,7 +664,7 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{Binding WorkstationPrintStatusText}" Foreground="{DynamicResource TextMuted}" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                <Button x:Name="BtnSwitchWorkstation" Grid.Column="1" Height="32" Margin="8,0,0,0" Padding="9,0" Style="{StaticResource SecondaryButtonStyle}" ToolTip="切换工位" Cursor="Hand" Focusable="False">
+                                <Button x:Name="BtnSwitchWorkstation" Grid.Column="1" Width="126" Height="32" Margin="8,0,0,0" Padding="9,0" Style="{StaticResource SecondaryButtonStyle}" ToolTip="切换工位" Cursor="Hand" Focusable="False">
                                     <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                                         <Path Data="{StaticResource FluentArrowSwapIcon}" Width="14" Height="14" Stretch="Uniform" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
                                         <TextBlock Text="切换工位" Margin="5,0,0,0" FontSize="12" VerticalAlignment="Center"/>
@@ -708,15 +708,16 @@
                                 </Grid>
                                 <Button x:Name="BtnMobileConnection"
                                         Grid.Column="1"
-                                        Height="40"
+                                        Width="126"
+                                        Height="32"
                                         Margin="8,0,0,0"
-                                        Padding="12,0"
+                                        Padding="9,0"
                                         Style="{StaticResource PrimaryButtonStyle}"
                                         ToolTip="{Binding WorkstationStatusToolTip}"
                                         Focusable="False">
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" IsHitTestVisible="False">
-                                        <Path Data="{StaticResource FluentWifiIcon}" Width="17" Height="17" Stretch="Uniform" Fill="White"/>
-                                        <TextBlock Text="手机/电脑连接" Margin="7,0,0,0" FontSize="13" Foreground="White" VerticalAlignment="Center"/>
+                                        <Path Data="{StaticResource FluentWifiIcon}" Width="14" Height="14" Stretch="Uniform" Fill="White"/>
+                                        <TextBlock Text="手机/电脑连接" Margin="5,0,0,0" FontSize="12" Foreground="White" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                             </Grid>

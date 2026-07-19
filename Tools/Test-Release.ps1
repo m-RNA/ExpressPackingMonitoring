@@ -35,6 +35,7 @@ $requiredCoreTests = @(
     "ConfigurationAndScannerTests.AddMonitorConnectPermission_AddsExactHostWithoutRequiringWildcardPermission",
     "ConfigurationAndScannerTests.AddMonitorConnectPermissions_AddsDistinctPrivateHostsAndRejectsPublicHosts",
     "ConfigurationAndScannerTests.AddMonitorConnectPermission_PreservesCrLfLineEndings",
+    "ConnectedClientTests.ConnectedDeviceCountDeduplicatesClientsByRemoteAddress",
     "ConfigurationAndScannerTests.AlertService_CriticalAlertBlocksNormalAlertUntilDisplayEnds",
     "ConfigurationAndScannerTests.AlertService_ForwardsIndustrialAlarmOnceAndRefundSpeechThreeTimes",
     "VideoDatabaseTests.GetRecentCompletedVideos_ReturnsLatestTwentyValidRecordsForDate",
