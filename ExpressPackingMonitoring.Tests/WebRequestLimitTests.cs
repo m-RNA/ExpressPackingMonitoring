@@ -86,6 +86,8 @@ public sealed class WebRequestLimitTests
 
         Assert.Contains("thumb.loading='lazy'", html);
         Assert.Contains("v.thumbnailUrl", html);
+        Assert.Contains("status-badge'+(external?' external':'')", html);
+        Assert.DoesNotContain("status-badge'+(v.exists?'':' missing')", html);
         Assert.Contains("?'其他设备':'PC'", html);
         Assert.Contains(".mobile-connect-toggle,.install-card{display:none}", html);
         Assert.DoesNotContain("status.textContent=v.exists?'文件存在':'文件丢失'", html);
