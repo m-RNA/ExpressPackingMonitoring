@@ -649,7 +649,7 @@ namespace ExpressPackingMonitoring.Data
         /// <summary>
         /// 获取指定日期最近完成且未删除的扫码录像记录。
         /// </summary>
-        public List<VideoRecord> GetRecentCompletedVideos(DateTime date, int limit = 10)
+        public List<VideoRecord> GetRecentCompletedVideos(DateTime date, int limit = 10, string sourceType = null)
         {
             if (limit <= 0) return new List<VideoRecord>();
 
@@ -664,11 +664,13 @@ namespace ExpressPackingMonitoring.Data
                       AND EndTime IS NOT NULL
                       AND StartTime >= @startTime
                       AND StartTime < @endTime
+                      AND (@sourceType = '' OR SourceType = @sourceType)
                     ORDER BY StartTime DESC
                     LIMIT @limit;";
                 cmd.Parameters.AddWithValue("@startTime", date.Date.ToString("yyyy-MM-dd HH:mm:ss"));
                 cmd.Parameters.AddWithValue("@endTime", date.Date.AddDays(1).ToString("yyyy-MM-dd HH:mm:ss"));
                 cmd.Parameters.AddWithValue("@limit", limit);
+                cmd.Parameters.AddWithValue("@sourceType", sourceType?.Trim() ?? "");
 
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read())
@@ -1015,7 +1017,7 @@ namespace ExpressPackingMonitoring.Data
             }
         }
 
-        public List<DailyStat> GetAggregatedStats(DateTime start, DateTime end, string groupBy = "day")
+        public List<DailyStat> GetAggregatedStats(DateTime start, DateTime end, string groupBy = "day", string sourceType = null)
         {
             lock (_lock)
             {
@@ -1037,15 +1039,18 @@ namespace ExpressPackingMonitoring.Data
                         SUM(CASE WHEN Id = (
                             SELECT MIN(v2.Id) FROM VideoRecords v2
                             WHERE v2.FilePath = VideoRecords.FilePath AND v2.IsDeleted = 0
+                              AND (@sourceType = '' OR v2.SourceType = @sourceType)
                         ) THEN FileSizeBytes ELSE 0 END) AS TotalBytes
                     FROM VideoRecords
                     WHERE StartTime >= @start AND StartTime <= @end
                       AND IsDeleted = 0 AND EndTime IS NOT NULL
+                      AND (@sourceType = '' OR SourceType = @sourceType)
                     GROUP BY GroupDate
                     ORDER BY GroupDate ASC;";
 
                 cmd.Parameters.AddWithValue("@start", start.ToString("yyyy-MM-dd 00:00:00"));
                 cmd.Parameters.AddWithValue("@end", end.ToString("yyyy-MM-dd 23:59:59"));
+                cmd.Parameters.AddWithValue("@sourceType", sourceType?.Trim() ?? "");
 
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read())

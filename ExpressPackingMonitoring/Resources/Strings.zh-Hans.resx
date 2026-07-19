@@ -324,6 +324,7 @@
   <data name="回放" xml:space="preserve"><value>回放</value></data>
   <data name="件" xml:space="preserve"><value>件</value></data>
   <data name="今日:" xml:space="preserve"><value>今日:</value></data>
+  <data name="本机今日:" xml:space="preserve"><value>本机今日:</value></data>
   <data name="局域网查看视频" xml:space="preserve"><value>局域网查看视频</value></data>
   <data name="聚合方式: " xml:space="preserve"><value>聚合方式: </value></data>
   <data name="累计工作时长" xml:space="preserve"><value>累计工作时长</value></data>
@@ -343,6 +344,7 @@
   <data name="全部" xml:space="preserve"><value>全部</value></data>
   <data name="如果这台电脑第一次使用，请先自动查找摄像头监控工位。" xml:space="preserve"><value>如果这台电脑第一次使用，请先自动查找摄像头监控工位。</value></data>
   <data name="扫码动态" xml:space="preserve"><value>扫码动态</value></data>
+  <data name="本机录制动态" xml:space="preserve"><value>本机录制动态</value></data>
   <data name="扫描单号开始录制，再次扫描同一单号停止录制。" xml:space="preserve"><value>扫描单号开始录制，再次扫描同一单号停止录制。</value></data>
   <data name="扫描新单号后，自动结束上一单并开始下一单。" xml:space="preserve"><value>扫描新单号后，自动结束上一单并开始下一单。</value></data>
   <data name="稍后再说" xml:space="preserve"><value>稍后再说</value></data>

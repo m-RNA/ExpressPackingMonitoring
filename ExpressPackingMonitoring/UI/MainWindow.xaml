@@ -426,7 +426,7 @@
                         </Grid.ColumnDefinitions>
                         
                         <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <TextBlock Text="今日:" FontSize="15" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Bottom" Margin="0,0,8,3"/>
+                            <TextBlock Text="本机今日:" FontSize="15" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Bottom" Margin="0,0,8,3"/>
                             <TextBlock FontSize="24" FontWeight="Black" Foreground="{DynamicResource AccentBlueDark}" Margin="0,0,24,0">
                                 <Run Text="{Binding TotalPieces, Mode=OneWay}"/><Run Text="件" FontSize="15"/>
                             </TextBlock>
@@ -503,7 +503,7 @@
                         </Grid>
                     </Grid>
                     <Border Grid.Row="1" BorderBrush="{DynamicResource BorderDefault}" BorderThickness="0,1,0,0" Padding="0,6,0,0" Margin="0,0,0,6">
-                        <TextBlock Text="扫码动态" FontSize="18" FontWeight="Black" Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="本机录制动态" FontSize="18" FontWeight="Black" Foreground="{DynamicResource TextPrimary}"/>
                     </Border>
                     <ListView Grid.Row="2" ItemsSource="{Binding FilteredLogs}" AlternationCount="2" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto">
                         <ListView.ItemTemplate>

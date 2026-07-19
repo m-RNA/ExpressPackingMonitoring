@@ -324,6 +324,7 @@
   <data name="回放" xml:space="preserve"><value>Playback</value></data>
   <data name="件" xml:space="preserve"><value> items</value></data>
   <data name="今日:" xml:space="preserve"><value>Today:</value></data>
+  <data name="本机今日:" xml:space="preserve"><value>Local today:</value></data>
   <data name="局域网查看视频" xml:space="preserve"><value>View video on LAN</value></data>
   <data name="聚合方式: " xml:space="preserve"><value>Aggregation method:</value></data>
   <data name="累计工作时长" xml:space="preserve"><value>Total working time</value></data>
@@ -343,6 +344,7 @@
   <data name="全部" xml:space="preserve"><value>All</value></data>
   <data name="如果这台电脑第一次使用，请先自动查找摄像头监控工位。" xml:space="preserve"><value>If this computer is used for the first time, please automatically search for the camera monitoring station first.</value></data>
   <data name="扫码动态" xml:space="preserve"><value>Scan activity</value></data>
+  <data name="本机录制动态" xml:space="preserve"><value>Local recording activity</value></data>
   <data name="扫描单号开始录制，再次扫描同一单号停止录制。" xml:space="preserve"><value>Scan the tracking number to start recording, scan the same tracking number again to stop recording.</value></data>
   <data name="扫描新单号后，自动结束上一单并开始下一单。" xml:space="preserve"><value>After scanning the new order number, the previous order will be automatically ended and the next order will be started.</value></data>
   <data name="稍后再说" xml:space="preserve"><value>Later</value></data>

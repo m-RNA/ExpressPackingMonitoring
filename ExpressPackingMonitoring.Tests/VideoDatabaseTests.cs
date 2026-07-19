@@ -166,6 +166,48 @@ public sealed class VideoDatabaseTests
         }
     }
 
+    [Fact]
+    public void MainWindowQueries_CanFilterToPcRecordingsOnly()
+    {
+        string tempDirectory = CreateTempDirectory();
+        try
+        {
+            DateTime date = new(2026, 7, 19);
+            using var database = new VideoDatabase(Path.Combine(tempDirectory, "videos.db"));
+            AddCompleted(
+                database,
+                "PC-LOCAL",
+                "发货",
+                Path.Combine(tempDirectory, "pc.mp4"),
+                date.AddHours(9));
+            database.InsertMobileBackupRecord(
+                "PHONE-REMOTE",
+                Path.Combine(tempDirectory, "phone.mp4"),
+                2048,
+                date.AddHours(10),
+                30,
+                "phone-1",
+                "打包手机",
+                "session-1",
+                new string('a', 64));
+
+            List<VideoRecord> allRecent = database.GetRecentCompletedVideos(date, 20);
+            List<VideoRecord> pcRecent = database.GetRecentCompletedVideos(date, 20, "pc");
+            List<DailyStat> allStats = database.GetAggregatedStats(date, date);
+            List<DailyStat> pcStats = database.GetAggregatedStats(date, date, "day", "pc");
+
+            Assert.Equal(2, allRecent.Count);
+            Assert.Single(pcRecent);
+            Assert.Equal("PC-LOCAL", pcRecent[0].OrderId);
+            Assert.Equal(2, Assert.Single(allStats).TotalPieces);
+            Assert.Equal(1, Assert.Single(pcStats).TotalPieces);
+        }
+        finally
+        {
+            DeleteTempDirectory(tempDirectory);
+        }
+    }
+
     private static void AddCompleted(VideoDatabase database, string orderId, string mode, string path, DateTime startTime)
     {
         long id = database.InsertVideoRecord(orderId, mode, "", "", path, startTime);

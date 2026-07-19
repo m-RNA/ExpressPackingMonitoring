@@ -745,7 +745,7 @@ namespace ExpressPackingMonitoring.ViewModels
         {
             try
             {
-                var todayList = _db?.GetAggregatedStats(DateTime.Today, DateTime.Today, "day");
+                var todayList = _db?.GetAggregatedStats(DateTime.Today, DateTime.Today, "day", "pc");
                 if (todayList != null && todayList.Count > 0)
                 {
                     var today = todayList[0];
@@ -766,7 +766,7 @@ namespace ExpressPackingMonitoring.ViewModels
         {
             try
             {
-                var records = _db?.GetRecentCompletedVideos(DateTime.Today, 20);
+                var records = _db?.GetRecentCompletedVideos(DateTime.Today, 20, "pc");
                 if (records == null) return;
 
                 _allLogs.Clear();
