@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         订单备注播报插件
 // @namespace    https://github.com/ExpressPackingMonitoring
-// @version      2.5
+// @version      2.6
 // @description  从快递助手批量打印页面提取订单备注和打印后退款状态，发送到监控工位，打包时自动播报或报警。
 // @author       ExpressPackingMonitoring
 // @icon         https://raw.githubusercontent.com/m-RNA/ExpressPackingMonitoring/main/ExpressPackingMonitoring/app.ico
@@ -33,6 +33,8 @@
     const INSTALL_MONITOR_ADDRESS = '';
     const DISCOVERY_DONE_KEY = 'monitor_auto_discovery_done';
     const DISCOVERY_LAST_ATTEMPT_KEY = 'monitor_auto_discovery_last_attempt';
+    const DISCOVERY_LOCK_KEY = 'monitor_auto_discovery_lock';
+    const DISCOVERY_LOCK_MS = 30000;
     const DISCOVERY_RETRY_DELAY_MS = 60 * 1000;
     const DISCOVERY_TIMEOUT = 700;
     const DISCOVERY_BATCH_SIZE = 32;
@@ -49,9 +51,11 @@
     // Chrome 可能暂停长时间处于后台的标签页，不应因短时无心跳反复新建工作页。
     const REFUND_WORKER_STALE_MS = 10 * 60 * 1000;
     const REFUND_WORKER_OPEN_COOLDOWN_MS = 10 * 60 * 1000;
+    const CONNECTION_CLIENT_ID_KEY = 'connection_client_id';
+    const CONNECTION_HEARTBEAT_INTERVAL_MS = 15000;
     const IS_REFUND_WORKER = new URL(location.href).searchParams.get(REFUND_WORKER_PARAM) === '1';
     const REFUND_WORKER_TOKEN = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const CHANGELOG = 'v2.5：修复上位机地址自动探测与失效地址恢复';
+    const CHANGELOG = 'v2.6：向监控工位报告快递端在线状态';
     const DEBUG_LOG = false;
 
     let lastUserActivityAt = Date.now();
@@ -231,6 +235,7 @@
     function getApiUrl() { return `${getBaseUrl(getMonitorAddressText())}/api/orderinfo`; }
     function getOrderLookupPendingUrl() { return `${getBaseUrl(getMonitorAddressText())}/api/order-lookup/pending`; }
     function getOrderLookupResultUrl() { return `${getBaseUrl(getMonitorAddressText())}/api/order-lookup/result`; }
+    function getConnectionHeartbeatUrl() { return `${getBaseUrl(getMonitorAddressText())}/api/connections/heartbeat`; }
     function getStorageUrl(host, port) { return `${getBaseUrl(host, port)}/api/storage`; }
     function getBaseUrl(host, port) {
         const address = normalizeAddress(host, port);
@@ -424,10 +429,20 @@
             Date.now());
         if (!shouldDiscover) return true;
 
-        if (!monitorDiscoveryPromise) {
-            monitorDiscoveryPromise = findMonitorAddress(false)
-                .finally(() => { monitorDiscoveryPromise = null; });
-        }
+        if (monitorDiscoveryPromise) return await monitorDiscoveryPromise;
+
+        const now = Date.now();
+        const existingLock = GM_getValue(DISCOVERY_LOCK_KEY, null);
+        if (existingLock && Number(existingLock.until || 0) > now) return false;
+        const lockToken = `${now}-${Math.random().toString(36).slice(2)}`;
+        GM_setValue(DISCOVERY_LOCK_KEY, { token: lockToken, until: now + DISCOVERY_LOCK_MS });
+        monitorDiscoveryPromise = findMonitorAddress(false)
+            .finally(() => {
+                monitorDiscoveryPromise = null;
+                const currentLock = GM_getValue(DISCOVERY_LOCK_KEY, null);
+                if (currentLock?.token === lockToken)
+                    GM_setValue(DISCOVERY_LOCK_KEY, null);
+            });
         const found = await monitorDiscoveryPromise;
         if (found) {
             showNotification(`已自动填入上位机地址：${found}`);
@@ -659,6 +674,30 @@
                 ontimeout: () => resolve({ status: 0, body: {} })
             });
         });
+    }
+
+    function getConnectionClientId() {
+        let clientId = String(GM_getValue(CONNECTION_CLIENT_ID_KEY, '') || '').trim();
+        if (/^[A-Za-z0-9._:-]{8,128}$/.test(clientId)) return clientId;
+        clientId = `userscript-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+        GM_setValue(CONNECTION_CLIENT_ID_KEY, clientId);
+        return clientId;
+    }
+
+    async function sendConnectionHeartbeat() {
+        const response = await requestMonitor('POST', getConnectionHeartbeatUrl(), {
+            clientId: getConnectionClientId(),
+            clientType: 'userscript',
+            displayName: '快递端油猴脚本'
+        }, 3000);
+        if (response.status === 200) return true;
+        await ensureMonitorAddress(false);
+        return false;
+    }
+
+    function startConnectionHeartbeat() {
+        sendConnectionHeartbeat();
+        setInterval(sendConnectionHeartbeat, CONNECTION_HEARTBEAT_INTERVAL_MS);
     }
 
     function delay(ms) {
@@ -949,6 +988,8 @@
             }
         }
     });
+
+    startConnectionHeartbeat();
 
     if (IS_REFUND_WORKER) {
         setTimeout(async () => {

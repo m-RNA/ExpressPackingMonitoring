@@ -17,6 +17,8 @@ public partial class PrintWorkstationWindow : Window
     private readonly AppConfig _config;
     private readonly string _activeWorkstationRole = WorkstationRoles.PrintStation;
     private CancellationTokenSource? _findCts;
+    private CancellationTokenSource? _heartbeatCts;
+    private string _heartbeatAddress = "";
 
     public PrintWorkstationWindow(AppConfig config)
     {
@@ -24,12 +26,14 @@ public partial class PrintWorkstationWindow : Window
         _config = config;
         AddressTextBox.Text = WorkstationNetwork.NormalizeAddress(_config.PrintStationMonitorAddress);
         Loaded += async (_, __) => await AutoConnectAndOpenAsync();
+        Closed += (_, __) => StopConnectionHeartbeat(notifyDisconnect: true);
     }
 
     private async Task<bool> ReconnectAsync(bool save, bool openWhenConnected = false)
     {
         string address = WorkstationNetwork.NormalizeAddress(AddressTextBox.Text);
         AddressTextBox.Text = address;
+        StopConnectionHeartbeat(notifyDisconnect: true);
         if (string.IsNullOrWhiteSpace(address))
         {
             SetStatus("未连接摄像头监控工位", "请自动查找，或输入摄像头监控工位底部状态栏显示的地址。", StatusVisual.Error);
@@ -53,6 +57,7 @@ public partial class PrintWorkstationWindow : Window
                 _config.PrintStationMonitorAddress = savedConfig.PrintStationMonitorAddress;
             }
             SetStatus("已连接到摄像头监控工位", $"已记住地址：{address}", StatusVisual.Success);
+            StartConnectionHeartbeat(address);
             if (openWhenConnected)
                 WorkstationNetwork.OpenUrl(WorkstationNetwork.ToUrl(address));
             return true;
@@ -62,6 +67,35 @@ public partial class PrintWorkstationWindow : Window
             SetStatus("未找到摄像头监控工位", "请确认摄像头监控工位已打开，并且两台电脑在同一局域网。", StatusVisual.Error);
             return false;
         }
+    }
+
+    private void StartConnectionHeartbeat(string address)
+    {
+        _heartbeatAddress = address;
+        _heartbeatCts = new CancellationTokenSource();
+        CancellationToken token = _heartbeatCts.Token;
+        _ = Task.Run(async () =>
+        {
+            while (!token.IsCancellationRequested)
+            {
+                await WorkstationNetwork.SendConnectionHeartbeatAsync(address, _config.MobileBackupComputerId, token: token);
+                try { await Task.Delay(TimeSpan.FromSeconds(15), token); }
+                catch (OperationCanceledException) { break; }
+            }
+        }, token);
+    }
+
+    private void StopConnectionHeartbeat(bool notifyDisconnect)
+    {
+        CancellationTokenSource? previous = _heartbeatCts;
+        _heartbeatCts = null;
+        previous?.Cancel();
+        previous?.Dispose();
+
+        string address = _heartbeatAddress;
+        _heartbeatAddress = "";
+        if (notifyDisconnect && !string.IsNullOrWhiteSpace(address))
+            _ = WorkstationNetwork.SendConnectionHeartbeatAsync(address, _config.MobileBackupComputerId, connected: false);
     }
 
     private async Task AutoConnectAndOpenAsync()

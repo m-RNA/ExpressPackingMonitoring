@@ -112,7 +112,8 @@ test('saved refund worker tab prevents duplicate even with stale heartbeat', asy
 });
 
 function createDiscoveryContext(initialStore, reachableHosts, webRtcPrefixes = ['192.168.31']) {
-  const store = new Map(Object.entries(initialStore));
+  const store = initialStore instanceof Map ? initialStore : new Map(Object.entries(initialStore));
+  let requestCount = 0;
   const document = {
     createElement: () => ({ style: {}, remove() {} }),
     body: { appendChild() {} }
@@ -122,6 +123,8 @@ function createDiscoveryContext(initialStore, reachableHosts, webRtcPrefixes = [
     INSTALL_MONITOR_ADDRESS: '',
     DISCOVERY_DONE_KEY: 'monitor_auto_discovery_done',
     DISCOVERY_LAST_ATTEMPT_KEY: 'monitor_auto_discovery_last_attempt',
+    DISCOVERY_LOCK_KEY: 'monitor_auto_discovery_lock',
+    DISCOVERY_LOCK_MS: 30000,
     DISCOVERY_RETRY_DELAY_MS: 1,
     DISCOVERY_TIMEOUT: 1,
     DISCOVERY_BATCH_SIZE: 32,
@@ -131,6 +134,7 @@ function createDiscoveryContext(initialStore, reachableHosts, webRtcPrefixes = [
     showNotification: () => {},
     getStorageUrl: (host, port) => `http://${host}:${port}/api/storage`,
     GM_xmlhttpRequest: options => {
+      requestCount += 1;
       const host = new URL(options.url).hostname;
       queueMicrotask(() => options.onload({ status: reachableHosts.has(host) ? 200 : 503 }));
     },
@@ -141,7 +145,7 @@ function createDiscoveryContext(initialStore, reachableHosts, webRtcPrefixes = [
     between('    function getBaseUrl(', '    // 专用工作页不显示业务菜单') +
       ';getWebRtcLocalPrefixes=async()=>WEBRTC_PREFIXES;globalThis.findMonitor=findMonitorAddress;globalThis.ensureMonitor=ensureMonitorAddress;globalThis.shouldDiscover=shouldAttemptMonitorDiscovery;',
     context);
-  return { context, store };
+  return { context, store, getRequestCount: () => requestCount };
 }
 
 test('automatic discovery replaces an offline saved monitor with a reachable address', async () => {
@@ -187,4 +191,68 @@ test('discovery backoff prevents repeated full scans before retry time', () => {
   assert.equal(
     createDiscoveryContext({}, new Set()).context.shouldDiscover(false, true, 1000, 1001),
     true);
+});
+
+test('shared discovery lock prevents heartbeat tabs from scanning concurrently', async () => {
+  const store = new Map();
+  const first = createDiscoveryContext(store, new Set(), ['192.168.31']);
+  const second = createDiscoveryContext(store, new Set(), ['192.168.31']);
+  const firstScan = first.context.ensureMonitor(true);
+  const secondResult = await second.context.ensureMonitor(true);
+  await firstScan;
+  assert.equal(secondResult, false);
+  assert.equal(second.getRequestCount(), 0);
+  assert.ok(first.getRequestCount() > 0);
+});
+
+function createConnectionHeartbeatContext(status = 200) {
+  const store = new Map();
+  const requests = [];
+  const intervals = [];
+  let discoveryCalls = 0;
+  const context = {
+    CONNECTION_CLIENT_ID_KEY: 'connection_client_id',
+    CONNECTION_HEARTBEAT_INTERVAL_MS: 15000,
+    GM_getValue: (key, fallback) => store.has(key) ? store.get(key) : fallback,
+    GM_setValue: (key, value) => store.set(key, value),
+    getConnectionHeartbeatUrl: () => 'http://192.168.1.20:5280/api/connections/heartbeat',
+    requestMonitor: async (method, url, data, timeout) => {
+      requests.push({ method, url, data, timeout });
+      return { status, body: {} };
+    },
+    ensureMonitorAddress: async () => { discoveryCalls += 1; return false; },
+    setInterval: (callback, delay) => { intervals.push({ callback, delay }); return intervals.length; },
+    Math,
+    Date,
+    String,
+    Promise
+  };
+  vm.createContext(context);
+  vm.runInContext(
+    between('    function getConnectionClientId()', '    function delay(') +
+      ';globalThis.getClientId=getConnectionClientId;globalThis.sendHeartbeat=sendConnectionHeartbeat;globalThis.startHeartbeat=startConnectionHeartbeat;',
+    context);
+  return { context, store, requests, intervals, getDiscoveryCalls: () => discoveryCalls };
+}
+
+test('userscript heartbeat keeps one persistent id across tabs', async () => {
+  const first = createConnectionHeartbeatContext();
+  const id = first.context.getClientId();
+  assert.equal(first.context.getClientId(), id);
+  assert.equal(first.store.get('connection_client_id'), id);
+  assert.match(id, /^userscript-/);
+
+  await first.context.sendHeartbeat();
+  assert.equal(first.requests.length, 1);
+  assert.equal(first.requests[0].data.clientId, id);
+  assert.equal(first.requests[0].data.clientType, 'userscript');
+});
+
+test('userscript heartbeat uses 15 second interval and recovery respects discovery helper', async () => {
+  const failed = createConnectionHeartbeatContext(0);
+  failed.context.startHeartbeat();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(failed.intervals.length, 1);
+  assert.equal(failed.intervals[0].delay, 15000);
+  assert.equal(failed.getDiscoveryCalls(), 1);
 });

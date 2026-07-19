@@ -390,6 +390,18 @@
   <data name="Main.PrintTestOrder" xml:space="preserve"><value>快递单打印工位：{0} 收到测试订单</value></data>
   <data name="Main.PrintNoRefund" xml:space="preserve"><value>快递单打印工位：{0} 已响应，未查到退款订单</value></data>
   <data name="Main.PrintOrders" xml:space="preserve"><value>快递单打印工位：{0} 收到 {1} 条订单</value></data>
+  <data name="Main.ConnectionServiceDisabled" xml:space="preserve"><value>连接服务未开启</value></data>
+  <data name="Main.ConnectionServiceStarting" xml:space="preserve"><value>正在准备连接服务</value></data>
+  <data name="Main.ConnectionServiceUnavailable" xml:space="preserve"><value>连接服务不可用</value></data>
+  <data name="Main.NoConnectedDevices" xml:space="preserve"><value>暂无设备连接</value></data>
+  <data name="Main.ConnectedDevices" xml:space="preserve"><value>已连接 {0} 个设备</value></data>
+  <data name="Main.ConnectionEmptyTip" xml:space="preserve"><value>网页、快递端油猴脚本或打印工位连接后会显示在这里</value></data>
+  <data name="Main.ClientWebDesktop" xml:space="preserve"><value>电脑网页</value></data>
+  <data name="Main.ClientWebMobile" xml:space="preserve"><value>手机网页</value></data>
+  <data name="Main.ClientUserscript" xml:space="preserve"><value>快递端油猴脚本</value></data>
+  <data name="Main.ClientPrintStation" xml:space="preserve"><value>打印工位程序</value></data>
+  <data name="Main.ClientMobileApp" xml:space="preserve"><value>手机 APP</value></data>
+  <data name="Main.ClientOther" xml:space="preserve"><value>其他设备</value></data>
   <data name="Main.Title" xml:space="preserve"><value>快递打包监控 {0}</value></data>
   <data name="Main.BarcodeClear" xml:space="preserve"><value>清\n除</value></data>
   <data name="Main.BarcodeReturn" xml:space="preserve"><value>退\n货</value></data>

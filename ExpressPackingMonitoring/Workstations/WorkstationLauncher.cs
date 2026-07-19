@@ -245,6 +245,33 @@ public static class WorkstationNetwork
         }
     }
 
+    public static async Task<bool> SendConnectionHeartbeatAsync(
+        string address,
+        string clientId,
+        bool connected = true,
+        CancellationToken token = default)
+    {
+        address = NormalizeAddress(address);
+        if (string.IsNullOrWhiteSpace(address) || string.IsNullOrWhiteSpace(clientId)) return false;
+        try
+        {
+            var payload = new
+            {
+                clientId,
+                clientType = "print-station",
+                displayName = "打印工位程序",
+                connected
+            };
+            using var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            using var response = await Client.PostAsync($"{ToUrl(address)}/api/connections/heartbeat", content, token);
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public sealed class TestOrderSendResult
     {
         public bool Sent { get; init; }

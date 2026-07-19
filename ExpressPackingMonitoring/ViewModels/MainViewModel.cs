@@ -232,6 +232,9 @@ namespace ExpressPackingMonitoring.ViewModels
         private readonly string _activeWorkstationRole = WorkstationRoles.CameraMonitor;
         private string _workstationPrintStatusText = "快递单打印工位：未连接";
         private string _workstationStatusToolTip = "";
+        private string _connectedDeviceText = "连接服务未开启";
+        private string _connectedDeviceToolTip = "开启局域网查看后可显示在线设备";
+        private bool _hasConnectedDevices;
         private string _monitorAccessAddress = "";
         private int _workstationAddressRefreshVersion;
 
@@ -360,6 +363,9 @@ namespace ExpressPackingMonitoring.ViewModels
         }
         public string WorkstationPrintStatusText { get => _workstationPrintStatusText; set => SetProperty(ref _workstationPrintStatusText, value); }
         public string WorkstationStatusToolTip { get => _workstationStatusToolTip; set => SetProperty(ref _workstationStatusToolTip, value); }
+        public string ConnectedDeviceText { get => _connectedDeviceText; private set => SetProperty(ref _connectedDeviceText, value); }
+        public string ConnectedDeviceToolTip { get => _connectedDeviceToolTip; private set => SetProperty(ref _connectedDeviceToolTip, value); }
+        public bool HasConnectedDevices { get => _hasConnectedDevices; private set => SetProperty(ref _hasConnectedDevices, value); }
         public string MonitorAccessAddress { get => _monitorAccessAddress; set => SetProperty(ref _monitorAccessAddress, value); }
 
         // 条形码（自动计算）
@@ -2268,10 +2274,12 @@ namespace ExpressPackingMonitoring.ViewModels
                     MonitorAccessAddress = "";
                     WorkstationPrintStatusText = "快递单打印工位：未连接";
                     WorkstationStatusToolTip = "开启局域网查看后，可点击手机/电脑连接查看二维码或复制网址。";
+                    SetConnectedDeviceUnavailable(AppLanguage.Get("Main.ConnectionServiceDisabled"), AppLanguage.Get("Main.ConnectionEmptyTip"));
                     return true;
                 }
 
                 WorkstationPrintStatusText = "快递单打印工位：等待服务启动";
+                SetConnectedDeviceUnavailable(AppLanguage.Get("Main.ConnectionServiceStarting"), AppLanguage.Get("Main.ConnectionEmptyTip"));
                 int port = Config.WebServerPort;
                 int cacheMaxMb = Config.TranscodeCacheMaxMB;
                 bool enableOrderInfoLog = Config.EnableOrderInfoLog;
@@ -2300,6 +2308,7 @@ namespace ExpressPackingMonitoring.ViewModels
                     try
                     {
                         server.OrderInfoReceived += OnOrderInfoReceived;
+                        server.ConnectedClientsChanged += OnConnectedClientsChanged;
                         server.Start(allowAccessSetup);
                         return server;
                     }
@@ -2329,6 +2338,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 MonitorAccessAddress = "";
                 WorkstationPrintStatusText = "快递单打印工位：Web 启动失败";
                 WorkstationStatusToolTip = $"其他电脑暂时无法连接这台摄像头监控工位。\n{ex.Message}";
+                SetConnectedDeviceUnavailable(AppLanguage.Get("Main.ConnectionServiceUnavailable"), ex.Message);
                 ShowToast($"警告：局域网服务启动失败: {ex.Message}");
                 return false;
             }
@@ -2346,12 +2356,14 @@ namespace ExpressPackingMonitoring.ViewModels
                 MonitorAccessAddress = "";
                 WorkstationPrintStatusText = "快递单打印工位：未连接";
                 WorkstationStatusToolTip = "其他电脑暂时无法连接这台摄像头监控工位。";
+                SetConnectedDeviceUnavailable(AppLanguage.Get("Main.ConnectionServiceDisabled"), AppLanguage.Get("Main.ConnectionEmptyTip"));
                 return;
             }
 
             MonitorAccessAddress = "";
             WorkstationPrintStatusText = "快递单打印工位：等待连接";
             WorkstationStatusToolTip = "正在准备给其他电脑浏览器使用的网址。两台电脑需要在同一局域网内。";
+            SetConnectedDeviceUnavailable(AppLanguage.Get("Main.ConnectionServiceStarting"), AppLanguage.Get("Main.ConnectionEmptyTip"));
 
             string verifiedAddress;
             try
@@ -2371,7 +2383,62 @@ namespace ExpressPackingMonitoring.ViewModels
             WorkstationStatusToolTip = Config.RequireWebAccessKey
                 ? "访问保护已开启。请点击手机/电脑连接查看二维码或复制完整访问链接，再发送到需要查看录像的设备。"
                 : $"其他电脑在浏览器输入 http://{MonitorAccessAddress}，即可搜索、下载和播放视频。若打不开，请确认两台电脑在同一局域网，并检查防火墙。";
+            UpdateConnectedClients(_webServer.GetConnectedClients());
         }
+
+        private void OnConnectedClientsChanged(IReadOnlyList<ConnectedClientInfo> clients)
+        {
+            Application application = Application.Current;
+            if (application == null || application.Dispatcher.CheckAccess())
+            {
+                UpdateConnectedClients(clients);
+                return;
+            }
+
+            _ = application.Dispatcher.InvokeAsync(() =>
+            {
+                if (!_isDisposed) UpdateConnectedClients(clients);
+            });
+        }
+
+        private void UpdateConnectedClients(IReadOnlyList<ConnectedClientInfo> clients)
+        {
+            if (_isDisposed) return;
+            int count = clients?.Count ?? 0;
+            HasConnectedDevices = count > 0;
+            ConnectedDeviceText = count > 0
+                ? AppLanguage.Format("Main.ConnectedDevices", count)
+                : AppLanguage.Get("Main.NoConnectedDevices");
+            if (count == 0)
+            {
+                ConnectedDeviceToolTip = AppLanguage.Get("Main.ConnectionEmptyTip");
+                return;
+            }
+
+            string[] details = clients
+                .GroupBy(client => GetConnectedClientTypeLabel(client.ClientType))
+                .OrderBy(group => group.Key, StringComparer.CurrentCulture)
+                .Select(group => $"{group.Key} {group.Count()}")
+                .ToArray();
+            ConnectedDeviceToolTip = string.Join("\n", details);
+        }
+
+        private void SetConnectedDeviceUnavailable(string text, string tooltip)
+        {
+            HasConnectedDevices = false;
+            ConnectedDeviceText = text;
+            ConnectedDeviceToolTip = tooltip;
+        }
+
+        private static string GetConnectedClientTypeLabel(string clientType) => clientType switch
+        {
+            "web-desktop" => AppLanguage.Get("Main.ClientWebDesktop"),
+            "web-mobile" => AppLanguage.Get("Main.ClientWebMobile"),
+            "userscript" => AppLanguage.Get("Main.ClientUserscript"),
+            "print-station" => AppLanguage.Get("Main.ClientPrintStation"),
+            "mobile-app" => AppLanguage.Get("Main.ClientMobileApp"),
+            _ => AppLanguage.Get("Main.ClientOther")
+        };
 
         public void CopyMonitorAddress()
         {

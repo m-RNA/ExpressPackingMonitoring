@@ -390,6 +390,18 @@
   <data name="Main.PrintTestOrder" xml:space="preserve"><value>Shipping-label station: {0} Test order received</value></data>
   <data name="Main.PrintNoRefund" xml:space="preserve"><value>Shipping-label station: {0} Responded; no refund orders found</value></data>
   <data name="Main.PrintOrders" xml:space="preserve"><value>Shipping-label station: {0} Received {1} orders</value></data>
+  <data name="Main.ConnectionServiceDisabled" xml:space="preserve"><value>Connection service is off</value></data>
+  <data name="Main.ConnectionServiceStarting" xml:space="preserve"><value>Preparing connections</value></data>
+  <data name="Main.ConnectionServiceUnavailable" xml:space="preserve"><value>Connections unavailable</value></data>
+  <data name="Main.NoConnectedDevices" xml:space="preserve"><value>No devices connected</value></data>
+  <data name="Main.ConnectedDevices" xml:space="preserve"><value>{0} devices connected</value></data>
+  <data name="Main.ConnectionEmptyTip" xml:space="preserve"><value>Connected web pages, the userscript, and print-station apps appear here</value></data>
+  <data name="Main.ClientWebDesktop" xml:space="preserve"><value>Desktop web</value></data>
+  <data name="Main.ClientWebMobile" xml:space="preserve"><value>Mobile web</value></data>
+  <data name="Main.ClientUserscript" xml:space="preserve"><value>Express Assistant userscript</value></data>
+  <data name="Main.ClientPrintStation" xml:space="preserve"><value>Print-station app</value></data>
+  <data name="Main.ClientMobileApp" xml:space="preserve"><value>Mobile app</value></data>
+  <data name="Main.ClientOther" xml:space="preserve"><value>Other device</value></data>
   <data name="Main.Title" xml:space="preserve"><value>Packing Monitor {0}</value></data>
   <data name="Main.BarcodeClear" xml:space="preserve"><value>C\nL\nR</value></data>
   <data name="Main.BarcodeReturn" xml:space="preserve"><value>R\nE\nT</value></data>
@@ -478,7 +490,7 @@
   <data name="时间格式错误" xml:space="preserve"><value>Invalid time format</value></data>
   <data name="不休眠时段 {0} 请填写完整的 HH:mm 开始和结束时间，或全部留空" xml:space="preserve"><value>Enter both the HH:mm start and end times for no-sleep period {0}, or leave both empty</value></data>
   <data name="完成向导后会显示手机连接二维码。手机与这台电脑连接同一个局域网，扫码即可打开打包视频和回放页面。" xml:space="preserve"><value>A phone connection QR code will appear after the wizard. Connect the phone to the same LAN as this computer and scan it to open recordings and playback.</value></data>
-  <data name="手机/电脑连接" xml:space="preserve"><value>Phone / computer connection</value></data>
+  <data name="手机/电脑连接" xml:space="preserve"><value>Connect devices</value></data>
   <data name="用手机或其他电脑查看录像" xml:space="preserve"><value>View recordings on a phone or another computer</value></data>
   <data name="手机或其他电脑连接同一个局域网后，扫描二维码或复制网址即可打开" xml:space="preserve"><value>Connect the phone or another computer to the same LAN, then scan the QR code or copy the URL to open the page</value></data>
   <data name="访问网址" xml:space="preserve"><value>Access URL</value></data>

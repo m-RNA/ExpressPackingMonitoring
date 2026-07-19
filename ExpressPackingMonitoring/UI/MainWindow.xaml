@@ -664,22 +664,62 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{Binding WorkstationPrintStatusText}" Foreground="{DynamicResource TextMuted}" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                <Button x:Name="BtnSwitchWorkstation" Grid.Column="1" Width="32" Height="32" Margin="8,0,0,0" Background="#01000000" BorderThickness="0" ToolTip="切换工位" Cursor="Hand" Focusable="False">
-                                    <Path Data="{StaticResource FluentArrowSwapIcon}" Width="15" Height="15" Stretch="Uniform" Fill="{DynamicResource TextSecondary}" IsHitTestVisible="False"/>
+                                <Button x:Name="BtnSwitchWorkstation" Grid.Column="1" Height="32" Margin="8,0,0,0" Padding="9,0" Style="{StaticResource SecondaryButtonStyle}" ToolTip="切换工位" Cursor="Hand" Focusable="False">
+                                    <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
+                                        <Path Data="{StaticResource FluentArrowSwapIcon}" Width="14" Height="14" Stretch="Uniform" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                                        <TextBlock Text="切换工位" Margin="5,0,0,0" FontSize="12" VerticalAlignment="Center"/>
+                                    </StackPanel>
                                 </Button>
                             </Grid>
-                            <Button x:Name="BtnMobileConnection"
-                                    Grid.Row="1"
-                                    Height="42"
-                                    Margin="0,8,0,0"
-                                    Style="{StaticResource PrimaryButtonStyle}"
-                                    ToolTip="{Binding WorkstationStatusToolTip}"
-                                    Focusable="False">
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" IsHitTestVisible="False">
-                                    <Path Data="{StaticResource FluentLinkIcon}" Width="16" Height="16" Stretch="Uniform" Fill="White"/>
-                                    <TextBlock Text="手机/电脑连接" Margin="7,0,0,0" FontSize="14" Foreground="White" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
+                            <Grid Grid.Row="1" Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid Grid.Column="0" VerticalAlignment="Center" ToolTip="{Binding ConnectedDeviceToolTip}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Width="8" Height="8" CornerRadius="4" Margin="0,0,6,0">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="{DynamicResource TextMuted}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasConnectedDevices}" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource AccentGreen}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                    </Border>
+                                    <TextBlock Grid.Column="1" Text="{Binding ConnectedDeviceText}" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasConnectedDevices}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource AccentGreen}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
+                                <Button x:Name="BtnMobileConnection"
+                                        Grid.Column="1"
+                                        Height="40"
+                                        Margin="8,0,0,0"
+                                        Padding="12,0"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        ToolTip="{Binding WorkstationStatusToolTip}"
+                                        Focusable="False">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" IsHitTestVisible="False">
+                                        <Path Data="{StaticResource FluentWifiIcon}" Width="17" Height="17" Stretch="Uniform" Fill="White"/>
+                                        <TextBlock Text="手机/电脑连接" Margin="7,0,0,0" FontSize="13" Foreground="White" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
                         </Grid>
                     </Border>
 

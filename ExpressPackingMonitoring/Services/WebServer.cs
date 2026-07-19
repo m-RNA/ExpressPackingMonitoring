@@ -79,6 +79,7 @@ namespace ExpressPackingMonitoring.Services
         private readonly string _accessKey;
         private readonly Func<string> _mobileConnectionUrlProvider;
         private readonly MobileBackupService _mobileBackupService;
+        private readonly ConnectedClientRegistry _connectedClients;
         private readonly string _mobileBackupComputerId;
         private readonly string _mobileBackupComputerName;
         private readonly CancellationTokenSource _cts = new();
@@ -99,6 +100,7 @@ namespace ExpressPackingMonitoring.Services
 
         /// <summary>收到油猴脚本推送的订单信息时触发，参数为本次推送的所有订单</summary>
         public event Action<List<OrderInfo>> OrderInfoReceived;
+        internal event Action<IReadOnlyList<ConnectedClientInfo>> ConnectedClientsChanged;
 
         public int Port { get; }
         public bool EnableOrderInfoLog { get; set; }
@@ -158,6 +160,11 @@ namespace ExpressPackingMonitoring.Services
                 mobileBackupStateDirectory ?? Path.Combine(AppPaths.CacheDir, "mobile-backup"),
                 mobileBackupRecordingDirectory ?? Path.Combine(AppPaths.UserDataDir, "mobile-backup-recordings"),
                 GetOrderInfo);
+            _connectedClients = new ConnectedClientRegistry();
+            _connectedClients.Changed += clients =>
+            {
+                try { ConnectedClientsChanged?.Invoke(clients); } catch { }
+            };
         }
 
         private static HttpListener CreateListener(int port, string listenerHost)
@@ -503,6 +510,9 @@ namespace ExpressPackingMonitoring.Services
                     case "/api/mobile-backup/uploads" when method == "POST":
                         HandleCreateMobileBackupUpload(ctx);
                         break;
+                    case "/api/connections/heartbeat" when method == "POST":
+                        HandleConnectionHeartbeat(ctx);
+                        break;
                     case var p when method == "GET" && p.StartsWith("/api/clip-tasks/") && !p.EndsWith("/cancel"):
                         HandleGetClipTask(ctx, path);
                         break;
@@ -641,6 +651,33 @@ namespace ExpressPackingMonitoring.Services
                 }
             });
         }
+
+        private void HandleConnectionHeartbeat(HttpListenerContext ctx)
+        {
+            try
+            {
+                ConnectedClientHeartbeat heartbeat = ReadJsonBody<ConnectedClientHeartbeat>(ctx);
+                string remoteAddress = ctx.Request.RemoteEndPoint?.Address.ToString() ?? "unknown";
+                _connectedClients.Heartbeat(heartbeat, remoteAddress);
+                SendJson(ctx, 200, new
+                {
+                    ok = true,
+                    heartbeatIntervalSeconds = ConnectedClientRegistry.HeartbeatIntervalSeconds,
+                    expiresInSeconds = ConnectedClientRegistry.ExpirationSeconds
+                });
+            }
+            catch (ConnectedClientValidationException ex)
+            {
+                int statusCode = ex.ErrorCode is "connection_registry_full" or "too_many_clients" ? 429 : 400;
+                SendJson(ctx, statusCode, new { errorCode = ex.ErrorCode, error = ex.Message });
+            }
+            catch (JsonException ex)
+            {
+                SendJson(ctx, 400, new { errorCode = "invalid_json", error = ex.Message });
+            }
+        }
+
+        internal IReadOnlyList<ConnectedClientInfo> GetConnectedClients() => _connectedClients.GetSnapshot();
 
         private void HandleCreateMobileBackupUpload(HttpListenerContext ctx)
         {
@@ -2235,6 +2272,7 @@ namespace ExpressPackingMonitoring.Services
                 pending.Completion.TrySetResult(new OrderLookupResult { Responded = false });
             _pendingOrderLookups.Clear();
             try { _clipService.Dispose(); } catch { }
+            try { _connectedClients.Dispose(); } catch { }
             try { _listener.Stop(); } catch { }
             try { _listener.Close(); } catch { }
             _cts.Dispose();

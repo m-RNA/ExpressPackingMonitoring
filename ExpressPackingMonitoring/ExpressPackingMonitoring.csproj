@@ -108,6 +108,7 @@
     <Compile Include="Services\UpdateCheckService.cs" />
     <Compile Include="Services\AlertService.cs" />
     <Compile Include="Services\CameraBarcodeRecognitionService.cs" />
+    <Compile Include="Services\ConnectedClientRegistry.cs" />
     <Compile Include="Services\MobileConnectionService.cs" />
     <Compile Include="Services\MobileBackupService.cs" />
     <Compile Include="Services\VideoClipService.cs" />
