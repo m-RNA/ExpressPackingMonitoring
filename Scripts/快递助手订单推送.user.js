@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         订单备注播报插件
 // @namespace    https://github.com/ExpressPackingMonitoring
-// @version      2.6
+// @version      2.7
 // @description  从快递助手批量打印页面提取订单备注和打印后退款状态，发送到监控工位，打包时自动播报或报警。
 // @author       ExpressPackingMonitoring
 // @icon         https://raw.githubusercontent.com/m-RNA/ExpressPackingMonitoring/main/ExpressPackingMonitoring/app.ico
@@ -10,7 +10,6 @@
 // @match        *://*.kuaidizs.cn/*
 // @connect      localhost
 // @connect      127.0.0.1
-// @connect      *
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
 // @grant        GM_getValue
@@ -37,7 +36,6 @@
     const DISCOVERY_LOCK_MS = 30000;
     const DISCOVERY_RETRY_DELAY_MS = 60 * 1000;
     const DISCOVERY_TIMEOUT = 700;
-    const DISCOVERY_BATCH_SIZE = 32;
     const ORDER_LOOKUP_RECONNECT_MS = 250;
     const PRINTED_REFUND_QUERY_TIMEOUT_MS = 6000;
     const PRINTED_REFUND_STABLE_MS = 500;
@@ -55,7 +53,7 @@
     const CONNECTION_HEARTBEAT_INTERVAL_MS = 15000;
     const IS_REFUND_WORKER = new URL(location.href).searchParams.get(REFUND_WORKER_PARAM) === '1';
     const REFUND_WORKER_TOKEN = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const CHANGELOG = 'v2.6：向监控工位报告快递端在线状态';
+    const CHANGELOG = 'v2.7：停止逐个扫描局域网 IP，避免重复跨域授权弹窗';
     const DEBUG_LOG = false;
 
     let lastUserActivityAt = Date.now();
@@ -300,6 +298,17 @@
         return address;
     }
 
+    function applyInstalledMonitorAddress() {
+        if (!INSTALL_MONITOR_ADDRESS) return;
+
+        const installed = formatAddress(normalizeAddress(INSTALL_MONITOR_ADDRESS, DEFAULT_PORT));
+        if (GM_getValue('installed_monitor_address', '') === installed) return;
+
+        const address = normalizeAddress(installed, DEFAULT_PORT);
+        saveMonitorAddress(address.host, address.port);
+        GM_setValue('installed_monitor_address', installed);
+    }
+
     function gmGet(url, timeout) {
         return new Promise(resolve => {
             GM_xmlhttpRequest({
@@ -317,96 +326,25 @@
         return gmGet(getStorageUrl(host, port), DISCOVERY_TIMEOUT);
     }
 
-    function getHostPrefix(host) {
-        const match = String(host || '').match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.\d{1,3}$/);
-        return match && match[1] !== '127' ? `${match[1]}.${match[2]}.${match[3]}` : '';
-    }
-
-    async function getWebRtcLocalPrefixes() {
-        const PeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection;
-        if (!PeerConnection) return [];
-
-        const prefixes = new Set();
-        const ipPattern = /\b(?:10|172\.(?:1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}\b/g;
-        const collect = text => {
-            for (const ip of String(text || '').match(ipPattern) || []) {
-                const prefix = getHostPrefix(ip);
-                if (prefix) prefixes.add(prefix);
-            }
-        };
-
-        return new Promise(resolve => {
-            const pc = new PeerConnection({ iceServers: [] });
-            let settled = false;
-            const done = async () => {
-                if (settled) return;
-                settled = true;
-                try {
-                    const stats = await pc.getStats();
-                    stats.forEach(report => collect(report.address || report.ip));
-                } catch (e) { /* ignore */ }
-                try { pc.close(); } catch (e) { /* ignore */ }
-                resolve(Array.from(prefixes));
-            };
-            pc.onicecandidate = event => {
-                if (!event.candidate) {
-                    done();
-                    return;
-                }
-                collect(event.candidate.candidate);
-                collect(event.candidate.address);
-            };
-            try {
-                pc.createDataChannel('monitor-discovery');
-                pc.createOffer()
-                    .then(offer => {
-                        collect(offer.sdp);
-                        return pc.setLocalDescription(offer);
-                    })
-                    .catch(done);
-            } catch (e) {
-                done();
-                return;
-            }
-            setTimeout(done, 900);
-        });
-    }
-
     async function findMonitorAddress(showProgress) {
         GM_setValue(DISCOVERY_LAST_ATTEMPT_KEY, Date.now());
         const saved = getMonitorAddress();
-        const port = saved.port;
-        const directCandidates = [saved.host, '127.0.0.1', 'localhost']
-            .filter((host, index, arr) => host && arr.indexOf(host) === index);
+        const installed = INSTALL_MONITOR_ADDRESS
+            ? normalizeAddress(INSTALL_MONITOR_ADDRESS, DEFAULT_PORT)
+            : null;
+        const directCandidates = [
+            installed,
+            saved,
+            { host: '127.0.0.1', port: saved.port },
+            { host: 'localhost', port: saved.port }
+        ].filter((address, index, addresses) => address &&
+            addresses.findIndex(item => item && formatAddress(item) === formatAddress(address)) === index);
 
-        for (const host of directCandidates) {
-            if (showProgress) showNotification(`正在探测 ${host}:${port}`);
-            if (await canConnectMonitor(host, port)) {
-                const found = saveMonitorAddress(host, port);
+        for (const address of directCandidates) {
+            if (showProgress) showNotification(`正在连接 ${formatAddress(address)}`);
+            if (await canConnectMonitor(address.host, address.port)) {
+                const found = saveMonitorAddress(address.host, address.port);
                 return `${found.host}:${found.port}`;
-            }
-        }
-
-        const prefixes = new Set();
-        const savedPrefix = getHostPrefix(saved.host);
-        if (savedPrefix) prefixes.add(savedPrefix);
-        for (const prefix of await getWebRtcLocalPrefixes()) prefixes.add(prefix);
-        ['192.168.0', '192.168.1', '192.168.2', '192.168.31', '10.0.0'].forEach(prefix => prefixes.add(prefix));
-
-        for (const prefix of prefixes) {
-            for (let start = 1; start <= 254; start += DISCOVERY_BATCH_SIZE) {
-                if (showProgress) showNotification(`正在查找 ${prefix}.x`);
-                const hosts = Array.from(
-                    { length: Math.min(DISCOVERY_BATCH_SIZE, 255 - start) },
-                    (_, index) => `${prefix}.${start + index}`
-                );
-                const checks = hosts.map(async host => ({ host, ok: await canConnectMonitor(host, port) }));
-                const results = await Promise.all(checks);
-                const found = results.find(item => item.ok);
-                if (found) {
-                    const address = saveMonitorAddress(found.host, port);
-                    return `${address.host}:${address.port}`;
-                }
             }
         }
 
@@ -460,10 +398,10 @@
                 showNotification(`已设置上位机地址：${formatAddress(address)}`);
             }
         });
-        GM_registerMenuCommand('自动探测上位机地址', async () => {
-            showNotification('正在自动探测上位机地址...');
+        GM_registerMenuCommand('重新连接上位机', async () => {
+            showNotification('正在连接已配置的上位机...');
             const found = await findMonitorAddress(true);
-            showNotification(found ? `已自动填入：${found}` : '未找到上位机，请确认 Web 服务已开启，并允许浏览器访问本地网络');
+            showNotification(found ? `已连接：${found}` : '连接失败，请从监控端安装页更新脚本或手动设置地址');
         });
         GM_registerMenuCommand('发送测试订单', async () => {
             await sendTestOrder();
@@ -695,8 +633,9 @@
         return false;
     }
 
-    function startConnectionHeartbeat() {
-        sendConnectionHeartbeat();
+    async function startConnectionHeartbeat() {
+        if (await ensureMonitorAddress(true))
+            await sendConnectionHeartbeat();
         setInterval(sendConnectionHeartbeat, CONNECTION_HEARTBEAT_INTERVAL_MS);
     }
 
@@ -898,13 +837,8 @@
         }
 
         testOrderSending = true;
-        showNotification('正在发送测试订单，用于确认监控工位能否收到订单备注');
+        showNotification(`正在向 ${getMonitorAddressText()} 发送测试订单`);
         try {
-            const connected = await ensureMonitorAddress(true);
-            if (!connected) {
-                showNotification('测试发送失败，未找到监控工位');
-                return;
-            }
             await pushToMonitor(buildTestOrder(), { isTest: true, skipAddressDiscovery: true });
         } finally {
             testOrderSending = false;
@@ -989,6 +923,7 @@
         }
     });
 
+    applyInstalledMonitorAddress();
     startConnectionHeartbeat();
 
     if (IS_REFUND_WORKER) {

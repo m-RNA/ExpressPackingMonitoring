@@ -111,7 +111,7 @@ test('saved refund worker tab prevents duplicate even with stale heartbeat', asy
   assert.equal(opened.length, 0);
 });
 
-function createDiscoveryContext(initialStore, reachableHosts, webRtcPrefixes = ['192.168.31']) {
+function createDiscoveryContext(initialStore, reachableHosts, installAddress = '') {
   const store = initialStore instanceof Map ? initialStore : new Map(Object.entries(initialStore));
   let requestCount = 0;
   const document = {
@@ -120,15 +120,13 @@ function createDiscoveryContext(initialStore, reachableHosts, webRtcPrefixes = [
   };
   const context = {
     DEFAULT_HOST: '127.0.0.1', DEFAULT_PORT: 5280, DEFAULT_ADDRESS: '127.0.0.1:5280',
-    INSTALL_MONITOR_ADDRESS: '',
+    INSTALL_MONITOR_ADDRESS: installAddress,
     DISCOVERY_DONE_KEY: 'monitor_auto_discovery_done',
     DISCOVERY_LAST_ATTEMPT_KEY: 'monitor_auto_discovery_last_attempt',
     DISCOVERY_LOCK_KEY: 'monitor_auto_discovery_lock',
     DISCOVERY_LOCK_MS: 30000,
     DISCOVERY_RETRY_DELAY_MS: 1,
     DISCOVERY_TIMEOUT: 1,
-    DISCOVERY_BATCH_SIZE: 32,
-    WEBRTC_PREFIXES: webRtcPrefixes,
     GM_getValue: (key, fallback) => store.has(key) ? store.get(key) : fallback,
     GM_setValue: (key, value) => store.set(key, value),
     showNotification: () => {},
@@ -143,37 +141,32 @@ function createDiscoveryContext(initialStore, reachableHosts, webRtcPrefixes = [
   vm.createContext(context);
   vm.runInContext(
     between('    function getBaseUrl(', '    // 专用工作页不显示业务菜单') +
-      ';getWebRtcLocalPrefixes=async()=>WEBRTC_PREFIXES;globalThis.findMonitor=findMonitorAddress;globalThis.ensureMonitor=ensureMonitorAddress;globalThis.shouldDiscover=shouldAttemptMonitorDiscovery;',
+      ';globalThis.findMonitor=findMonitorAddress;globalThis.ensureMonitor=ensureMonitorAddress;globalThis.shouldDiscover=shouldAttemptMonitorDiscovery;',
     context);
   return { context, store, getRequestCount: () => requestCount };
 }
 
-test('automatic discovery replaces an offline saved monitor with a reachable address', async () => {
+test('installed monitor address replaces an offline saved address without scanning the subnet', async () => {
   const { context, store } = createDiscoveryContext(
     { monitor_address: '192.168.31.250:5280' },
-    new Set(['192.168.31.10']));
+    new Set(['192.168.31.10']),
+    '192.168.31.10:5280');
   assert.equal(await context.findMonitor(false), '192.168.31.10:5280');
   assert.equal(store.get('monitor_address'), '192.168.31.10:5280');
 });
 
-test('first run discovery deterministically selects the first reachable monitor', async () => {
-  const { context, store } = createDiscoveryContext({}, new Set(['192.168.31.2', '192.168.31.3']));
-  assert.equal(await context.findMonitor(false), '192.168.31.2:5280');
-  assert.equal(store.get('monitor_address'), '192.168.31.2:5280');
-});
-
-test('fallback discovery scans common LAN prefixes when WebRTC prefix misses', async () => {
-  const { context, store } = createDiscoveryContext(
-    {},
-    new Set(['192.168.2.239']),
-    ['10.77.77']);
-  assert.equal(await context.findMonitor(false), '192.168.2.239:5280');
-  assert.equal(store.get('monitor_address'), '192.168.2.239:5280');
+test('address lookup probes only installed saved and local addresses', async () => {
+  const { context, getRequestCount } = createDiscoveryContext(
+    { monitor_address: '192.168.31.250:5280' },
+    new Set(),
+    '192.168.31.10:5280');
+  assert.equal(await context.findMonitor(false), '');
+  assert.equal(getRequestCount(), 4);
 });
 
 test('failed discovery retries after backoff and recovers when monitor comes online', async () => {
   const reachableHosts = new Set();
-  const { context, store } = createDiscoveryContext({}, reachableHosts, ['192.168.31']);
+  const { context, store } = createDiscoveryContext({}, reachableHosts, '192.168.31.10:5280');
 
   assert.equal(await context.ensureMonitor(true), false);
   assert.equal(store.get('monitor_auto_discovery_done'), true);

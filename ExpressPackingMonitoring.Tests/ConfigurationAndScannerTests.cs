@@ -209,15 +209,29 @@ public sealed class ConfigurationAndScannerTests
     }
 
     [Fact]
-    public void AddMonitorConnectPermission_AddsExactHostWithoutDuplicatingWildcardPermission()
+    public void Userscript_AvoidsSubnetScanningAndSendsTestOrderDirectly()
     {
-        const string script = "// ==UserScript==\n// @connect      localhost\n// @connect      *\n// ==/UserScript==\nconst INSTALL_MONITOR_ADDRESS = '';";
+        string scriptPath = Path.Combine(AppContext.BaseDirectory, "Scripts", "快递助手订单推送.user.js");
+        string script = File.ReadAllText(scriptPath);
+
+        Assert.DoesNotContain("// @connect      *", script);
+        Assert.DoesNotContain("RTCPeerConnection", script);
+        Assert.DoesNotContain("start <= 254", script);
+        Assert.Contains("applyInstalledMonitorAddress();", script);
+        Assert.Contains("await pushToMonitor(buildTestOrder(), { isTest: true, skipAddressDiscovery: true });", script);
+        Assert.DoesNotContain("const connected = await ensureMonitorAddress(true);", script);
+    }
+
+    [Fact]
+    public void AddMonitorConnectPermission_AddsExactHostWithoutRequiringWildcardPermission()
+    {
+        const string script = "// ==UserScript==\n// @connect      localhost\n// ==/UserScript==\nconst INSTALL_MONITOR_ADDRESS = '';";
 
         string customized = PrintToolInstallGuide.AddMonitorConnectPermission(script, "192.168.2.239:5280");
         string repeated = PrintToolInstallGuide.AddMonitorConnectPermission(customized, "http://192.168.2.239:5280");
 
         Assert.Contains("// @connect      192.168.2.239", customized);
-        Assert.Contains("// @connect      *", customized);
+        Assert.DoesNotContain("// @connect      *", customized);
         Assert.Contains("const INSTALL_MONITOR_ADDRESS = '192.168.2.239:5280';", customized);
         Assert.Equal(customized, repeated);
     }
