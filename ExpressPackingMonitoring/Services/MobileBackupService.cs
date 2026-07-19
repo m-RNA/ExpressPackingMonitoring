@@ -20,23 +20,22 @@ internal sealed class MobileBackupService
 
     private readonly VideoDatabase _database;
     private readonly string _stateDirectory;
-    private readonly string _recordingDirectory;
+    private readonly Func<string> _recordingRootResolver;
     private readonly Func<string, OrderInfo?> _orderInfoResolver;
     private readonly ConcurrentDictionary<string, object> _uploadLocks = new(StringComparer.OrdinalIgnoreCase);
 
     public MobileBackupService(
         VideoDatabase database,
         string stateDirectory,
-        string recordingDirectory,
+        Func<string> recordingRootResolver,
         Func<string, OrderInfo?>? orderInfoResolver = null)
     {
         _database = database ?? throw new ArgumentNullException(nameof(database));
         _stateDirectory = string.IsNullOrWhiteSpace(stateDirectory)
             ? throw new ArgumentException("上传状态目录不能为空", nameof(stateDirectory))
             : Path.GetFullPath(stateDirectory);
-        _recordingDirectory = string.IsNullOrWhiteSpace(recordingDirectory)
-            ? throw new ArgumentException("备份录像目录不能为空", nameof(recordingDirectory))
-            : Path.GetFullPath(recordingDirectory);
+        _recordingRootResolver = recordingRootResolver
+            ?? throw new ArgumentNullException(nameof(recordingRootResolver));
         _orderInfoResolver = orderInfoResolver ?? (_ => null);
         Directory.CreateDirectory(_stateDirectory);
         CleanupExpiredUploads();
@@ -69,6 +68,9 @@ internal sealed class MobileBackupService
                 {
                     throw new MobileBackupValidationException("upload_conflict", "同一上传任务的文件信息不一致");
                 }
+
+                if (TryUseStateFinalFile(state, out _, out long completedSize))
+                    return new MobileBackupCreateResult(uploadId, completedSize, ChunkSizeBytes, true);
 
                 long offset = File.Exists(PartPath(uploadId)) ? new FileInfo(PartPath(uploadId)).Length : 0;
                 state.ReceivedBytes = offset;
@@ -170,7 +172,7 @@ internal sealed class MobileBackupService
                 finalPath = existingFile.FilePath;
                 fileSize = new FileInfo(finalPath).Length;
             }
-            else if (TryUseVerifiedFinalFile(fileSha256, out finalPath, out fileSize))
+            else if (TryUseStateFinalFile(LoadState(uploadId), out finalPath, out fileSize))
             {
                 // 文件已原子移动但数据库写入失败时，重试完成请求可继续落库。
             }
@@ -189,8 +191,11 @@ internal sealed class MobileBackupService
                     throw new MobileBackupFileHashException();
                 }
 
-                Directory.CreateDirectory(_recordingDirectory);
-                finalPath = Path.Combine(_recordingDirectory, $"{fileSha256}.mp4");
+                finalPath = ResolveFinalPath(sessions, fileSha256);
+                state.FinalPath = finalPath;
+                state.UpdatedAtUtc = DateTime.UtcNow;
+                SaveState(state);
+                Directory.CreateDirectory(Path.GetDirectoryName(finalPath)!);
                 if (File.Exists(finalPath))
                 {
                     if (!string.Equals(ComputeFileSha256(finalPath), fileSha256, StringComparison.Ordinal))
@@ -266,15 +271,50 @@ internal sealed class MobileBackupService
 
     private string PartPath(string uploadId) => Path.Combine(_stateDirectory, $"{uploadId}.part");
 
-    private bool TryUseVerifiedFinalFile(string fileSha256, out string finalPath, out long fileSize)
+    private bool TryUseStateFinalFile(MobileBackupUploadState? state, out string finalPath, out long fileSize)
     {
-        finalPath = Path.Combine(_recordingDirectory, $"{fileSha256}.mp4");
+        finalPath = state?.FinalPath ?? "";
         fileSize = 0;
-        if (!File.Exists(finalPath)) return false;
-        if (!string.Equals(ComputeFileSha256(finalPath), fileSha256, StringComparison.Ordinal))
+        if (state == null || string.IsNullOrWhiteSpace(finalPath) || !File.Exists(finalPath)) return false;
+        if (!string.Equals(ComputeFileSha256(finalPath), state.FileSha256, StringComparison.Ordinal))
             throw new IOException("目标备份文件已存在但校验值不一致");
         fileSize = new FileInfo(finalPath).Length;
         return true;
+    }
+
+    private string ResolveFinalPath(IReadOnlyList<MobileBackupSessionRequest> sessions, string fileSha256)
+    {
+        MobileBackupSessionRequest earliest = sessions.OrderBy(session => session.StartedAt).First();
+        string trackingNumber = sessions
+            .OrderBy(session => session.StartedAt)
+            .Select(session => session.TrackingNumber?.Trim().ToUpperInvariant() ?? "")
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "未识别面单";
+        DateTime startedAt = earliest.StartedAt.ToLocalTime().DateTime;
+        string root = _recordingRootResolver()?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(root))
+            throw new IOException("电脑录像存储路径为空");
+
+        string dateDirectory = Path.Combine(Path.GetFullPath(root), startedAt.ToString("yyyy-MM-dd"));
+        string baseName = SanitizeFileName($"{trackingNumber}_{startedAt:yyyyMMdd_HHmmss}_发货");
+        string preferredPath = Path.Combine(dateDirectory, $"{baseName}.mp4");
+        if (!File.Exists(preferredPath) || FileMatchesSha256(preferredPath, fileSha256))
+            return preferredPath;
+
+        string collisionPath = Path.Combine(dateDirectory, $"{baseName}_{fileSha256[..8]}.mp4");
+        if (!File.Exists(collisionPath) || FileMatchesSha256(collisionPath, fileSha256))
+            return collisionPath;
+        throw new IOException("目标录像文件名冲突");
+    }
+
+    private static bool FileMatchesSha256(string path, string sha256) =>
+        string.Equals(ComputeFileSha256(path), sha256, StringComparison.Ordinal);
+
+    private static string SanitizeFileName(string value)
+    {
+        foreach (char invalid in Path.GetInvalidFileNameChars())
+            value = value.Replace(invalid, '_');
+        value = value.Trim().TrimEnd('.', ' ');
+        return string.IsNullOrWhiteSpace(value) ? "未识别面单" : value;
     }
 
     private MobileBackupUploadState? LoadState(string uploadId)
@@ -424,6 +464,7 @@ internal sealed class MobileBackupUploadState
     public long TotalBytes { get; set; }
     public long ReceivedBytes { get; set; }
     public string MimeType { get; set; } = "";
+    public string FinalPath { get; set; } = "";
     public DateTime CreatedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
 }

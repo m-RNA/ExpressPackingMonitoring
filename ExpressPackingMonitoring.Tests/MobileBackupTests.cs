@@ -121,6 +121,39 @@ public sealed class MobileBackupTests
             Assert.Equal("卖家备注", record.SellerMemo);
             Assert.Equal("商品 A", record.ProductInfo);
             Assert.True(File.Exists(record.FilePath));
+            Assert.Equal(
+                Path.Combine(directory, "recordings", "2026-07-19", "TRACK-001_20260719_100000_发货.mp4"),
+                record.FilePath);
+        }
+        finally
+        {
+            DeleteTempDirectory(directory);
+        }
+    }
+
+    [Fact]
+    public void DifferentContentWithSameBusinessNameUsesShortHashSuffix()
+    {
+        string directory = CreateTempDirectory();
+        try
+        {
+            byte[] file = Encoding.UTF8.GetBytes("new mobile video");
+            string sha = Sha256(file);
+            string dateDirectory = Path.Combine(directory, "recordings", "2026-07-19");
+            Directory.CreateDirectory(dateDirectory);
+            File.WriteAllText(Path.Combine(dateDirectory, "TRACK-001_20260719_100000_发货.mp4"), "existing video");
+            using var database = new VideoDatabase(Path.Combine(directory, "videos.db"));
+            var service = CreateService(database, directory);
+            service.CreateOrResume(CreateRequest(sha, file.Length));
+            service.AppendChunk(sha, 0, file.Length - 1, file.Length, file, sha);
+
+            MobileBackupCompleteResult completed = service.Complete(
+                sha,
+                CompleteRequest(sha, "collision-session", "TRACK-001", "phone-1", "手机"));
+
+            Assert.Equal(
+                $"TRACK-001_20260719_100000_发货_{sha[..8]}.mp4",
+                Path.GetFileName(database.GetVideoById(completed.RecordId).FilePath));
         }
         finally
         {
@@ -285,7 +318,7 @@ public sealed class MobileBackupTests
                 mobileBackupComputerId: "computer-1",
                 mobileBackupComputerName: "打包电脑",
                 mobileBackupStateDirectory: Path.Combine(directory, "state"),
-                mobileBackupRecordingDirectory: Path.Combine(directory, "recordings"));
+                mobileBackupRecordingRootResolver: () => Path.Combine(directory, "recordings"));
             server.Start();
             using var client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
             CancellationToken cancellationToken = TestContext.Current.CancellationToken;
@@ -345,7 +378,7 @@ public sealed class MobileBackupTests
     }
 
     private static MobileBackupService CreateService(VideoDatabase database, string directory, Func<string, OrderInfo?>? resolver = null) =>
-        new(database, Path.Combine(directory, "state"), Path.Combine(directory, "recordings"), resolver);
+        new(database, Path.Combine(directory, "state"), () => Path.Combine(directory, "recordings"), resolver);
 
     private static MobileBackupCreateRequest CreateRequest(string sha, long length) =>
         new() { FileSha256 = sha, TotalBytes = length, MimeType = "video/mp4" };

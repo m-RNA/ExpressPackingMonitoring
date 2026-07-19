@@ -136,7 +136,7 @@ namespace ExpressPackingMonitoring.Services
             string mobileBackupComputerId = null,
             string mobileBackupComputerName = null,
             string mobileBackupStateDirectory = null,
-            string mobileBackupRecordingDirectory = null)
+            Func<string> mobileBackupRecordingRootResolver = null)
         {
             _db = db ?? throw new ArgumentNullException(nameof(db));
             _isRecordingProvider = isRecordingProvider ?? (() => false);
@@ -158,7 +158,7 @@ namespace ExpressPackingMonitoring.Services
             _mobileBackupService = new MobileBackupService(
                 _db,
                 mobileBackupStateDirectory ?? Path.Combine(AppPaths.CacheDir, "mobile-backup"),
-                mobileBackupRecordingDirectory ?? Path.Combine(AppPaths.UserDataDir, "mobile-backup-recordings"),
+                mobileBackupRecordingRootResolver ?? (() => Path.Combine(AppPaths.UserDataDir, "mobile-backup-recordings")),
                 GetOrderInfo);
             _connectedClients = new ConnectedClientRegistry();
             _connectedClients.Changed += clients =>

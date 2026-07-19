@@ -104,7 +104,7 @@ public sealed class ConnectedClientTests
                 port,
                 listenerHost: "127.0.0.1",
                 mobileBackupStateDirectory: Path.Combine(directory, "uploads"),
-                mobileBackupRecordingDirectory: Path.Combine(directory, "recordings"));
+                mobileBackupRecordingRootResolver: () => Path.Combine(directory, "recordings"));
             server.Start();
             using var client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
             CancellationToken token = TestContext.Current.CancellationToken;
