@@ -77,6 +77,7 @@ namespace ExpressPackingMonitoring.Services
         private readonly VideoClipService _clipService;
         private readonly bool _requireAccessKey;
         private readonly string _accessKey;
+        private readonly Func<string> _mobileConnectionUrlProvider;
         private readonly CancellationTokenSource _cts = new();
         private readonly SemaphoreSlim _requestSlots = new(32, 32);
         private Task _listenTask;
@@ -125,7 +126,8 @@ namespace ExpressPackingMonitoring.Services
             Func<string> currentRecordingFileProvider = null,
             bool requireAccessKey = false,
             string accessKey = null,
-            string listenerHost = "+")
+            string listenerHost = "+",
+            Func<string> mobileConnectionUrlProvider = null)
         {
             _db = db ?? throw new ArgumentNullException(nameof(db));
             _isRecordingProvider = isRecordingProvider ?? (() => false);
@@ -133,6 +135,7 @@ namespace ExpressPackingMonitoring.Services
             _mkvConverter = mkvConverter;
             _requireAccessKey = requireAccessKey;
             _accessKey = accessKey?.Trim() ?? "";
+            _mobileConnectionUrlProvider = mobileConnectionUrlProvider ?? (() => "");
             _clipService = new VideoClipService(_db, WriteLog, _mkvConverter, IsCurrentRecordingFile, () => Task.Run(CleanWebCache));
             Port = port;
             _transCacheMaxBytes = (long)transCacheMaxMB * 1024 * 1024;
@@ -458,6 +461,9 @@ namespace ExpressPackingMonitoring.Services
                     case "/api/storage":
                         HandleStorageOverview(ctx);
                         break;
+                    case "/api/mobile-connection" when method == "GET":
+                        HandleMobileConnection(ctx);
+                        break;
                     case var p when method == "GET" && p.StartsWith("/api/clip-tasks/") && !p.EndsWith("/cancel"):
                         HandleGetClipTask(ctx, path);
                         break;
@@ -540,11 +546,41 @@ namespace ExpressPackingMonitoring.Services
             }
         }
 
-        private static bool RequiresAccessKey(string path)
+        internal static bool RequiresAccessKey(string path)
         {
             return path == ""
                 || path.StartsWith("/api/videos", StringComparison.OrdinalIgnoreCase)
-                || path.StartsWith("/api/clip", StringComparison.OrdinalIgnoreCase);
+                || path.StartsWith("/api/clip", StringComparison.OrdinalIgnoreCase)
+                || path.Equals("/api/mobile-connection", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void HandleMobileConnection(HttpListenerContext ctx)
+        {
+            string url;
+            try
+            {
+                url = _mobileConnectionUrlProvider()?.Trim() ?? "";
+            }
+            catch (Exception ex)
+            {
+                SendJson(ctx, 503, new { error = $"手机连接网址暂不可用: {ex.Message}" });
+                return;
+            }
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out Uri parsed)
+                || parsed.IsLoopback
+                || !string.Equals(parsed.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase))
+            {
+                SendJson(ctx, 503, new { error = "监控端尚未准备好可供手机访问的局域网网址" });
+                return;
+            }
+
+            SendJson(ctx, 200, new
+            {
+                url,
+                qrCode = MobileConnectionService.CreateQrDataUri(url),
+                accessProtected = _requireAccessKey
+            });
         }
 
         private bool TryAuthorizeRequest(HttpListenerContext ctx, out bool authorizedByQuery)

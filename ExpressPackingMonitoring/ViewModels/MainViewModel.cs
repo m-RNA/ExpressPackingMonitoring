@@ -168,6 +168,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private long _recordingStartTimestamp;
         private bool _isDisposed = false; // 新增：防止销毁后操作 UI
         private WebServer _webServer;
+        private Task<bool> _webServerStartupTask;
         private readonly SemaphoreSlim _webServerLifecycleLock = new(1, 1);
         private GlobalKeyboardHook _globalKeyHook;
         private CameraBarcodeRecognitionService _cameraBarcodeRecognition;
@@ -229,7 +230,6 @@ namespace ExpressPackingMonitoring.ViewModels
         private bool _pendingCameraRestart = false; // 录制中修改了摄像头配置，录制结束后重启
         private volatile bool _isEncoderDetectRunning = true; // 是否正在进行 GPU 编码器检测
         private readonly string _activeWorkstationRole = WorkstationRoles.CameraMonitor;
-        private string _workstationAccessText = AppLanguage.Get("Main.OtherComputersUnavailable");
         private string _workstationPrintStatusText = "快递单打印工位：未连接";
         private string _workstationStatusToolTip = "";
         private string _monitorAccessAddress = "";
@@ -358,7 +358,6 @@ namespace ExpressPackingMonitoring.ViewModels
                     OnPropertyChanged(nameof(IsCameraBarcodeRecognitionEnabled));
             }
         }
-        public string WorkstationAccessText { get => _workstationAccessText; set => SetProperty(ref _workstationAccessText, value); }
         public string WorkstationPrintStatusText { get => _workstationPrintStatusText; set => SetProperty(ref _workstationPrintStatusText, value); }
         public string WorkstationStatusToolTip { get => _workstationStatusToolTip; set => SetProperty(ref _workstationStatusToolTip, value); }
         public string MonitorAccessAddress { get => _monitorAccessAddress; set => SetProperty(ref _monitorAccessAddress, value); }
@@ -1788,6 +1787,7 @@ namespace ExpressPackingMonitoring.ViewModels
             }
 
             RunCameraBarcodeUpgradePromptIfNeeded(owner);
+            await RunMobileConnectionSetupPromptIfNeededAsync(owner);
         }
 
         private async Task RunFirstUseSetupWizardIfNeededAsync(System.Windows.Window owner)
@@ -1846,11 +1846,14 @@ namespace ExpressPackingMonitoring.ViewModels
                 if (Config.EnableWebServer)
                 {
                     ShowToast("正在应用局域网服务设置...");
-                    if (!await RestartWebServerAsync(allowAccessSetup: true))
+                    bool webServerReady = await RestartWebServerAsync(allowAccessSetup: true);
+                    _webServerStartupTask = Task.FromResult(webServerReady);
+                    if (!webServerReady)
                         return;
                 }
 
                 ShowToast(wizard.WasSkipped ? "已跳过配置向导" : "配置向导已完成");
+                ShowMobileConnectionSetupPromptIfReady(owner);
             }
             catch (Exception ex)
             {
@@ -1886,6 +1889,50 @@ namespace ExpressPackingMonitoring.ViewModels
             ShowToast(enableRecognition
                 ? "已启用摄像头识别面单"
                 : "已保留当前设置，可随时在设置中开启");
+        }
+
+        private async Task RunMobileConnectionSetupPromptIfNeededAsync(System.Windows.Window owner)
+        {
+            if (_isDisposed || !AppConfig.ShouldPromptMobileConnection(Config))
+                return;
+
+            Task<bool> startupTask = _webServerStartupTask;
+            if (startupTask != null)
+            {
+                bool webServerReady;
+                try
+                {
+                    webServerReady = await startupTask;
+                }
+                catch
+                {
+                    return;
+                }
+
+                if (!webServerReady)
+                    return;
+            }
+
+            ShowMobileConnectionSetupPromptIfReady(owner);
+        }
+
+        private void ShowMobileConnectionSetupPromptIfReady(System.Windows.Window owner)
+        {
+            if (!AppConfig.ShouldPromptMobileConnection(Config)
+                || !TryGetMobileConnectionUrl(out string url))
+            {
+                return;
+            }
+
+            ShowMobileConnectionWindow(owner, url);
+
+            var nextConfig = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(Config)) ?? new AppConfig();
+            AppConfig.MarkMobileConnectionSetupCompleted(nextConfig);
+            if (!SaveConfig(nextConfig, notifyUser: true))
+                return;
+
+            Config = nextConfig;
+            RuntimeLog.Info("MobileConnection", "Mobile connection setup prompt completed");
         }
 
         public bool SuspendCameraForSetupWizard()
@@ -2076,7 +2123,7 @@ namespace ExpressPackingMonitoring.ViewModels
             Task.Run(CheckDiskAndCleanup);
             Task.Run(CameraIdleWatchdog);
             // 新用户先完成首次配置向导，再请求局域网权限；已有用户则在权限缺失时自动修复。
-            _ = RestartWebServerAsync(allowAccessSetup: ShouldRepairLanAccessAtStartup(Config));
+            _webServerStartupTask = RestartWebServerAsync(allowAccessSetup: ShouldRepairLanAccessAtStartup(Config));
 
             // 启动时自动将上次断电残留的 MKV 转换为 MP4
             _mkvRecoveryTask = Task.Run(RecoverOrphanedMkvAsync);
@@ -2219,13 +2266,11 @@ namespace ExpressPackingMonitoring.ViewModels
                 if (!Config.EnableWebServer || _db == null || _isDisposed)
                 {
                     MonitorAccessAddress = "";
-                    WorkstationAccessText = "其他电脑查视频：未开启";
                     WorkstationPrintStatusText = "快递单打印工位：未连接";
-                    WorkstationStatusToolTip = "开启后，其他电脑可在浏览器输入这里显示的网址，搜索、下载和播放打包视频。";
+                    WorkstationStatusToolTip = "开启局域网查看后，可点击手机/电脑连接查看二维码或复制网址。";
                     return true;
                 }
 
-                WorkstationAccessText = "其他电脑查视频：正在启动服务...";
                 WorkstationPrintStatusText = "快递单打印工位：等待服务启动";
                 int port = Config.WebServerPort;
                 int cacheMaxMb = Config.TranscodeCacheMaxMB;
@@ -2243,7 +2288,8 @@ namespace ExpressPackingMonitoring.ViewModels
                         ConvertRecordMkvToMp4,
                         () => _currentVideoFilePath,
                         requireAccessKey,
-                        accessKey)
+                        accessKey,
+                        mobileConnectionUrlProvider: BuildMonitorAccessUrl)
                     {
                         EnableOrderInfoLog = enableOrderInfoLog
                     };
@@ -2277,7 +2323,6 @@ namespace ExpressPackingMonitoring.ViewModels
                 try { newServer?.Dispose(); } catch { }
                 RuntimeLog.Error("Web", "LAN service start failed", ex);
                 MonitorAccessAddress = "";
-                WorkstationAccessText = "其他电脑查视频：暂时不可用";
                 WorkstationPrintStatusText = "快递单打印工位：Web 启动失败";
                 WorkstationStatusToolTip = $"其他电脑暂时无法连接这台摄像头监控工位。\n{ex.Message}";
                 ShowToast($"警告：局域网服务启动失败: {ex.Message}");
@@ -2295,14 +2340,12 @@ namespace ExpressPackingMonitoring.ViewModels
             if (_webServer == null)
             {
                 MonitorAccessAddress = "";
-                WorkstationAccessText = "其他电脑查视频：暂时不可用";
                 WorkstationPrintStatusText = "快递单打印工位：未连接";
                 WorkstationStatusToolTip = "其他电脑暂时无法连接这台摄像头监控工位。";
                 return;
             }
 
             MonitorAccessAddress = "";
-            WorkstationAccessText = "其他电脑查视频：正在准备网址...";
             WorkstationPrintStatusText = "快递单打印工位：等待连接";
             WorkstationStatusToolTip = "正在准备给其他电脑浏览器使用的网址。两台电脑需要在同一局域网内。";
 
@@ -2320,24 +2363,20 @@ namespace ExpressPackingMonitoring.ViewModels
                 return;
 
             MonitorAccessAddress = verifiedAddress;
-            WorkstationAccessText = Config.RequireWebAccessKey
-                ? AppLanguage.Format("Main.RecordingAccessProtected", MonitorAccessAddress)
-                : AppLanguage.Format("Main.RecordingAccess", MonitorAccessAddress);
             WorkstationPrintStatusText = "快递单打印工位：等待连接";
             WorkstationStatusToolTip = Config.RequireWebAccessKey
-                ? "访问保护已开启。请点击底部地址复制完整访问链接，再发送到需要查看录像的设备。"
+                ? "访问保护已开启。请点击手机/电脑连接查看二维码或复制完整访问链接，再发送到需要查看录像的设备。"
                 : $"其他电脑在浏览器输入 http://{MonitorAccessAddress}，即可搜索、下载和播放视频。若打不开，请确认两台电脑在同一局域网，并检查防火墙。";
         }
 
         public void CopyMonitorAddress()
         {
-            if (string.IsNullOrWhiteSpace(MonitorAccessAddress))
+            if (!TryGetMobileConnectionUrl(out string url))
             {
-                ShowToast("当前没有可复制的访问地址");
+                ShowToast(GetMobileConnectionUnavailableMessage());
                 return;
             }
 
-            string url = BuildMonitorAccessUrl();
             bool copied = false;
             for (int i = 0; i < 3 && !copied; i++)
             {
@@ -2365,10 +2404,109 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private string BuildMonitorAccessUrl()
         {
-            string url = WorkstationNetwork.ToUrl(MonitorAccessAddress);
-            if (!Config.RequireWebAccessKey || string.IsNullOrWhiteSpace(Config.WebAccessKey))
-                return url;
-            return $"{url}/?key={Uri.EscapeDataString(Config.WebAccessKey)}";
+            return MobileConnectionService.TryBuildUsableAccessUrl(
+                MonitorAccessAddress,
+                Config.RequireWebAccessKey,
+                Config.WebAccessKey,
+                out string url)
+                ? url
+                : "";
+        }
+
+        public void ShowMobileConnection(System.Windows.Window owner = null)
+        {
+            string unavailableMessage = GetMobileConnectionUnavailableMessage();
+            string url = "";
+            if (string.IsNullOrEmpty(unavailableMessage))
+                TryGetMobileConnectionUrl(out url);
+
+            var dialogOwner = owner ?? Application.Current?.MainWindow;
+            var dialog = new MobileConnectionWindow(
+                url,
+                Config.RequireWebAccessKey,
+                unavailableMessage,
+                canOpenSettings: owner is not SettingsWindow)
+            {
+                Owner = dialogOwner
+            };
+
+            MainWindow mainWindow = Application.Current?.MainWindow as MainWindow;
+            mainWindow?.SuspendCapsLockForModalWindow();
+            try
+            {
+                dialog.ShowDialog();
+            }
+            finally
+            {
+                mainWindow?.ResumeCapsLockAfterModalWindow();
+            }
+
+            if (dialog.OpenSettingsRequested && owner is not SettingsWindow)
+                OpenSettings();
+        }
+
+        public void CopyMobileConnectionUrl()
+        {
+            if (!TryGetMobileConnectionUrl(out string url))
+            {
+                ShowToast(GetMobileConnectionUnavailableMessage());
+                return;
+            }
+
+            try
+            {
+                Clipboard.SetDataObject(url, true);
+                ShowToast("连接网址已复制");
+            }
+            catch (Exception ex)
+            {
+                ShowToast($"复制网址失败: {ex.Message}");
+            }
+        }
+
+        private void ShowMobileConnectionWindow(System.Windows.Window owner, string url)
+        {
+            var dialog = new MobileConnectionWindow(url, Config.RequireWebAccessKey) { Owner = owner };
+            MainWindow mainWindow = Application.Current?.MainWindow as MainWindow;
+            mainWindow?.SuspendCapsLockForModalWindow();
+            try
+            {
+                dialog.ShowDialog();
+            }
+            finally
+            {
+                mainWindow?.ResumeCapsLockAfterModalWindow();
+            }
+        }
+
+        private bool TryGetMobileConnectionUrl(out string url)
+        {
+            url = "";
+            return Config.EnableWebServer
+                && _webServer != null
+                && MobileConnectionService.TryBuildUsableAccessUrl(
+                    MonitorAccessAddress,
+                    Config.RequireWebAccessKey,
+                    Config.WebAccessKey,
+                    out url);
+        }
+
+        private string GetMobileConnectionUnavailableMessage()
+        {
+            if (!Config.EnableWebServer)
+                return "局域网查看尚未开启，请先在设置中启用";
+            if (_webServer == null)
+                return "局域网服务暂时不可用，请检查端口、权限或防火墙设置";
+            if (!MobileConnectionService.TryBuildUsableAccessUrl(
+                    MonitorAccessAddress,
+                    Config.RequireWebAccessKey,
+                    Config.WebAccessKey,
+                    out _))
+            {
+                return "尚未取得可供手机访问的局域网地址，请确认电脑已连接局域网";
+            }
+
+            return "";
         }
 
         public void SwitchWorkstation()
@@ -2422,10 +2560,6 @@ namespace ExpressPackingMonitoring.ViewModels
                     if (_isDisposed) return;
                     if (_webServer != null)
                     {
-                        if (!string.IsNullOrWhiteSpace(MonitorAccessAddress))
-                            WorkstationAccessText = Config.RequireWebAccessKey
-                                ? AppLanguage.Format("Main.RecordingAccessProtected", MonitorAccessAddress)
-                                : AppLanguage.Format("Main.RecordingAccess", MonitorAccessAddress);
                         WorkstationPrintStatusText = printStatusText;
                     }
 

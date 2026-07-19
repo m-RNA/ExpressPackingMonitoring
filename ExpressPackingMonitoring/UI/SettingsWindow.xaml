@@ -2059,6 +2059,37 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
                             <Border Style="{StaticResource SectionCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,18,0">
+                                        <TextBlock Text="手机/电脑连接" Style="{StaticResource FieldLabelStyle}"/>
+                                        <TextBlock Margin="0,5,0,0"
+                                                   Style="{StaticResource FieldHintStyle}"
+                                                   TextWrapping="Wrap">
+                                            <Run Text="当前地址："/>
+                                            <Run Text="{Binding MainVM.MonitorAccessAddress, Mode=OneWay, TargetNullValue=尚未准备}"/>
+                                        </TextBlock>
+                                        <TextBlock Text="手机或其他电脑连接同一个局域网后，可扫码或复制网址打开录像网页"
+                                                   Style="{StaticResource FieldHintStyle}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal"
+                                                VerticalAlignment="Center">
+                                        <Button Content="显示二维码"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Margin="0,0,8,0"
+                                                Click="ShowMobileConnection_Click"/>
+                                        <Button Content="复制网址"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Click="CopyMobileConnectionUrl_Click"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <Border Style="{StaticResource SectionCardStyle}">
                                 <StackPanel>
                                     <Grid Style="{StaticResource SettingRowStyle}">
                                         <Grid.ColumnDefinitions>

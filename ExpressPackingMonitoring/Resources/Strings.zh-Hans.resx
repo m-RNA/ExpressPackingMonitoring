@@ -383,21 +383,14 @@
   <data name="发货" xml:space="preserve"><value>发货</value></data>
   <data name="退货" xml:space="preserve"><value>退货</value></data>
   <data name="已保存" xml:space="preserve"><value>已保存</value></data>
-  <data name="其他电脑查视频：未开启" xml:space="preserve"><value>其他电脑查视频：未开启</value></data>
-  <data name="其他电脑查视频：正在启动服务..." xml:space="preserve"><value>其他电脑查视频：正在启动服务...</value></data>
-  <data name="其他电脑查视频：暂时不可用" xml:space="preserve"><value>其他电脑查视频：暂时不可用</value></data>
-  <data name="其他电脑查视频：正在准备网址..." xml:space="preserve"><value>其他电脑查视频：正在准备网址...</value></data>
   <data name="快递单打印工位：未连接" xml:space="preserve"><value>快递单打印工位：未连接</value></data>
   <data name="快递单打印工位：等待服务启动" xml:space="preserve"><value>快递单打印工位：等待服务启动</value></data>
   <data name="快递单打印工位：Web 启动失败" xml:space="preserve"><value>快递单打印工位：Web 启动失败</value></data>
   <data name="快递单打印工位：等待连接" xml:space="preserve"><value>快递单打印工位：等待连接</value></data>
-  <data name="Main.RecordingAccess" xml:space="preserve"><value>其他电脑查视频：{0}</value></data>
-  <data name="Main.RecordingAccessProtected" xml:space="preserve"><value>其他电脑查视频：{0}（访问保护已开启）</value></data>
   <data name="Main.PrintTestOrder" xml:space="preserve"><value>快递单打印工位：{0} 收到测试订单</value></data>
   <data name="Main.PrintNoRefund" xml:space="preserve"><value>快递单打印工位：{0} 已响应，未查到退款订单</value></data>
   <data name="Main.PrintOrders" xml:space="preserve"><value>快递单打印工位：{0} 收到 {1} 条订单</value></data>
   <data name="Main.Title" xml:space="preserve"><value>快递打包监控 {0}</value></data>
-  <data name="Main.OtherComputersUnavailable" xml:space="preserve"><value>其他电脑暂时无法连接</value></data>
   <data name="Main.BarcodeClear" xml:space="preserve"><value>清\n除</value></data>
   <data name="Main.BarcodeReturn" xml:space="preserve"><value>退\n货</value></data>
   <data name="Main.BarcodeShipping" xml:space="preserve"><value>发\n货</value></data>
@@ -484,4 +477,18 @@
   <data name="时间格式为 HH:mm" xml:space="preserve"><value>时间格式为 HH:mm</value></data>
   <data name="时间格式错误" xml:space="preserve"><value>时间格式错误</value></data>
   <data name="不休眠时段 {0} 请填写完整的 HH:mm 开始和结束时间，或全部留空" xml:space="preserve"><value>不休眠时段 {0} 请填写完整的 HH:mm 开始和结束时间，或全部留空</value></data>
+  <data name="完成向导后会显示手机连接二维码。手机与这台电脑连接同一个局域网，扫码即可打开打包视频和回放页面。" xml:space="preserve"><value>完成向导后会显示手机连接二维码。手机与这台电脑连接同一个局域网，扫码即可打开打包视频和回放页面。</value></data>
+  <data name="手机/电脑连接" xml:space="preserve"><value>手机/电脑连接</value></data>
+  <data name="用手机或其他电脑查看录像" xml:space="preserve"><value>用手机或其他电脑查看录像</value></data>
+  <data name="手机或其他电脑连接同一个局域网后，扫描二维码或复制网址即可打开" xml:space="preserve"><value>手机或其他电脑连接同一个局域网后，扫描二维码或复制网址即可打开</value></data>
+  <data name="访问网址" xml:space="preserve"><value>访问网址</value></data>
+  <data name="此网址包含录像访问密钥，请不要发送给无关人员" xml:space="preserve"><value>此网址包含录像访问密钥，请不要发送给无关人员</value></data>
+  <data name="暂时无法生成二维码" xml:space="preserve"><value>暂时无法生成二维码</value></data>
+  <data name="打开设置" xml:space="preserve"><value>打开设置</value></data>
+  <data name="复制网址" xml:space="preserve"><value>复制网址</value></data>
+  <data name="电脑打开" xml:space="preserve"><value>电脑打开</value></data>
+  <data name="当前地址：" xml:space="preserve"><value>当前地址：</value></data>
+  <data name="手机或其他电脑连接同一个局域网后，可扫码或复制网址打开录像网页" xml:space="preserve"><value>手机或其他电脑连接同一个局域网后，可扫码或复制网址打开录像网页</value></data>
+  <data name="显示二维码" xml:space="preserve"><value>显示二维码</value></data>
+  <data name="连接网址已复制" xml:space="preserve"><value>连接网址已复制</value></data>
 </root>

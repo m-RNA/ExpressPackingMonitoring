@@ -1016,6 +1016,16 @@ namespace ExpressPackingMonitoring.UI
                 MessageBoxImage.Information);
         }
 
+        private void ShowMobileConnection_Click(object sender, RoutedEventArgs e)
+        {
+            MainVM?.ShowMobileConnection(this);
+        }
+
+        private void CopyMobileConnectionUrl_Click(object sender, RoutedEventArgs e)
+        {
+            MainVM?.CopyMobileConnectionUrl();
+        }
+
         private void SelectMicByConfig(List<MicInfo> mics)
         {
             var micMatch = mics.FirstOrDefault(m => !string.IsNullOrEmpty(Config.AudioDeviceMoniker)

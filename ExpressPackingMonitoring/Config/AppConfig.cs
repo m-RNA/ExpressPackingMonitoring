@@ -62,12 +62,16 @@ namespace ExpressPackingMonitoring.Config
     {
         public const int CurrentVoiceSettingsVersion = 2;
         public const int CurrentCameraBarcodeSetupVersion = 1;
+        public const int CurrentMobileConnectionSetupVersion = 1;
 
         // 语音提醒设置迁移版本。旧配置没有该字段，加载后会从 0 迁移到当前版本。
         public int VoiceSettingsVersion { get; set; } = 0;
 
         // 摄像头识别升级引导版本。旧配置缺少该字段时会提示用户选择是否启用。
         public int CameraBarcodeSetupVersion { get; set; } = 0;
+
+        // 手机扫码连接升级引导版本。旧配置缺少该字段时会在局域网服务就绪后提示一次。
+        public int MobileConnectionSetupVersion { get; set; } = 0;
 
         // 工位用途："CameraMonitor"=摄像头监控工位，"PrintStation"=快递单打印工位，空值表示首次启动需要选择。
         public string WorkstationRole { get; set; } = "";
@@ -413,6 +417,20 @@ namespace ExpressPackingMonitoring.Config
             if (enableRecognition)
                 config.EnableCameraBarcodeRecognition = true;
             config.CameraBarcodeSetupVersion = CurrentCameraBarcodeSetupVersion;
+        }
+
+        internal static bool ShouldPromptMobileConnection(AppConfig config)
+        {
+            return config != null
+                && config.FirstUseWizardCompleted
+                && config.EnableWebServer
+                && config.MobileConnectionSetupVersion < CurrentMobileConnectionSetupVersion;
+        }
+
+        internal static void MarkMobileConnectionSetupCompleted(AppConfig config)
+        {
+            ArgumentNullException.ThrowIfNull(config);
+            config.MobileConnectionSetupVersion = CurrentMobileConnectionSetupVersion;
         }
 
         private static string NormalizeAiTtsEngine(string engine)

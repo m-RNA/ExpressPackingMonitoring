@@ -88,6 +88,7 @@ try {
             WorkstationRole = "CameraMonitor"
             FirstUseWizardCompleted = $true
             CameraBarcodeSetupVersion = 1
+            MobileConnectionSetupVersion = 1
             EnableCameraBarcodeRecognition = $false
             EnableGlobalKeyboard = $false
             Language = "zh-Hans"

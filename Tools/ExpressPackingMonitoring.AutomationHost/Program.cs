@@ -29,7 +29,12 @@ database.UpdateVideoRecordOnStop(
     "H264",
     "automation");
 
-using var server = new WebServer(database, port, transCacheMaxMB: 64, listenerHost: "127.0.0.1");
+using var server = new WebServer(
+    database,
+    port,
+    transCacheMaxMB: 64,
+    listenerHost: "127.0.0.1",
+    mobileConnectionUrlProvider: () => $"http://192.168.1.20:{port}");
 server.Start();
 Console.WriteLine($"READY http://127.0.0.1:{port}/");
 Console.Out.Flush();

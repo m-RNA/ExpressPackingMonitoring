@@ -366,7 +366,7 @@
                                                FontSize="15"
                                                FontWeight="Bold"
                                                Foreground="{DynamicResource TextPrimary}"/>
-                                    <TextBlock Text="同一局域网内的电脑、手机等设备，可以通过主界面底部显示的局域网访问地址，打开打包视频和回放页面。请确认这些设备连接在同一个局域网内。"
+                                    <TextBlock Text="完成向导后会显示手机连接二维码。手机与这台电脑连接同一个局域网，扫码即可打开打包视频和回放页面。"
                                                Margin="0,7,0,0"
                                                FontSize="13"
                                                LineHeight="20"

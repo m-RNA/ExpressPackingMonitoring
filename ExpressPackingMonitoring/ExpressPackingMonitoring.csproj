@@ -108,6 +108,7 @@
     <Compile Include="Services\UpdateCheckService.cs" />
     <Compile Include="Services\AlertService.cs" />
     <Compile Include="Services\CameraBarcodeRecognitionService.cs" />
+    <Compile Include="Services\MobileConnectionService.cs" />
     <Compile Include="Services\VideoClipService.cs" />
     <Compile Include="Services\WebServer.cs" />
     <Compile Include="Themes\ThemeManager.cs" />
@@ -122,6 +123,7 @@
     <Compile Include="UI\FirstUseSetupWizardWindow.xaml.cs" />
     <Compile Include="UI\MainWindow.xaml.cs" />
     <Compile Include="UI\MarkdownFlowDocumentRenderer.cs" />
+    <Compile Include="UI\MobileConnectionWindow.xaml.cs" />
     <Compile Include="UI\PlaybackWindow.xaml.cs" />
     <Compile Include="UI\SettingsWindow.xaml.cs" />
     <Compile Include="UI\StatisticsWindow.xaml.cs" />

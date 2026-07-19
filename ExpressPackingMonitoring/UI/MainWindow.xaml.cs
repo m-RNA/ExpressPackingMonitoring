@@ -116,8 +116,8 @@ namespace ExpressPackingMonitoring.UI
                     "CameraBarcodeCompare",
                     "摄像头对照调试模式已启用：摄像头仅记录判定，不会触发录制；扫码枪保持真实执行");
             }
-            BtnCopyMonitorAddress.Click += BtnCopyMonitorAddress_Click;
-            BtnCopyMonitorAddress.PreviewMouseLeftButtonUp += BtnCopyMonitorAddress_PreviewMouseLeftButtonUp;
+            BtnMobileConnection.Click += BtnMobileConnection_Click;
+            BtnMobileConnection.PreviewMouseLeftButtonUp += BtnMobileConnection_PreviewMouseLeftButtonUp;
             BtnSwitchWorkstation.Click += BtnSwitchWorkstation_Click;
             BtnSwitchWorkstation.PreviewMouseLeftButtonUp += BtnSwitchWorkstation_PreviewMouseLeftButtonUp;
             _capsCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -272,9 +272,9 @@ namespace ExpressPackingMonitoring.UI
             if (DataContext is MainViewModel viewModel) viewModel.OpenSettings();
         }
 
-        private void BtnCopyMonitorAddress_Click(object sender, RoutedEventArgs e)
+        private void BtnMobileConnection_Click(object sender, RoutedEventArgs e)
         {
-            ExecuteCopyMonitorAddress();
+            ExecuteMobileConnection();
             e.Handled = true;
         }
 
@@ -284,9 +284,9 @@ namespace ExpressPackingMonitoring.UI
             e.Handled = true;
         }
 
-        private void BtnCopyMonitorAddress_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        private void BtnMobileConnection_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
-            ExecuteCopyMonitorAddress();
+            ExecuteMobileConnection();
             e.Handled = true;
         }
 
@@ -296,9 +296,9 @@ namespace ExpressPackingMonitoring.UI
             e.Handled = true;
         }
 
-        private void ExecuteCopyMonitorAddress()
+        private void ExecuteMobileConnection()
         {
-            if (DataContext is MainViewModel viewModel) viewModel.CopyMonitorAddress();
+            if (DataContext is MainViewModel viewModel) viewModel.ShowMobileConnection(this);
         }
 
         private void ExecuteSwitchWorkstation()

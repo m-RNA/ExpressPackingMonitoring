@@ -42,6 +42,9 @@ $requiredCoreTests = @(
     "VideoDatabaseTests.UpsertOrderInfos_DoesNotLetOlderSnapshotOverwriteNewerRefundState",
     "VideoDatabaseTests.VideoRecords_DerivesFileNameFromPathAndDoesNotPersistRedundantColumn",
     "WebRequestLimitTests.ClipEditor_UsesSingleScreenSourcePlaybackWorkflow"
+    "MobileConnectionTests.FirstUseDefaultsLeaveMobilePromptPendingUntilQrWasShown"
+    "MobileConnectionTests.GeneratedQrDecodesToExactAccessUrl"
+    "MobileConnectionTests.ProtectedEndpointRejectsUnauthorizedAndAcceptsQueryThenCookie"
 )
 
 function Invoke-DotNet {

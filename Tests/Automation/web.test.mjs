@@ -14,6 +14,17 @@ test('isolated Web server supports search, playback and clip editor entry', { sk
     await page.goto(baseUrl, { waitUntil: 'networkidle' });
     await assert.doesNotReject(() => page.getByRole('heading', { name: '快递打包录像回放' }).waitFor());
 
+    const mobileConnectButton = page.getByRole('button', { name: '手机打开' });
+    await assert.doesNotReject(() => mobileConnectButton.waitFor());
+    await mobileConnectButton.click();
+    await assert.doesNotReject(() => page.locator('#mobileConnectOverlay.active').waitFor());
+    await assert.doesNotReject(() => page.locator('#mobileConnectQr[src^="data:image/png;base64,"]').waitFor());
+    assert.equal(await page.locator('#mobileConnectUrl').inputValue(), `http://192.168.1.20:${new URL(baseUrl).port}`);
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 720, height: 900 });
+    assert.equal(await mobileConnectButton.isVisible(), false);
+    await page.setViewportSize({ width: 1280, height: 900 });
+
     const search = page.getByPlaceholder('输入订单号关键词搜索');
     await search.fill('AUTO_WEB_001');
     await search.press('Enter');
