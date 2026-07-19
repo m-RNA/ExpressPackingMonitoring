@@ -78,6 +78,9 @@ namespace ExpressPackingMonitoring.Services
         private readonly bool _requireAccessKey;
         private readonly string _accessKey;
         private readonly Func<string> _mobileConnectionUrlProvider;
+        private readonly MobileBackupService _mobileBackupService;
+        private readonly string _mobileBackupComputerId;
+        private readonly string _mobileBackupComputerName;
         private readonly CancellationTokenSource _cts = new();
         private readonly SemaphoreSlim _requestSlots = new(32, 32);
         private Task _listenTask;
@@ -127,7 +130,11 @@ namespace ExpressPackingMonitoring.Services
             bool requireAccessKey = false,
             string accessKey = null,
             string listenerHost = "+",
-            Func<string> mobileConnectionUrlProvider = null)
+            Func<string> mobileConnectionUrlProvider = null,
+            string mobileBackupComputerId = null,
+            string mobileBackupComputerName = null,
+            string mobileBackupStateDirectory = null,
+            string mobileBackupRecordingDirectory = null)
         {
             _db = db ?? throw new ArgumentNullException(nameof(db));
             _isRecordingProvider = isRecordingProvider ?? (() => false);
@@ -136,12 +143,21 @@ namespace ExpressPackingMonitoring.Services
             _requireAccessKey = requireAccessKey;
             _accessKey = accessKey?.Trim() ?? "";
             _mobileConnectionUrlProvider = mobileConnectionUrlProvider ?? (() => "");
+            _mobileBackupComputerId = mobileBackupComputerId?.Trim() ?? "";
+            _mobileBackupComputerName = string.IsNullOrWhiteSpace(mobileBackupComputerName)
+                ? Environment.MachineName
+                : mobileBackupComputerName.Trim();
             _clipService = new VideoClipService(_db, WriteLog, _mkvConverter, IsCurrentRecordingFile, () => Task.Run(CleanWebCache));
             Port = port;
             _transCacheMaxBytes = (long)transCacheMaxMB * 1024 * 1024;
             _listener = CreateListener(port, listenerHost);
             MigrateLegacyOrderInfoCache();
             LoadOrderInfoCacheFromDatabase();
+            _mobileBackupService = new MobileBackupService(
+                _db,
+                mobileBackupStateDirectory ?? Path.Combine(AppPaths.CacheDir, "mobile-backup"),
+                mobileBackupRecordingDirectory ?? Path.Combine(AppPaths.UserDataDir, "mobile-backup-recordings"),
+                GetOrderInfo);
         }
 
         private static HttpListener CreateListener(int port, string listenerHost)
@@ -410,8 +426,8 @@ namespace ExpressPackingMonitoring.Services
                 Log($">>> {method} {path} from {ctx.Request.RemoteEndPoint}");
 
                 ApplyCorsHeaders(ctx);
-                ctx.Response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-                ctx.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, X-EPM-Access-Key");
+                ctx.Response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
+                ctx.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Content-Range, X-EPM-Access-Key, X-Chunk-SHA256");
 
                 if (method == "POST")
                 {
@@ -425,10 +441,27 @@ namespace ExpressPackingMonitoring.Services
                     }
                 }
 
+                if (method == "PUT" && IsMobileBackupPath(path)
+                    && ctx.Request.ContentLength64 > MobileBackupService.ChunkSizeBytes)
+                {
+                    SendJson(ctx, 413, new { errorCode = "chunk_too_large", error = "分块超过服务端上限" });
+                    return;
+                }
+
                 if (method == "OPTIONS")
                 {
                     ctx.Response.StatusCode = 204;
                     ctx.Response.OutputStream.Close();
+                    return;
+                }
+
+                if (IsMobileBackupPath(path) && !TryAuthorizeMobileBackupRequest(ctx, out bool missingBackupKey))
+                {
+                    SendJson(ctx, missingBackupKey ? 401 : 403, new
+                    {
+                        errorCode = missingBackupKey ? "pairing_required" : "access_key_invalid",
+                        error = missingBackupKey ? "需要重新配对" : "访问密钥无效，请重新配对"
+                    });
                     return;
                 }
 
@@ -464,6 +497,12 @@ namespace ExpressPackingMonitoring.Services
                     case "/api/mobile-connection" when method == "GET":
                         HandleMobileConnection(ctx);
                         break;
+                    case "/api/mobile-backup/capabilities" when method == "GET":
+                        HandleMobileBackupCapabilities(ctx);
+                        break;
+                    case "/api/mobile-backup/uploads" when method == "POST":
+                        HandleCreateMobileBackupUpload(ctx);
+                        break;
                     case var p when method == "GET" && p.StartsWith("/api/clip-tasks/") && !p.EndsWith("/cancel"):
                         HandleGetClipTask(ctx, path);
                         break;
@@ -495,7 +534,11 @@ namespace ExpressPackingMonitoring.Services
                         HandleOrderLookupResult(ctx);
                         break;
                     default:
-                        if (method == "HEAD" && path.StartsWith("/api/videos/") && path.EndsWith("/play"))
+                        if (method == "PUT" && IsMobileBackupUploadPath(path, "/chunks", out string chunkUploadId))
+                            HandleMobileBackupChunk(ctx, chunkUploadId);
+                        else if (method == "POST" && IsMobileBackupUploadPath(path, "/complete", out string completeUploadId))
+                            HandleCompleteMobileBackupUpload(ctx, completeUploadId);
+                        else if (method == "HEAD" && path.StartsWith("/api/videos/") && path.EndsWith("/play"))
                         {
                             // HEAD 请求只返回 headers，不启动转码/传输
                             ctx.Response.ContentType = "video/mp4";
@@ -552,6 +595,162 @@ namespace ExpressPackingMonitoring.Services
                 || path.StartsWith("/api/videos", StringComparison.OrdinalIgnoreCase)
                 || path.StartsWith("/api/clip", StringComparison.OrdinalIgnoreCase)
                 || path.Equals("/api/mobile-connection", StringComparison.OrdinalIgnoreCase);
+        }
+
+        internal static bool IsMobileBackupPath(string path) =>
+            path?.StartsWith("/api/mobile-backup", StringComparison.OrdinalIgnoreCase) == true;
+
+        private bool TryAuthorizeMobileBackupRequest(HttpListenerContext ctx, out bool missingKey)
+        {
+            string headerKey = ctx.Request.Headers["X-EPM-Access-Key"];
+            missingKey = string.IsNullOrWhiteSpace(headerKey);
+            return !missingKey && AccessKeysEqual(headerKey, _accessKey);
+        }
+
+        private static bool IsMobileBackupUploadPath(string path, string suffix, out string uploadId)
+        {
+            uploadId = "";
+            const string prefix = "/api/mobile-backup/uploads/";
+            if (path == null
+                || !path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                || !path.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            int length = path.Length - prefix.Length - suffix.Length;
+            if (length <= 0) return false;
+            uploadId = path.Substring(prefix.Length, length).Trim('/');
+            return uploadId.Length > 0 && !uploadId.Contains('/');
+        }
+
+        private void HandleMobileBackupCapabilities(HttpListenerContext ctx)
+        {
+            SendJson(ctx, 200, new
+            {
+                protocol = MobileBackupService.ProtocolVersion,
+                computerId = _mobileBackupComputerId,
+                computerName = _mobileBackupComputerName,
+                maxChunkBytes = MobileBackupService.ChunkSizeBytes,
+                supportedFormats = new[] { "video/mp4" },
+                retryPolicy = new
+                {
+                    chunkMaxAttempts = 5,
+                    chunkBackoffSeconds = new[] { 1, 2, 4, 8, 16 },
+                    fileMaxAttempts = 3
+                }
+            });
+        }
+
+        private void HandleCreateMobileBackupUpload(HttpListenerContext ctx)
+        {
+            try
+            {
+                MobileBackupCreateResult result = _mobileBackupService.CreateOrResume(ReadJsonBody<MobileBackupCreateRequest>(ctx));
+                SendJson(ctx, 200, new
+                {
+                    uploadId = result.UploadId,
+                    offset = result.Offset,
+                    chunkSize = result.ChunkSize,
+                    fileReady = result.FileReady
+                });
+            }
+            catch (Exception ex)
+            {
+                SendMobileBackupError(ctx, ex);
+            }
+        }
+
+        private void HandleMobileBackupChunk(HttpListenerContext ctx, string uploadId)
+        {
+            try
+            {
+                if (!TryParseContentRange(ctx.Request.Headers["Content-Range"], out long start, out long end, out long total))
+                    throw new MobileBackupValidationException("invalid_content_range", "Content-Range 格式应为 bytes start-end/total");
+                string chunkSha256 = ctx.Request.Headers["X-Chunk-SHA256"] ?? "";
+                byte[] content = ReadRequestBytes(ctx, MobileBackupService.ChunkSizeBytes);
+                long offset = _mobileBackupService.AppendChunk(uploadId, start, end, total, content, chunkSha256);
+                SendJson(ctx, 200, new { uploadId, offset });
+            }
+            catch (Exception ex)
+            {
+                SendMobileBackupError(ctx, ex);
+            }
+        }
+
+        private void HandleCompleteMobileBackupUpload(HttpListenerContext ctx, string uploadId)
+        {
+            try
+            {
+                MobileBackupCompleteResult result = _mobileBackupService.Complete(uploadId, ReadJsonBody<MobileBackupCompleteRequest>(ctx));
+                SendJson(ctx, 200, new
+                {
+                    status = result.Status,
+                    fileSha256 = result.FileSha256,
+                    recordId = result.RecordId,
+                    alreadyCompleted = result.AlreadyCompleted,
+                    message = "电脑校验完成，备份成功"
+                });
+            }
+            catch (Exception ex)
+            {
+                SendMobileBackupError(ctx, ex);
+            }
+        }
+
+        private static void SendMobileBackupError(HttpListenerContext ctx, Exception exception)
+        {
+            switch (exception)
+            {
+                case MobileBackupOffsetException offset:
+                    SendJson(ctx, 409, new
+                    {
+                        errorCode = "offset_mismatch",
+                        error = offset.Message,
+                        expectedOffset = offset.ExpectedOffset
+                    });
+                    break;
+                case MobileBackupFileHashException fileHash:
+                    SendJson(ctx, 422, new
+                    {
+                        errorCode = "sha256_mismatch",
+                        error = fileHash.Message,
+                        expectedOffset = 0,
+                        retryWholeFile = true,
+                        maxFileAttempts = 3
+                    });
+                    break;
+                case MobileBackupValidationException validation:
+                    int statusCode = validation.ErrorCode == "upload_not_found" ? 404
+                        : validation.ErrorCode.Contains("sha256_mismatch", StringComparison.Ordinal) ? 422
+                        : 400;
+                    SendJson(ctx, statusCode, new { errorCode = validation.ErrorCode, error = validation.Message });
+                    break;
+                case JsonException json:
+                    SendJson(ctx, 400, new { errorCode = "invalid_json", error = json.Message });
+                    break;
+                case InvalidDataException invalidData:
+                    SendJson(ctx, 400, new { errorCode = "invalid_request", error = invalidData.Message });
+                    break;
+                default:
+                    SendJson(ctx, 500, new { errorCode = "mobile_backup_failed", error = exception.Message });
+                    break;
+            }
+        }
+
+        internal static bool TryParseContentRange(string value, out long start, out long end, out long total)
+        {
+            start = end = total = 0;
+            if (string.IsNullOrWhiteSpace(value) || !value.StartsWith("bytes ", StringComparison.OrdinalIgnoreCase))
+                return false;
+            string[] rangeAndTotal = value[6..].Split('/', 2);
+            if (rangeAndTotal.Length != 2) return false;
+            string[] bounds = rangeAndTotal[0].Split('-', 2);
+            return bounds.Length == 2
+                && long.TryParse(bounds[0], out start)
+                && long.TryParse(bounds[1], out end)
+                && long.TryParse(rangeAndTotal[1], out total)
+                && start >= 0 && end >= start && total > end;
         }
 
         private void HandleMobileConnection(HttpListenerContext ctx)
@@ -1288,6 +1487,8 @@ namespace ExpressPackingMonitoring.Services
                 r.FileName,
                 filePath = r.FilePath ?? "",
                 videoCodec = r.VideoCodec ?? "",
+                sourceType = r.SourceType ?? "pc",
+                sourceDeviceName = r.SourceDeviceName ?? "",
                 sizeMB = Math.Round(r.FileSizeBytes / 1048576.0, 1),
                 startTime = r.StartTime.ToString("yyyy-MM-dd HH:mm:ss"),
                 durationSec = Math.Round(r.DurationSeconds, 0),
@@ -1829,6 +2030,13 @@ namespace ExpressPackingMonitoring.Services
 
         private static string ReadRequestBody(HttpListenerContext ctx, int maxBytes)
         {
+            byte[] bytes = ReadRequestBytes(ctx, maxBytes);
+            Encoding encoding = ctx.Request.ContentEncoding ?? Encoding.UTF8;
+            return encoding.GetString(bytes);
+        }
+
+        private static byte[] ReadRequestBytes(HttpListenerContext ctx, int maxBytes)
+        {
             long contentLength = ctx.Request.ContentLength64;
             if (contentLength > maxBytes)
                 throw new InvalidDataException($"请求内容过大，最大允许 {maxBytes / 1024} KB");
@@ -1846,9 +2054,7 @@ namespace ExpressPackingMonitoring.Services
                     throw new InvalidDataException($"请求内容过大，最大允许 {maxBytes / 1024} KB");
                 buffer.Write(chunk, 0, read);
             }
-
-            Encoding encoding = ctx.Request.ContentEncoding ?? Encoding.UTF8;
-            return encoding.GetString(buffer.GetBuffer(), 0, checked((int)buffer.Length));
+            return buffer.ToArray();
         }
 
         internal static void ValidateOrderInfoItems(List<OrderInfo> items)

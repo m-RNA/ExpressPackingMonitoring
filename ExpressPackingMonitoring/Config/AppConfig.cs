@@ -149,6 +149,7 @@ namespace ExpressPackingMonitoring.Config
         public int TranscodeCacheMaxMB { get; set; } = 1024;  // 转码缓存上限(MB)，超出后按时间清理最旧的
         public bool RequireWebAccessKey { get; set; } = false;
         public string WebAccessKey { get; set; } = "";
+        public string MobileBackupComputerId { get; set; } = "";
 
         // AI 语音合成
         public bool EnableAiTts { get; set; } = true;
@@ -199,6 +200,21 @@ namespace ExpressPackingMonitoring.Config
             {
                 config.WebAccessKey = config.WebAccessKey.Trim();
                 changed = true;
+            }
+
+            if (!Guid.TryParse(config.MobileBackupComputerId, out Guid computerId) || computerId == Guid.Empty)
+            {
+                config.MobileBackupComputerId = Guid.NewGuid().ToString("D");
+                changed = true;
+            }
+            else
+            {
+                string normalizedComputerId = computerId.ToString("D");
+                if (!string.Equals(config.MobileBackupComputerId, normalizedComputerId, StringComparison.Ordinal))
+                {
+                    config.MobileBackupComputerId = normalizedComputerId;
+                    changed = true;
+                }
             }
 
             string normalizedEngine = NormalizeAiTtsEngine(config.AiTtsEngine);

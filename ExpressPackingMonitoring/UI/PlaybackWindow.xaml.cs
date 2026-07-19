@@ -28,6 +28,7 @@ namespace ExpressPackingMonitoring.UI
         public string StopReason { get; set; } = "";
         public string VideoCodec { get; set; } = "";
         public string VideoEncoder { get; set; } = "";
+        public string SourceDisplay { get; set; } = "";
         public bool IsMissing { get; set; }
         public bool IsDeleted { get; set; }
         public string DeleteReason { get; set; } = "";
@@ -174,6 +175,9 @@ namespace ExpressPackingMonitoring.UI
                             StopReason = record.StopReason,
                             VideoCodec = record.VideoCodec,
                             VideoEncoder = record.VideoEncoder,
+                            SourceDisplay = string.Equals(record.SourceType, "external", StringComparison.OrdinalIgnoreCase)
+                                ? $"来源：{(string.IsNullOrWhiteSpace(record.SourceDeviceName) ? "其他设备" : record.SourceDeviceName)}"
+                                : "来源：本机",
                             IsMissing = missing,
                             IsDeleted = deleted,
                             DeleteReason = record.DeleteReason,

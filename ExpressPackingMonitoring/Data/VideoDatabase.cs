@@ -25,6 +25,11 @@ namespace ExpressPackingMonitoring.Data
         public string ProductInfo { get; set; } = "";
         public DateTime? OrderInfoPushTime { get; set; }
         public string OrderInfoJson { get; set; } = "";
+        public string SourceType { get; set; } = "pc";
+        public string SourceDeviceId { get; set; } = "";
+        public string SourceDeviceName { get; set; } = "";
+        public string SourceSessionId { get; set; } = "";
+        public string ContentSha256 { get; set; } = "";
         public string VideoCodec { get; set; } = "";
         public string VideoEncoder { get; set; } = "";
         public string FilePath { get; set; } = "";
@@ -119,6 +124,11 @@ namespace ExpressPackingMonitoring.Data
                     ProductInfo TEXT DEFAULT '',
                     OrderInfoPushTime TEXT,
                     OrderInfoJson TEXT DEFAULT '',
+                    SourceType TEXT NOT NULL DEFAULT 'pc',
+                    SourceDeviceId TEXT DEFAULT '',
+                    SourceDeviceName TEXT DEFAULT '',
+                    SourceSessionId TEXT DEFAULT '',
+                    ContentSha256 TEXT DEFAULT '',
                     FilePath TEXT NOT NULL,
                     FileSizeBytes INTEGER DEFAULT 0,
                     StartTime TEXT NOT NULL,
@@ -167,6 +177,11 @@ namespace ExpressPackingMonitoring.Data
             EnsureColumnExists("VideoRecords", "ProductInfo", "TEXT DEFAULT ''");
             EnsureColumnExists("VideoRecords", "OrderInfoPushTime", "TEXT");
             EnsureColumnExists("VideoRecords", "OrderInfoJson", "TEXT DEFAULT ''");
+            EnsureColumnExists("VideoRecords", "SourceType", "TEXT NOT NULL DEFAULT 'pc'");
+            EnsureColumnExists("VideoRecords", "SourceDeviceId", "TEXT DEFAULT ''");
+            EnsureColumnExists("VideoRecords", "SourceDeviceName", "TEXT DEFAULT ''");
+            EnsureColumnExists("VideoRecords", "SourceSessionId", "TEXT DEFAULT ''");
+            EnsureColumnExists("VideoRecords", "ContentSha256", "TEXT DEFAULT ''");
 
             ExecuteNonQuery("CREATE INDEX IF NOT EXISTS idx_video_orderid ON VideoRecords(OrderId);");
             ExecuteNonQuery("CREATE INDEX IF NOT EXISTS idx_video_starttime ON VideoRecords(StartTime);");
@@ -177,13 +192,24 @@ namespace ExpressPackingMonitoring.Data
             ExecuteNonQuery("CREATE INDEX IF NOT EXISTS idx_video_source_order ON VideoRecords(SourceOrderId);");
             ExecuteNonQuery("CREATE INDEX IF NOT EXISTS idx_orderinfo_source_order ON OrderInfoRecords(SourceOrderId);");
             ExecuteNonQuery("CREATE INDEX IF NOT EXISTS idx_orderinfo_push_time ON OrderInfoRecords(PushTime DESC);");
+            ExecuteNonQuery("CREATE INDEX IF NOT EXISTS idx_video_content_sha256 ON VideoRecords(ContentSha256);");
+            ExecuteNonQuery("CREATE UNIQUE INDEX IF NOT EXISTS idx_video_external_session ON VideoRecords(SourceDeviceId, SourceSessionId) WHERE SourceType = 'external' AND SourceDeviceId <> '' AND SourceSessionId <> '';");
             CleanupExpiredOrderInfos();
         }
 
         /// <summary>
         /// 录制开始时插入记录，返回记录 ID
         /// </summary>
-        public long InsertVideoRecord(string orderId, string mode, string videoCodec, string videoEncoder, string filePath, DateTime startTime, OrderInfo orderInfo = null)
+        public long InsertVideoRecord(
+            string orderId,
+            string mode,
+            string videoCodec,
+            string videoEncoder,
+            string filePath,
+            DateTime startTime,
+            OrderInfo orderInfo = null,
+            string sourceDeviceId = "",
+            string sourceDeviceName = "")
         {
             string orderInfoJson = SerializeOrderInfo(orderInfo);
             lock (_lock)
@@ -192,10 +218,12 @@ namespace ExpressPackingMonitoring.Data
                 cmd.CommandText = @"
                     INSERT INTO VideoRecords (
                         OrderId, Mode, TrackingNumber, SourceOrderId, BuyerMessage, SellerMemo, ProductInfo,
-                        OrderInfoPushTime, OrderInfoJson, VideoCodec, VideoEncoder, FilePath, StartTime)
+                        OrderInfoPushTime, OrderInfoJson, SourceType, SourceDeviceId, SourceDeviceName,
+                        VideoCodec, VideoEncoder, FilePath, StartTime)
                     VALUES (
                         @orderId, @mode, @trackingNumber, @sourceOrderId, @buyerMessage, @sellerMemo, @productInfo,
-                        @orderInfoPushTime, @orderInfoJson, @videoCodec, @videoEncoder, @filePath, @startTime);
+                        @orderInfoPushTime, @orderInfoJson, 'pc', @sourceDeviceId, @sourceDeviceName,
+                        @videoCodec, @videoEncoder, @filePath, @startTime);
                     SELECT last_insert_rowid();";
                 cmd.Parameters.AddWithValue("@orderId", orderId ?? "");
                 cmd.Parameters.AddWithValue("@mode", mode ?? "");
@@ -206,11 +234,111 @@ namespace ExpressPackingMonitoring.Data
                 cmd.Parameters.AddWithValue("@productInfo", orderInfo?.ProductInfo ?? "");
                 cmd.Parameters.AddWithValue("@orderInfoPushTime", orderInfo == null ? DBNull.Value : orderInfo.PushTime.ToString("yyyy-MM-dd HH:mm:ss"));
                 cmd.Parameters.AddWithValue("@orderInfoJson", orderInfoJson);
+                cmd.Parameters.AddWithValue("@sourceDeviceId", sourceDeviceId?.Trim() ?? "");
+                cmd.Parameters.AddWithValue("@sourceDeviceName", sourceDeviceName?.Trim() ?? "");
                 cmd.Parameters.AddWithValue("@videoCodec", videoCodec ?? "");
                 cmd.Parameters.AddWithValue("@videoEncoder", videoEncoder ?? "");
                 cmd.Parameters.AddWithValue("@filePath", filePath ?? "");
                 cmd.Parameters.AddWithValue("@startTime", startTime.ToString("yyyy-MM-dd HH:mm:ss"));
                 return (long)cmd.ExecuteScalar();
+            }
+        }
+
+        public long InsertMobileBackupRecord(
+            string trackingNumber,
+            string filePath,
+            long fileSizeBytes,
+            DateTime startTime,
+            double durationSeconds,
+            string sourceDeviceId,
+            string sourceDeviceName,
+            string sourceSessionId,
+            string contentSha256,
+            OrderInfo orderInfo = null)
+        {
+            string normalizedTracking = trackingNumber?.Trim().ToUpperInvariant() ?? "";
+            string orderId = string.IsNullOrEmpty(normalizedTracking) ? "未识别面单" : normalizedTracking;
+            string orderInfoJson = SerializeOrderInfo(orderInfo);
+            DateTime endTime = startTime.AddSeconds(Math.Max(0, durationSeconds));
+
+            lock (_lock)
+            {
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = @"
+                    INSERT INTO VideoRecords (
+                        OrderId, Mode, TrackingNumber, SourceOrderId, BuyerMessage, SellerMemo, ProductInfo,
+                        OrderInfoPushTime, OrderInfoJson, SourceType, SourceDeviceId, SourceDeviceName,
+                        SourceSessionId, ContentSha256, FilePath, FileSizeBytes, StartTime, EndTime,
+                        DurationSeconds, StopReason)
+                    VALUES (
+                        @orderId, '发货', @trackingNumber, @sourceOrderId, @buyerMessage, @sellerMemo, @productInfo,
+                        @orderInfoPushTime, @orderInfoJson, 'external', @sourceDeviceId, @sourceDeviceName,
+                        @sourceSessionId, @contentSha256, @filePath, @fileSizeBytes, @startTime, @endTime,
+                        @durationSeconds, 'APP 备份');
+                    SELECT last_insert_rowid();";
+                cmd.Parameters.AddWithValue("@orderId", orderId);
+                cmd.Parameters.AddWithValue("@trackingNumber", normalizedTracking);
+                cmd.Parameters.AddWithValue("@sourceOrderId", orderInfo?.OrderId ?? "");
+                cmd.Parameters.AddWithValue("@buyerMessage", orderInfo?.BuyerMessage ?? "");
+                cmd.Parameters.AddWithValue("@sellerMemo", orderInfo?.SellerMemo ?? "");
+                cmd.Parameters.AddWithValue("@productInfo", orderInfo?.ProductInfo ?? "");
+                cmd.Parameters.AddWithValue("@orderInfoPushTime", orderInfo == null ? DBNull.Value : orderInfo.PushTime.ToString("yyyy-MM-dd HH:mm:ss"));
+                cmd.Parameters.AddWithValue("@orderInfoJson", orderInfoJson);
+                cmd.Parameters.AddWithValue("@sourceDeviceId", sourceDeviceId?.Trim() ?? "");
+                cmd.Parameters.AddWithValue("@sourceDeviceName", sourceDeviceName?.Trim() ?? "");
+                cmd.Parameters.AddWithValue("@sourceSessionId", sourceSessionId?.Trim() ?? "");
+                cmd.Parameters.AddWithValue("@contentSha256", contentSha256?.Trim().ToLowerInvariant() ?? "");
+                cmd.Parameters.AddWithValue("@filePath", filePath ?? "");
+                cmd.Parameters.AddWithValue("@fileSizeBytes", fileSizeBytes);
+                cmd.Parameters.AddWithValue("@startTime", startTime.ToString("yyyy-MM-dd HH:mm:ss"));
+                cmd.Parameters.AddWithValue("@endTime", endTime.ToString("yyyy-MM-dd HH:mm:ss"));
+                cmd.Parameters.AddWithValue("@durationSeconds", Math.Max(0, durationSeconds));
+                return (long)cmd.ExecuteScalar();
+            }
+        }
+
+        public VideoRecord GetVideoBySourceSession(string sourceDeviceId, string sourceSessionId)
+        {
+            if (string.IsNullOrWhiteSpace(sourceDeviceId) || string.IsNullOrWhiteSpace(sourceSessionId))
+                return null;
+
+            lock (_lock)
+            {
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = @"
+                    SELECT Id, OrderId, Mode, VideoCodec, VideoEncoder, FilePath, FileSizeBytes,
+                           StartTime, EndTime, DurationSeconds, StopReason,
+                           IsDeleted, DeletedAt, DeleteReason,
+                           TrackingNumber, SourceOrderId, BuyerMessage, SellerMemo, ProductInfo, OrderInfoPushTime, OrderInfoJson,
+                           SourceType, SourceDeviceId, SourceDeviceName, SourceSessionId, ContentSha256
+                    FROM VideoRecords
+                    WHERE SourceType = 'external' AND SourceDeviceId = @sourceDeviceId AND SourceSessionId = @sourceSessionId
+                    LIMIT 1;";
+                cmd.Parameters.AddWithValue("@sourceDeviceId", sourceDeviceId.Trim());
+                cmd.Parameters.AddWithValue("@sourceSessionId", sourceSessionId.Trim());
+                using var reader = cmd.ExecuteReader();
+                return reader.Read() ? ReadVideoRecord(reader) : null;
+            }
+        }
+
+        public VideoRecord GetVideoByContentSha256(string contentSha256)
+        {
+            if (string.IsNullOrWhiteSpace(contentSha256)) return null;
+            lock (_lock)
+            {
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = @"
+                    SELECT Id, OrderId, Mode, VideoCodec, VideoEncoder, FilePath, FileSizeBytes,
+                           StartTime, EndTime, DurationSeconds, StopReason,
+                           IsDeleted, DeletedAt, DeleteReason,
+                           TrackingNumber, SourceOrderId, BuyerMessage, SellerMemo, ProductInfo, OrderInfoPushTime, OrderInfoJson,
+                           SourceType, SourceDeviceId, SourceDeviceName, SourceSessionId, ContentSha256
+                    FROM VideoRecords
+                    WHERE ContentSha256 = @contentSha256 AND IsDeleted = 0
+                    ORDER BY Id LIMIT 1;";
+                cmd.Parameters.AddWithValue("@contentSha256", contentSha256.Trim().ToLowerInvariant());
+                using var reader = cmd.ExecuteReader();
+                return reader.Read() ? ReadVideoRecord(reader) : null;
             }
         }
 
@@ -332,7 +460,7 @@ namespace ExpressPackingMonitoring.Data
                             OrderInfoPushTime = @pushTime,
                             OrderInfoJson = @orderInfoJson
                         WHERE IsDeleted = 0
-                          AND StartTime >= @since
+                          AND (StartTime >= @since OR SourceType = 'external')
                           AND (OrderId = @trackingNumber OR TrackingNumber = @trackingNumber)
                           AND (
                               BuyerMessage = '' OR SellerMemo = '' OR ProductInfo = ''
@@ -563,7 +691,8 @@ namespace ExpressPackingMonitoring.Data
                     SELECT Id, OrderId, Mode, VideoCodec, VideoEncoder, FilePath, FileSizeBytes,
                            StartTime, EndTime, DurationSeconds, StopReason,
                            IsDeleted, DeletedAt, DeleteReason,
-                           TrackingNumber, SourceOrderId, BuyerMessage, SellerMemo, ProductInfo, OrderInfoPushTime, OrderInfoJson
+                           TrackingNumber, SourceOrderId, BuyerMessage, SellerMemo, ProductInfo, OrderInfoPushTime, OrderInfoJson,
+                           SourceType, SourceDeviceId, SourceDeviceName, SourceSessionId, ContentSha256
                     FROM VideoRecords WHERE Id = @id AND IsDeleted = 0;";
                 cmd.Parameters.AddWithValue("@id", id);
                 using var reader = cmd.ExecuteReader();
@@ -591,7 +720,12 @@ namespace ExpressPackingMonitoring.Data
                         SellerMemo = reader.IsDBNull(17) ? "" : reader.GetString(17),
                         ProductInfo = reader.IsDBNull(18) ? "" : reader.GetString(18),
                         OrderInfoPushTime = reader.IsDBNull(19) ? null : DateTime.Parse(reader.GetString(19)),
-                        OrderInfoJson = reader.IsDBNull(20) ? "" : reader.GetString(20)
+                        OrderInfoJson = reader.IsDBNull(20) ? "" : reader.GetString(20),
+                        SourceType = reader.IsDBNull(21) ? "pc" : reader.GetString(21),
+                        SourceDeviceId = reader.IsDBNull(22) ? "" : reader.GetString(22),
+                        SourceDeviceName = reader.IsDBNull(23) ? "" : reader.GetString(23),
+                        SourceSessionId = reader.IsDBNull(24) ? "" : reader.GetString(24),
+                        ContentSha256 = reader.IsDBNull(25) ? "" : reader.GetString(25)
                     };
                 }
                 return null;
@@ -612,7 +746,8 @@ namespace ExpressPackingMonitoring.Data
                       SELECT Id, OrderId, Mode, VideoCodec, VideoEncoder, FilePath, FileSizeBytes,
                           StartTime, EndTime, DurationSeconds, StopReason,
                            IsDeleted, DeletedAt, DeleteReason,
-                           TrackingNumber, SourceOrderId, BuyerMessage, SellerMemo, ProductInfo, OrderInfoPushTime, OrderInfoJson
+                           TrackingNumber, SourceOrderId, BuyerMessage, SellerMemo, ProductInfo, OrderInfoPushTime, OrderInfoJson,
+                           SourceType, SourceDeviceId, SourceDeviceName, SourceSessionId, ContentSha256
                     FROM VideoRecords 
                     WHERE 1 = 1";
 
@@ -627,7 +762,8 @@ namespace ExpressPackingMonitoring.Data
                     sql += @" AND (
                         OrderId LIKE @keyword OR FilePath LIKE @keyword OR TrackingNumber LIKE @keyword
                         OR SourceOrderId LIKE @keyword OR BuyerMessage LIKE @keyword
-                        OR SellerMemo LIKE @keyword OR ProductInfo LIKE @keyword)";
+                        OR SellerMemo LIKE @keyword OR ProductInfo LIKE @keyword
+                        OR SourceDeviceName LIKE @keyword)";
                     cmd.Parameters.AddWithValue("@keyword", $"%{keyword}%");
                 }
 
@@ -663,7 +799,12 @@ namespace ExpressPackingMonitoring.Data
                         SellerMemo = reader.IsDBNull(17) ? "" : reader.GetString(17),
                         ProductInfo = reader.IsDBNull(18) ? "" : reader.GetString(18),
                         OrderInfoPushTime = reader.IsDBNull(19) ? null : DateTime.Parse(reader.GetString(19)),
-                        OrderInfoJson = reader.IsDBNull(20) ? "" : reader.GetString(20)
+                        OrderInfoJson = reader.IsDBNull(20) ? "" : reader.GetString(20),
+                        SourceType = reader.IsDBNull(21) ? "pc" : reader.GetString(21),
+                        SourceDeviceId = reader.IsDBNull(22) ? "" : reader.GetString(22),
+                        SourceDeviceName = reader.IsDBNull(23) ? "" : reader.GetString(23),
+                        SourceSessionId = reader.IsDBNull(24) ? "" : reader.GetString(24),
+                        ContentSha256 = reader.IsDBNull(25) ? "" : reader.GetString(25)
                     });
                 }
                 return results;
@@ -694,7 +835,12 @@ namespace ExpressPackingMonitoring.Data
                 SellerMemo = reader.IsDBNull(17) ? "" : reader.GetString(17),
                 ProductInfo = reader.IsDBNull(18) ? "" : reader.GetString(18),
                 OrderInfoPushTime = reader.IsDBNull(19) ? null : DateTime.Parse(reader.GetString(19)),
-                OrderInfoJson = reader.IsDBNull(20) ? "" : reader.GetString(20)
+                OrderInfoJson = reader.IsDBNull(20) ? "" : reader.GetString(20),
+                SourceType = reader.IsDBNull(21) ? "pc" : reader.GetString(21),
+                SourceDeviceId = reader.IsDBNull(22) ? "" : reader.GetString(22),
+                SourceDeviceName = reader.IsDBNull(23) ? "" : reader.GetString(23),
+                SourceSessionId = reader.IsDBNull(24) ? "" : reader.GetString(24),
+                ContentSha256 = reader.IsDBNull(25) ? "" : reader.GetString(25)
             };
         }
 
@@ -725,7 +871,8 @@ namespace ExpressPackingMonitoring.Data
                     whereSql += @" AND (
                         OrderId LIKE @keyword OR FilePath LIKE @keyword OR TrackingNumber LIKE @keyword
                         OR SourceOrderId LIKE @keyword OR BuyerMessage LIKE @keyword
-                        OR SellerMemo LIKE @keyword OR ProductInfo LIKE @keyword)";
+                        OR SellerMemo LIKE @keyword OR ProductInfo LIKE @keyword
+                        OR SourceDeviceName LIKE @keyword)";
                     countCmd.Parameters.AddWithValue("@keyword", $"%{keyword}%");
                 }
 
@@ -741,7 +888,8 @@ namespace ExpressPackingMonitoring.Data
                     SELECT Id, OrderId, Mode, VideoCodec, VideoEncoder, FilePath, FileSizeBytes,
                            StartTime, EndTime, DurationSeconds, StopReason,
                            IsDeleted, DeletedAt, DeleteReason,
-                           TrackingNumber, SourceOrderId, BuyerMessage, SellerMemo, ProductInfo, OrderInfoPushTime, OrderInfoJson "
+                           TrackingNumber, SourceOrderId, BuyerMessage, SellerMemo, ProductInfo, OrderInfoPushTime, OrderInfoJson,
+                           SourceType, SourceDeviceId, SourceDeviceName, SourceSessionId, ContentSha256 "
                     + whereSql + @"
                     ORDER BY StartTime DESC
                     LIMIT @limit OFFSET @offset;";
@@ -785,10 +933,13 @@ namespace ExpressPackingMonitoring.Data
                         substr(StartTime, 1, 10) AS Date,
                         COUNT(*) AS TotalPieces,
                         SUM(DurationSeconds) AS TotalDurationSec,
-                        SUM(FileSizeBytes) AS TotalBytes
-                    FROM VideoRecords 
+                        SUM(CASE WHEN Id = (
+                            SELECT MIN(v2.Id) FROM VideoRecords v2
+                            WHERE v2.FilePath = VideoRecords.FilePath AND v2.IsDeleted = 0
+                        ) THEN FileSizeBytes ELSE 0 END) AS TotalBytes
+                    FROM VideoRecords
                     WHERE StartTime >= @start AND StartTime <= @end
-                      AND IsDeleted = 0 
+                      AND IsDeleted = 0
                       AND EndTime IS NOT NULL
                     GROUP BY substr(StartTime, 1, 10)
                     ORDER BY Date ASC;";
@@ -829,8 +980,11 @@ namespace ExpressPackingMonitoring.Data
                         {dateSelector} AS GroupDate,
                         COUNT(*) AS TotalPieces,
                         SUM(DurationSeconds) AS TotalDurationSec,
-                        SUM(FileSizeBytes) AS TotalBytes
-                    FROM VideoRecords 
+                        SUM(CASE WHEN Id = (
+                            SELECT MIN(v2.Id) FROM VideoRecords v2
+                            WHERE v2.FilePath = VideoRecords.FilePath AND v2.IsDeleted = 0
+                        ) THEN FileSizeBytes ELSE 0 END) AS TotalBytes
+                    FROM VideoRecords
                     WHERE StartTime >= @start AND StartTime <= @end
                       AND IsDeleted = 0 AND EndTime IS NOT NULL
                     GROUP BY GroupDate
@@ -862,7 +1016,14 @@ namespace ExpressPackingMonitoring.Data
             lock (_lock)
             {
                 using var cmd = _connection.CreateCommand();
-                cmd.CommandText = "SELECT COALESCE(SUM(FileSizeBytes), 0) FROM VideoRecords WHERE IsDeleted = 0;";
+                cmd.CommandText = @"
+                    SELECT COALESCE(SUM(FileSizeBytes), 0)
+                    FROM (
+                        SELECT MAX(FileSizeBytes) AS FileSizeBytes
+                        FROM VideoRecords
+                        WHERE IsDeleted = 0
+                        GROUP BY FilePath
+                    );";
                 return (long)cmd.ExecuteScalar();
             }
         }
@@ -875,8 +1036,18 @@ namespace ExpressPackingMonitoring.Data
             lock (_lock)
             {
                 using var cmd = _connection.CreateCommand();
-                cmd.CommandText = @"SELECT COALESCE(SUM(FileSizeBytes), 0), COALESCE(SUM(DurationSeconds), 0) 
-                                    FROM VideoRecords WHERE IsDeleted = 0 AND DurationSeconds > 0 AND EndTime IS NOT NULL;";
+                cmd.CommandText = @"
+                    SELECT
+                        (SELECT COALESCE(SUM(FileSizeBytes), 0)
+                         FROM (
+                             SELECT MAX(FileSizeBytes) AS FileSizeBytes
+                             FROM VideoRecords
+                             WHERE IsDeleted = 0 AND DurationSeconds > 0 AND EndTime IS NOT NULL
+                             GROUP BY FilePath
+                         )),
+                        COALESCE(SUM(DurationSeconds), 0)
+                    FROM VideoRecords
+                    WHERE IsDeleted = 0 AND DurationSeconds > 0 AND EndTime IS NOT NULL;";
                 using var reader = cmd.ExecuteReader();
                 if (reader.Read())
                     return (reader.GetInt64(0), reader.GetDouble(1));
@@ -894,10 +1065,11 @@ namespace ExpressPackingMonitoring.Data
                 var results = new List<VideoRecord>();
                 using var cmd = _connection.CreateCommand();
                 cmd.CommandText = @"
-                    SELECT Id, OrderId, FilePath, FileSizeBytes, StartTime
+                    SELECT MIN(Id), MIN(OrderId), FilePath, MAX(FileSizeBytes), MIN(StartTime)
                     FROM VideoRecords 
-                    WHERE IsDeleted = 0 
-                    ORDER BY StartTime ASC 
+                    WHERE IsDeleted = 0
+                    GROUP BY FilePath
+                    ORDER BY MIN(StartTime) ASC
                     LIMIT @limit;";
                 cmd.Parameters.AddWithValue("@limit", limit);
 
@@ -955,11 +1127,12 @@ namespace ExpressPackingMonitoring.Data
                 var results = new List<StorageVideoFile>();
                 using var cmd = _connection.CreateCommand();
                 cmd.CommandText = @"
-                    SELECT FilePath, FileSizeBytes, StartTime
+                    SELECT FilePath, MAX(FileSizeBytes), MIN(StartTime)
                     FROM VideoRecords
                     WHERE IsDeleted = 0
                       AND EndTime IS NOT NULL
-                    ORDER BY StartTime ASC;";
+                    GROUP BY FilePath
+                    ORDER BY MIN(StartTime) ASC;";
 
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read())

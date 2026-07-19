@@ -2289,7 +2289,11 @@ namespace ExpressPackingMonitoring.ViewModels
                         () => _currentVideoFilePath,
                         requireAccessKey,
                         accessKey,
-                        mobileConnectionUrlProvider: BuildMonitorAccessUrl)
+                        mobileConnectionUrlProvider: BuildMonitorAccessUrl,
+                        mobileBackupComputerId: Config.MobileBackupComputerId,
+                        mobileBackupComputerName: Environment.MachineName,
+                        mobileBackupStateDirectory: Path.Combine(AppPaths.CacheDir, "mobile-backup"),
+                        mobileBackupRecordingDirectory: Path.Combine(ResolveBestStoragePath(), "设备备份"))
                     {
                         EnableOrderInfoLog = enableOrderInfoLog
                     };

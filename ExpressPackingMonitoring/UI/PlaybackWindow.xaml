@@ -145,6 +145,7 @@
                                         <TextBlock Text="{Binding Duration}" FontSize="11" Foreground="{DynamicResource TextSecondary}" Margin="0,0,8,0"/>
                                         <TextBlock Text="{Binding FileSize}" FontSize="11" Foreground="{DynamicResource TextSecondary}" Margin="0,0,8,0"/>
                                         <TextBlock Text="{Binding EncoderDisplay}" FontSize="11" Foreground="{DynamicResource AccentBlue}" Margin="0,0,8,0"/>
+                                        <TextBlock Text="{Binding SourceDisplay}" FontSize="11" Foreground="{DynamicResource TextSecondary}" Margin="0,0,8,0"/>
                                         <TextBlock Text="{Binding StopReason}" FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,0,8,0"/>
                                     </StackPanel>
                                     <TextBlock Grid.Row="2" Text="{Binding StatusText}" FontSize="11" FontWeight="Bold" Margin="0,3,0,0">
