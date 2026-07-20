@@ -55,6 +55,16 @@
   <data name="仍未检测到摄像头，请检查连接" xml:space="preserve"><value>No camera detected. Check the connection</value></data>
   <data name="首次使用请在下方确认接收目标并保存，订单联动会在保存成功后启用" xml:space="preserve"><value>For first-time setup, confirm the receiving targets below and save. Order integration will be enabled after saving succeeds</value></data>
   <data name="未识别面单" xml:space="preserve"><value>Unrecognized shipping label</value></data>
+  <data name="恢复默认设置" xml:space="preserve"><value>Restore defaults</value></data>
+  <data name="恢复常用设置，保留配对、安全、存储位置、订单目标和历史数据" xml:space="preserve"><value>Restore common settings while keeping pairing, security, storage locations, order targets, and history</value></data>
+  <data name="恢复默认" xml:space="preserve"><value>Restore defaults</value></data>
+  <data name="保存并应用" xml:space="preserve"><value>Save and apply</value></data>
+  <data name="Settings.ResetDefaultsRecordingBlocked" xml:space="preserve"><value>Finish the current recording before restoring default settings</value></data>
+  <data name="Settings.ResetDefaultsConfirm" xml:space="preserve"><value>This will reset camera, recording, scanner, voice, appearance, and startup settings. Pairing, security settings, storage locations, order targets, and historical data will be kept. Continue?</value></data>
+  <data name="Settings.ResetDefaultsFailed" xml:space="preserve"><value>Failed to restore default settings</value></data>
+  <data name="Settings.ResetDefaultsRestartPrompt" xml:space="preserve"><value>Default settings have been saved. Restart now to apply them completely?</value></data>
+  <data name="Settings.RestartFailed" xml:space="preserve"><value>Unable to restart automatically. Restart the app manually</value></data>
+  <data name="Settings.ResetDefaultsSaved" xml:space="preserve"><value>Default settings saved. Restart the app to apply them completely</value></data>
   <data name="检查更新" xml:space="preserve"><value>Check for updates</value></data>
   <data name="播放选区" xml:space="preserve"><value>Play selection</value></data>
   <data name="生成并下载" xml:space="preserve"><value>Create and download</value></data>

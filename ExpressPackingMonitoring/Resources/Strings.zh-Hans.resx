@@ -55,6 +55,16 @@
   <data name="仍未检测到摄像头，请检查连接" xml:space="preserve"><value>仍未检测到摄像头，请检查连接</value></data>
   <data name="首次使用请在下方确认接收目标并保存，订单联动会在保存成功后启用" xml:space="preserve"><value>首次使用请在下方确认接收目标并保存，订单联动会在保存成功后启用</value></data>
   <data name="未识别面单" xml:space="preserve"><value>未识别面单</value></data>
+  <data name="恢复默认设置" xml:space="preserve"><value>恢复默认设置</value></data>
+  <data name="恢复常用设置，保留配对、安全、存储位置、订单目标和历史数据" xml:space="preserve"><value>恢复常用设置，保留配对、安全、存储位置、订单目标和历史数据</value></data>
+  <data name="恢复默认" xml:space="preserve"><value>恢复默认</value></data>
+  <data name="保存并应用" xml:space="preserve"><value>保存并应用</value></data>
+  <data name="Settings.ResetDefaultsRecordingBlocked" xml:space="preserve"><value>请先安全完成当前录像，再恢复默认设置</value></data>
+  <data name="Settings.ResetDefaultsConfirm" xml:space="preserve"><value>这会重置摄像头、录制、扫码、语音、外观和启动设置。配对、安全设置、存储位置、订单目标和历史数据会保留。是否继续？</value></data>
+  <data name="Settings.ResetDefaultsFailed" xml:space="preserve"><value>恢复默认设置失败</value></data>
+  <data name="Settings.ResetDefaultsRestartPrompt" xml:space="preserve"><value>默认设置已保存，是否立即重启以完整生效？</value></data>
+  <data name="Settings.RestartFailed" xml:space="preserve"><value>无法自动重启，请手动重新启动程序</value></data>
+  <data name="Settings.ResetDefaultsSaved" xml:space="preserve"><value>默认设置已保存，重启程序后完整生效</value></data>
   <data name="检查更新" xml:space="preserve"><value>检查更新</value></data>
   <data name="播放选区" xml:space="preserve"><value>播放选区</value></data>
   <data name="生成并下载" xml:space="preserve"><value>生成并下载</value></data>

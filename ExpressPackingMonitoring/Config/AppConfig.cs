@@ -510,6 +510,51 @@ namespace ExpressPackingMonitoring.Config
             config.FirstUseWizardCompleted = true;
         }
 
+        internal static AppConfig CreateDefaultsPreservingRuntimeIdentity(AppConfig current)
+        {
+            ArgumentNullException.ThrowIfNull(current);
+
+            var reset = new AppConfig
+            {
+                VoiceSettingsVersion = current.VoiceSettingsVersion,
+                CameraBarcodeSetupVersion = current.CameraBarcodeSetupVersion,
+                MobileConnectionSetupVersion = current.MobileConnectionSetupVersion,
+                UnifiedModulesMigrationVersion = current.UnifiedModulesMigrationVersion,
+                GlobalOnboardingVersion = current.GlobalOnboardingVersion,
+                PcRecordingSetupVersion = current.PcRecordingSetupVersion,
+                MobileBackupSetupVersion = current.MobileBackupSetupVersion,
+                OrderIntegrationSetupVersion = current.OrderIntegrationSetupVersion,
+                WorkstationRole = current.WorkstationRole,
+                PrintStationMonitorAddress = current.PrintStationMonitorAddress,
+                FirstUseWizardCompleted = current.FirstUseWizardCompleted,
+                EnablePcCameraRecording = current.EnablePcCameraRecording,
+                EnableMobileBackup = current.EnableMobileBackup,
+                EnableOrderIntegration = current.EnableOrderIntegration,
+                EnableWebServer = current.EnableWebServer,
+                WebServerPort = current.WebServerPort,
+                RequireWebAccessKey = current.RequireWebAccessKey,
+                WebAccessKey = current.WebAccessKey,
+                MobileBackupComputerId = current.MobileBackupComputerId,
+                StorageLocations = current.StorageLocations?.Select(location => new StorageLocation
+                {
+                    Path = location.Path,
+                    ReserveGB = location.ReserveGB,
+                    Priority = location.Priority
+                }).ToList() ?? new List<StorageLocation>(),
+                OrderIntegrationTargets = current.OrderIntegrationTargets?.Select(target => new OrderIntegrationTarget
+                {
+                    Id = target.Id,
+                    DisplayName = target.DisplayName,
+                    Address = target.Address,
+                    Enabled = target.Enabled,
+                    IsLocal = target.IsLocal
+                }).ToList() ?? new List<OrderIntegrationTarget>()
+            };
+
+            NormalizeAfterLoad(reset);
+            return reset;
+        }
+
         internal static bool ShouldPromptCameraBarcodeUpgrade(AppConfig config)
         {
             return config != null

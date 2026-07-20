@@ -755,11 +755,6 @@ namespace ExpressPackingMonitoring.UI
                 MainVM.ShowToast("设置已保存并应用");
         }
 
-        private async void BtnApply_Click(object sender, RoutedEventArgs e)
-        {
-            await SaveAndApplyAsync();
-        }
-
         private async Task<bool> SaveAndApplyAsync()
         {
             Keyboard.ClearFocus();
@@ -864,6 +859,56 @@ namespace ExpressPackingMonitoring.UI
                 }
             }
             return applied;
+        }
+
+        private async void ResetDefaults_Click(object sender, RoutedEventArgs e)
+        {
+            if (MainVM.IsRecording)
+            {
+                MessageBox.Show(
+                    AppLanguage.Get("Settings.ResetDefaultsRecordingBlocked"),
+                    AppLanguage.Get("恢复默认设置"),
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
+            }
+
+            MessageBoxResult confirmed = MessageBox.Show(
+                AppLanguage.Get("Settings.ResetDefaultsConfirm"),
+                AppLanguage.Get("恢复默认设置"),
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (confirmed != MessageBoxResult.Yes)
+                return;
+
+            AppConfig reset = AppConfig.CreateDefaultsPreservingRuntimeIdentity(MainVM.Config);
+            if (!await MainVM.ApplySettingsAsync(reset))
+            {
+                MainVM.ShowToast(AppLanguage.Get("Settings.ResetDefaultsFailed"));
+                return;
+            }
+
+            ApplyAutoStart(reset.AutoStartOnBoot);
+            ReloadFromRuntime();
+            MessageBoxResult restart = MessageBox.Show(
+                AppLanguage.Get("Settings.ResetDefaultsRestartPrompt"),
+                AppLanguage.Get("RestartRequired"),
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information);
+            if (restart == MessageBoxResult.Yes)
+            {
+                if (!global::ExpressPackingMonitoring.WorkstationNetwork.TryRestartApplication("settings-defaults-reset"))
+                {
+                    MessageBox.Show(
+                        AppLanguage.Get("Settings.RestartFailed"),
+                        AppLanguage.Get("RestartRequired"),
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+                return;
+            }
+
+            MainVM.ShowToast(AppLanguage.Get("Settings.ResetDefaultsSaved"));
         }
 
         private bool ValidateCameraIdleNoSleepPeriods()

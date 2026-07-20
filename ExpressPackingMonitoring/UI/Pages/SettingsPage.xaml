@@ -715,7 +715,7 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Margin="24">
+    <Grid Margin="24" MaxWidth="910" HorizontalAlignment="Center">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
@@ -2778,7 +2778,7 @@
                                                  IsIndeterminate="True"
                                                  Foreground="{DynamicResource AccentBlue}"/>
 
-                                    <Grid Style="{StaticResource SettingRowLastStyle}"
+                                    <Grid Style="{StaticResource SettingRowStyle}"
                                         ToolTip="清除已保存的显卡编码检测结果，下次重新判断可用编码器">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -2795,6 +2795,24 @@
                                                 Command="{Binding MainVM.ResetEncoderDetectCommand}"
                                                 Style="{StaticResource SecondaryButtonStyle}"
                                                 HorizontalAlignment="Left"/>
+                                    </Grid>
+                                    <Grid Style="{StaticResource SettingRowLastStyle}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="24"/>
+                                            <ColumnDefinition Width="260"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="恢复默认设置" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="恢复常用设置，保留配对、安全、存储位置、订单目标和历史数据"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="2"
+                                                Content="恢复默认"
+                                                Click="ResetDefaults_Click"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                HorizontalAlignment="Left"
+                                                Focusable="False"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>
@@ -2907,9 +2925,8 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <UniformGrid Grid.Column="1" Rows="1" Columns="3" Width="330">
-                    <Button Content="保存设置" Margin="0,0,10,0" Click="BtnOk_Click" Style="{StaticResource SettingsFooterPrimaryButtonStyle}"/>
-                    <Button Content="应用" Margin="0,0,10,0" Click="BtnApply_Click" Style="{StaticResource SettingsFooterSecondaryButtonStyle}"/>
+                <UniformGrid Grid.Column="1" Rows="1" Columns="2" Width="260">
+                    <Button Content="保存并应用" Margin="0,0,10,0" Click="BtnOk_Click" Style="{StaticResource SettingsFooterPrimaryButtonStyle}"/>
                     <Button Content="恢复已保存" Click="BtnCancel_Click" Style="{StaticResource SettingsFooterSecondaryButtonStyle}"/>
                 </UniformGrid>
             </Grid>
