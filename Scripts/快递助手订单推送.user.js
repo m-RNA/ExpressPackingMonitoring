@@ -661,7 +661,7 @@
             GM_xmlhttpRequest({
                 method: 'POST',
                 url: `${getBaseUrl(address.host, address.port)}/api/orderinfo`,
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json; charset=utf-8' },
                 data: JSON.stringify(orders),
                 timeout: 5000,
                 onload: res => resolve({
@@ -711,7 +711,7 @@
             GM_xmlhttpRequest({
                 method: method,
                 url: url,
-                headers: data ? { 'Content-Type': 'application/json' } : undefined,
+                headers: data ? { 'Content-Type': 'application/json; charset=utf-8' } : undefined,
                 data: data ? JSON.stringify(data) : undefined,
                 timeout: timeout || 3000,
                 onload: res => resolve({ status: res.status, body: parseJsonResponse(res.responseText) }),
