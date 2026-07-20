@@ -1,6 +1,7 @@
 using ExpressPackingMonitoring.Config;
 using ExpressPackingMonitoring.Input;
 using ExpressPackingMonitoring.Services;
+using ExpressPackingMonitoring.UI.Components;
 using ExpressPackingMonitoring.ViewModels;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
@@ -24,6 +25,7 @@ public partial class PcRecordingPage : UserControl, IDisposable
     private readonly MainViewModel _runtime;
     private readonly DispatcherTimer _capsCheckTimer;
     private readonly DispatcherTimer _scanAutoSubmitTimer;
+    private readonly StatisticsPanel _statisticsPanel;
     private readonly List<double> _scanInputIntervalsMs = new();
     private Window? _hostWindow;
     private bool _capsLockStateBeforeFocus;
@@ -40,6 +42,8 @@ public partial class PcRecordingPage : UserControl, IDisposable
         _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         InitializeComponent();
         DataContext = runtime;
+        _statisticsPanel = new StatisticsPanel(runtime.Database);
+        StatisticsContentHost.Content = _statisticsPanel;
 
         BtnMobileConnection.Click += BtnMobileConnection_Click;
         BtnMobileConnection.PreviewMouseLeftButtonUp += BtnMobileConnection_PreviewMouseLeftButtonUp;
@@ -48,6 +52,7 @@ public partial class PcRecordingPage : UserControl, IDisposable
         _scanAutoSubmitTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(220) };
         _scanAutoSubmitTimer.Tick += ScanAutoSubmitTimer_Tick;
         Loaded += PcRecordingPage_Loaded;
+        SizeChanged += PcRecordingPage_SizeChanged;
         VideoImage.SizeChanged += (_, _) => UpdateCameraOverlays();
         _runtime.PropertyChanged += Runtime_PropertyChanged;
         RefreshState();
@@ -243,6 +248,23 @@ public partial class PcRecordingPage : UserControl, IDisposable
     }
 
     private void BtnSettings_Click(object sender, RoutedEventArgs e) => RequestModule(AppModules.Settings);
+
+    private void BtnStats_Click(object sender, RoutedEventArgs e)
+    {
+        StatisticsOverlay.Visibility = Visibility.Visible;
+        _statisticsPanel.Refresh();
+    }
+
+    private void CloseStats_Click(object sender, RoutedEventArgs e) => StatisticsOverlay.Visibility = Visibility.Collapsed;
+
+    private void PcRecordingPage_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        bool compact = e.NewSize.Width < 920;
+        RecordingSidebar.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        RecordingSidebarColumn.Width = compact ? new GridLength(0) : new GridLength(360);
+        RecordingMainColumn.Margin = compact ? new Thickness(0) : new Thickness(0, 0, 24, 0);
+        RecordingLayout.Margin = compact ? new Thickness(14) : new Thickness(24);
+    }
 
     private void BtnMobileConnection_Click(object sender, RoutedEventArgs e)
     {

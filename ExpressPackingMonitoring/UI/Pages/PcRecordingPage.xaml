@@ -76,14 +76,19 @@
             </Style.Triggers>
         </Style>
     </UserControl.Resources>
-        <Grid Margin="24">
+    <Grid>
+        <Grid x:Name="RecordingLayout" Margin="24">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="360"/>
+                <ColumnDefinition x:Name="RecordingSidebarColumn" Width="360"/>
             </Grid.ColumnDefinitions>
-            <Button x:Name="BtnTogglePcRecording" Grid.Column="1" Width="120" Height="34" HorizontalAlignment="Right" VerticalAlignment="Top" Panel.ZIndex="20" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Click="BtnTogglePcRecording_Click"/>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <Button x:Name="BtnTogglePcRecording" Grid.Row="0" Grid.ColumnSpan="2" Width="120" Height="34" Margin="0,0,0,10" HorizontalAlignment="Right" Panel.ZIndex="20" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Click="BtnTogglePcRecording_Click"/>
 
-            <Grid Grid.Column="0" Margin="0,0,24,0">
+            <Grid x:Name="RecordingMainColumn" Grid.Row="1" Grid.Column="0" Margin="0,0,24,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
@@ -435,7 +440,7 @@
                         </StackPanel>
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Style="{StaticResource ModernBtn}" Command="{Binding OpenStatsCommand}" Background="{DynamicResource ControlBackgroundHover}" BorderBrush="{DynamicResource BorderStrong}" BorderThickness="2" Width="120" Height="42" Margin="0,0,10,0">
+                            <Button Style="{StaticResource ModernBtn}" Click="BtnStats_Click" Background="{DynamicResource ControlBackgroundHover}" BorderBrush="{DynamicResource BorderStrong}" BorderThickness="2" Width="120" Height="42" Margin="0,0,10,0">
                                 <StackPanel Orientation="Horizontal">
                                     <Path Data="{StaticResource FluentDataIcon}" Width="18" Height="18" Stretch="Uniform" Fill="{DynamicResource AccentBlue}" Margin="0,0,7,0"/>
                                     <TextBlock Text="数据" Foreground="{DynamicResource TextPrimary}"/>
@@ -458,7 +463,7 @@
                 </Border>
             </Grid>
 
-            <Border Grid.Column="1" Background="{DynamicResource PanelBackground}" CornerRadius="10" Padding="16,12">
+            <Border x:Name="RecordingSidebar" Grid.Row="1" Grid.Column="1" Background="{DynamicResource PanelBackground}" CornerRadius="10" Padding="16,12">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -744,4 +749,21 @@
                 </Grid>
             </Border>
         </Grid>
+
+        <Grid x:Name="StatisticsOverlay" Visibility="Collapsed" Panel.ZIndex="100" Background="#99000000">
+            <Border Margin="32" CornerRadius="12" Background="{DynamicResource WindowBackground}" BorderBrush="{DynamicResource BorderStrong}" BorderThickness="1">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Margin="20,14,14,10">
+                        <TextBlock Text="打包数据分析" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
+                        <Button Content="关闭" Width="76" Height="34" HorizontalAlignment="Right" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Click="CloseStats_Click"/>
+                    </Grid>
+                    <ContentControl x:Name="StatisticsContentHost" Grid.Row="1"/>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
 </UserControl>

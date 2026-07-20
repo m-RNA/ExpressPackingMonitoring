@@ -19,19 +19,25 @@ public partial class MobileBackupSetupWindow : Window
         LanText.Text = string.IsNullOrWhiteSpace(accessAddress)
             ? "局域网服务尚未取得有效地址。可以先完成配置，稍后在此页面重试二维码"
             : $"电脑地址：http://{accessAddress}  访问密钥会安全写入二维码";
+        if (MobileConnectionService.TryBuildUsableAccessUrl(
+                _accessAddress,
+                _config.RequireWebAccessKey,
+                _config.WebAccessKey,
+                out string url))
+        {
+            AccessUrlTextBox.Text = url;
+            QrCodeImage.Source = MobileConnectionService.CreateQrBitmap(url, 180);
+            QrUnavailableText.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            AccessUrlTextBox.Text = "局域网服务尚未准备完成";
+            QrCodeImage.Source = null;
+            QrUnavailableText.Visibility = Visibility.Visible;
+        }
     }
 
     private void Download_Click(object sender, RoutedEventArgs e) => WorkstationNetwork.OpenUrl(GlobalOnboardingWindow.MobileDownloadUrl);
-
-    private void Qr_Click(object sender, RoutedEventArgs e)
-    {
-        if (!MobileConnectionService.TryBuildUsableAccessUrl(_accessAddress, _config.RequireWebAccessKey, _config.WebAccessKey, out string url))
-        {
-            MessageBox.Show(this, "暂时没有可用的局域网地址，请检查网络、端口和防火墙后重试", "无法显示二维码", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-        new MobileConnectionWindow(url, _config.RequireWebAccessKey) { Owner = this }.ShowDialog();
-    }
 
     private void Finish_Click(object sender, RoutedEventArgs e) => DialogResult = true;
 }

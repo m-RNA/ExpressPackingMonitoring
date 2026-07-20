@@ -100,6 +100,7 @@ namespace ExpressPackingMonitoring.UI
                     (DataContext as MainViewModel)?.RunStartupSetupFlowsIfNeeded(this);
                     string startupModule = Application.Current.Properties["StartupModule"] as string ?? Shell.CurrentModule;
                     ShowModule(startupModule);
+                    UpdateResponsiveLayout(ActualWidth);
                 }), DispatcherPriority.ContextIdle);
             };
             SourceInitialized += (_, __) =>
@@ -148,6 +149,8 @@ namespace ExpressPackingMonitoring.UI
             OrderIntegrationModule.Visibility = module == AppModules.OrderIntegration ? Visibility.Visible : Visibility.Collapsed;
             VideoLibraryModule.Visibility = module == AppModules.VideoLibrary ? Visibility.Visible : Visibility.Collapsed;
             SettingsModule.Visibility = module == AppModules.Settings ? Visibility.Visible : Visibility.Collapsed;
+            ShellModuleTitle.Text = GetModuleDisplayName(module);
+            UpdateNavigationState(module);
 
             if (module == AppModules.VideoLibrary)
                 _ = _videoLibraryPage.RefreshAsync();
@@ -226,9 +229,16 @@ namespace ExpressPackingMonitoring.UI
             OverviewPcStatus.Text = GetModuleStatus(viewModel.Config.PcRecordingSetupVersion, viewModel.Config.EnablePcCameraRecording, AppConfig.CurrentPcRecordingSetupVersion);
             OverviewMobileStatus.Text = GetModuleStatus(viewModel.Config.MobileBackupSetupVersion, viewModel.Config.EnableMobileBackup, AppConfig.CurrentMobileBackupSetupVersion);
             OverviewOrderStatus.Text = GetModuleStatus(viewModel.Config.OrderIntegrationSetupVersion, viewModel.Config.EnableOrderIntegration, AppConfig.CurrentOrderIntegrationSetupVersion);
+            OverviewPcAction.Content = GetModuleActionText(viewModel.Config.PcRecordingSetupVersion, AppConfig.CurrentPcRecordingSetupVersion);
+            OverviewMobileAction.Content = GetModuleActionText(viewModel.Config.MobileBackupSetupVersion, AppConfig.CurrentMobileBackupSetupVersion);
+            OverviewOrderAction.Content = GetModuleActionText(viewModel.Config.OrderIntegrationSetupVersion, AppConfig.CurrentOrderIntegrationSetupVersion);
             ShellLanStatusText.Text = string.IsNullOrWhiteSpace(viewModel.MonitorAccessAddress)
                 ? "局域网服务准备中"
                 : $"局域网  {viewModel.MonitorAccessAddress}\n{viewModel.ConnectedDeviceText}";
+            ShellConnectedStatusText.Text = viewModel.ConnectedDeviceText;
+            ShellAddressStatusText.Text = string.IsNullOrWhiteSpace(viewModel.MonitorAccessAddress)
+                ? "局域网服务准备中"
+                : viewModel.MonitorAccessAddress;
             ShellVersionText.Text = $"版本 {AppVersion.Current}";
             _pcRecordingPage.RefreshState();
             _runtimeHost.MobileBackup.Refresh();
@@ -236,6 +246,42 @@ namespace ExpressPackingMonitoring.UI
 
         private static string GetModuleStatus(int setupVersion, bool enabled, int currentVersion) =>
             setupVersion < currentVersion ? "未配置" : enabled ? "运行正常" : "已暂停";
+
+        private static string GetModuleActionText(int setupVersion, int currentVersion) =>
+            setupVersion < currentVersion ? "开始配置" : "打开";
+
+        private static string GetModuleDisplayName(string module) => module switch
+        {
+            AppModules.PcRecording => "电脑录像",
+            AppModules.MobileBackup => "手机备份",
+            AppModules.OrderIntegration => "订单联动",
+            AppModules.VideoLibrary => "录像库",
+            AppModules.Settings => "设置",
+            _ => "概览"
+        };
+
+        private void UpdateNavigationState(string activeModule)
+        {
+            foreach (Button button in new[] { NavOverview, NavPcRecording, NavMobileBackup, NavOrderIntegration, NavVideoLibrary, NavSettings })
+            {
+                bool active = string.Equals(button.Tag as string, activeModule, StringComparison.Ordinal);
+                button.Style = FindResource(active ? "PrimaryButtonStyle" : "SecondaryButtonStyle") as Style;
+                button.HorizontalContentAlignment = HorizontalAlignment.Left;
+                button.Padding = new Thickness(16, 0, 16, 0);
+            }
+        }
+
+        private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateResponsiveLayout(e.NewSize.Width);
+
+        private void UpdateResponsiveLayout(double width)
+        {
+            if (NavigationColumn == null) return;
+            bool compact = width < 1080;
+            NavigationColumn.Width = new GridLength(width < 860 ? 148 : compact ? 176 : 224);
+            ShellBrandSubtitle.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+            ShellBrandPanel.Margin = compact ? new Thickness(4, 0, 4, 16) : new Thickness(8, 0, 8, 24);
+            OverviewCardsGrid.Columns = width < 1040 ? 1 : 3;
+        }
 
         private static AppConfig CloneConfig(AppConfig config) =>
             JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(config)) ?? new AppConfig();

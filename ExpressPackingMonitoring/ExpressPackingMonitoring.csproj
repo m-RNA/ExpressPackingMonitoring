@@ -127,13 +127,11 @@
     <Compile Include="ViewModels\MobileBackupViewModel.cs" />
     <Compile Include="ViewModels\OrderIntegrationViewModel.cs" />
     <Compile Include="UI\ConfirmDialog.xaml.cs" />
-    <Compile Include="UI\CameraBarcodeUpgradeDialog.xaml.cs" />
     <Compile Include="UI\DriveSelectionDialog.cs" />
     <Compile Include="UI\FirstUseSetupWizardWindow.xaml.cs" />
     <Compile Include="UI\GlobalOnboardingWindow.xaml.cs" />
     <Compile Include="UI\MainWindow.xaml.cs" />
     <Compile Include="UI\MarkdownFlowDocumentRenderer.cs" />
-    <Compile Include="UI\MobileConnectionWindow.xaml.cs" />
     <Compile Include="UI\MobileBackupSetupWindow.xaml.cs" />
     <Compile Include="UI\Pages\MobileBackupPage.xaml.cs" />
     <Compile Include="UI\Pages\OrderIntegrationPage.xaml.cs" />
@@ -141,13 +139,11 @@
     <Compile Include="UI\OrderIntegrationSetupWindow.xaml.cs" />
     <Compile Include="UI\Pages\VideoLibraryPage.xaml.cs" />
     <Compile Include="UI\Pages\SettingsPage.xaml.cs" />
-    <Compile Include="UI\StatisticsWindow.xaml.cs" />
+    <Compile Include="UI\Components\StatisticsPanel.xaml.cs" />
     <Compile Include="UI\UpdateAvailableDialog.xaml.cs" />
     <Compile Include="Workstations\PrintToolInstallGuide.cs" />
     <Compile Include="Workstations\WorkstationInstanceCoordinator.cs" />
-    <Compile Include="Workstations\PrintWorkstationWindow.xaml.cs" />
     <Compile Include="Workstations\WorkstationLauncher.cs" />
-    <Compile Include="Workstations\WorkstationSelectionWindow.xaml.cs" />
   </ItemGroup>
 
   <!-- 排除不需要的 OpenCV 内置 ffmpeg（已使用独立 ffmpeg.exe 管道录制） -->

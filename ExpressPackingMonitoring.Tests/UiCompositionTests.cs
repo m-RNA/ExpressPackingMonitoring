@@ -19,10 +19,18 @@ public class UiCompositionTests
         Assert.Contains("SettingsContentHost", mainXaml);
         Assert.DoesNotContain("new SettingsWindow", mainViewModel);
         Assert.DoesNotContain("new PlaybackWindow", mainViewModel);
+        Assert.DoesNotContain("new MobileConnectionWindow", mainViewModel);
+        Assert.DoesNotContain("new StatisticsWindow", mainViewModel);
+        Assert.DoesNotContain("new WorkstationSelectionWindow", mainViewModel);
         Assert.False(File.Exists(Path.Combine(project, "UI", "SettingsWindow.xaml")));
         Assert.False(File.Exists(Path.Combine(project, "UI", "PlaybackWindow.xaml")));
+        Assert.False(File.Exists(Path.Combine(project, "UI", "MobileConnectionWindow.xaml")));
+        Assert.False(File.Exists(Path.Combine(project, "UI", "StatisticsWindow.xaml")));
+        Assert.False(File.Exists(Path.Combine(project, "Workstations", "PrintWorkstationWindow.xaml")));
+        Assert.False(File.Exists(Path.Combine(project, "Workstations", "WorkstationSelectionWindow.xaml")));
         Assert.DoesNotContain("ScanInputTextBox", mainXaml);
         Assert.True(File.Exists(Path.Combine(project, "UI", "Pages", "PcRecordingPage.xaml")));
+        Assert.True(File.Exists(Path.Combine(project, "UI", "Components", "StatisticsPanel.xaml")));
     }
 
     private static string FindRepositoryRoot()

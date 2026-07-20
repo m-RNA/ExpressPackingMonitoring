@@ -7,7 +7,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 
-namespace ExpressPackingMonitoring.UI
+namespace ExpressPackingMonitoring.UI.Components
 {
     public class ChartItem
     {
@@ -21,7 +21,7 @@ namespace ExpressPackingMonitoring.UI
         public Visibility LabelVisibility { get; set; } = Visibility.Visible;
     }
 
-    public partial class StatisticsWindow : Window, INotifyPropertyChanged
+    public partial class StatisticsPanel : UserControl, INotifyPropertyChanged
     {
         private VideoDatabase _db;
         private bool _isInternalUpdating = false; // 防止日期切换时触发多次刷新
@@ -41,7 +41,7 @@ namespace ExpressPackingMonitoring.UI
         private string _summaryAvgTime = "00:00";
         public string SummaryAvgTime { get => _summaryAvgTime; set { _summaryAvgTime = value; OnPropertyChanged(nameof(SummaryAvgTime)); } }
 
-        public StatisticsWindow(VideoDatabase db)
+        public StatisticsPanel(VideoDatabase db)
         {
             InitializeComponent();
             _db = db;
@@ -138,6 +138,8 @@ namespace ExpressPackingMonitoring.UI
             SummaryDuration = $"{(int)totalSec / 3600}h {((int)totalSec % 3600) / 60}m";
             SummaryAvgTime = totalPieces > 0 ? TimeSpan.FromSeconds(totalSec / totalPieces).ToString(@"mm\:ss") : "00:00";
         }
+
+        public void Refresh() => RefreshData();
 
         private void ApplyPreset(string tag)
         {

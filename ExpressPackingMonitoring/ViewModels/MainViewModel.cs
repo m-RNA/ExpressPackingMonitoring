@@ -231,7 +231,6 @@ namespace ExpressPackingMonitoring.ViewModels
         private bool _maxDurationWarned = false;
         private bool _pendingCameraRestart = false; // 录制中修改了摄像头配置，录制结束后重启
         private volatile bool _isEncoderDetectRunning = true; // 是否正在进行 GPU 编码器检测
-        private readonly string _activeWorkstationRole = WorkstationRoles.CameraMonitor;
         private string _workstationPrintStatusText = "快递单打印工位：未连接";
         private string _workstationStatusToolTip = "";
         private string _connectedDeviceText = "连接服务未开启";
@@ -512,10 +511,8 @@ namespace ExpressPackingMonitoring.ViewModels
         public ICommand OpenPlaybackCommand { get; }
         public ICommand ToggleModeCommand { get; }
         public ICommand ToggleRecordingCommand { get; }
-        public ICommand OpenStatsCommand { get; } // 打开统计面板
         public ICommand ResetEncoderDetectCommand { get; } // 重置编码器检测
         public ICommand CopyMonitorAddressCommand { get; }
-        public ICommand SwitchWorkstationCommand { get; }
         public event Action<string> ModuleNavigationRequested;
 
         public MainViewModel()
@@ -528,9 +525,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 OpenPlaybackCommand = new RelayCommand(() => { });
                 ToggleModeCommand = new RelayCommand(() => { });
                 ToggleRecordingCommand = new RelayCommand(() => { });
-                OpenStatsCommand = new RelayCommand(() => { });
                 CopyMonitorAddressCommand = new RelayCommand(() => { });
-                SwitchWorkstationCommand = new RelayCommand(() => { });
                 ClearScanInputCommand = new RelayCommand(() => { });
                 ClearSearchCommand = new RelayCommand(() => { });
                 return;
@@ -600,10 +595,8 @@ namespace ExpressPackingMonitoring.ViewModels
             OpenPlaybackCommand = new RelayCommand(OpenPlaybackWindow);
             ToggleModeCommand = new RelayCommand(ToggleMode);
             ToggleRecordingCommand = new RelayCommand(ToggleRecording);
-            OpenStatsCommand = new RelayCommand(OpenStatsWindow);
             ResetEncoderDetectCommand = new RelayCommand(ResetEncoderDetect);
             CopyMonitorAddressCommand = new RelayCommand(CopyMonitorAddress);
-            SwitchWorkstationCommand = new RelayCommand(SwitchWorkstation);
             ClearScanInputCommand = new RelayCommand(() => ScanInputText = "");
             ClearSearchCommand = new RelayCommand(() => LogSearchText = "");
             InitializeSystem();
@@ -1861,151 +1854,6 @@ namespace ExpressPackingMonitoring.ViewModels
                 RestartCamera();
         }
 
-        private async Task RunFirstUseSetupWizardIfNeededAsync(System.Windows.Window owner)
-        {
-            if (Config.FirstUseWizardCompleted || _isDisposed)
-                return;
-
-            bool pausedCamera = false;
-            try
-            {
-                _isSetupWizardActive = true;
-                if (!IsRecording)
-                {
-                    pausedCamera = StopCamera();
-                    if (!pausedCamera)
-                    {
-                        ShowToast("摄像头未能停止，暂时无法打开配置向导");
-                        return;
-                    }
-                }
-
-                var clonedConfig = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(Config)) ?? new AppConfig();
-                var wizard = new FirstUseSetupWizardWindow(clonedConfig) { Owner = owner };
-                MainWindow setupOwner = owner as MainWindow;
-                setupOwner?.SuspendCapsLockForModalWindow();
-
-                bool accepted;
-                try
-                {
-                    accepted = wizard.ShowDialog() == true;
-                }
-                finally
-                {
-                    setupOwner?.ResumeCapsLockAfterModalWindow();
-                }
-
-                if (!accepted)
-                    return;
-
-                AppConfig nextConfig = wizard.WasSkipped ? clonedConfig : wizard.ResultConfig;
-                AppConfig.ApplyFirstUseDefaults(nextConfig);
-                AppConfig.NormalizeAfterLoad(nextConfig);
-                if (!SaveConfig(nextConfig, notifyUser: true))
-                    return;
-                Config = nextConfig;
-                ResetCameraBarcodeRecognition();
-                ApplyGlobalKeyboardConfig();
-                if (_globalKeyHook != null)
-                {
-                    if (Config.EnableGlobalKeyboard)
-                        _globalKeyHook.Start();
-                    else
-                        _globalKeyHook.Stop();
-                }
-
-                if (Config.EnableWebServer)
-                {
-                    ShowToast("正在应用局域网服务设置...");
-                    bool webServerReady = await RestartWebServerAsync(allowAccessSetup: true);
-                    _webServerStartupTask = Task.FromResult(webServerReady);
-                    if (!webServerReady)
-                        return;
-                }
-
-                ShowToast(wizard.WasSkipped ? "已跳过配置向导" : "配置向导已完成");
-                ShowMobileConnectionSetupPromptIfReady(owner);
-            }
-            catch (Exception ex)
-            {
-                RuntimeLog.Error("SetupWizard", "First-use setup wizard failed", ex);
-                ShowToast($"配置向导错误: {ex.Message}");
-            }
-            finally
-            {
-                _isSetupWizardActive = false;
-                if (pausedCamera && !IsRecording && !_isDisposed)
-                {
-                    _consecutiveRestartFailures = 0;
-                    RestartCamera();
-                }
-            }
-        }
-
-        private void RunCameraBarcodeUpgradePromptIfNeeded(System.Windows.Window owner)
-        {
-            if (_isDisposed || !AppConfig.ShouldPromptCameraBarcodeUpgrade(Config))
-                return;
-
-            var dialog = new CameraBarcodeUpgradeDialog { Owner = owner };
-            bool enableRecognition = dialog.ShowDialog() == true;
-            var nextConfig = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(Config)) ?? new AppConfig();
-            AppConfig.ApplyCameraBarcodeUpgradeChoice(nextConfig, enableRecognition);
-            if (!SaveConfig(nextConfig, notifyUser: true))
-                return;
-
-            Config = nextConfig;
-            ResetCameraBarcodeRecognition();
-            RuntimeLog.Info("CameraBarcode", $"Upgrade choice saved enabled={Config.EnableCameraBarcodeRecognition}");
-            ShowToast(enableRecognition
-                ? "已启用摄像头识别面单"
-                : "已保留当前设置，可随时在设置中开启");
-        }
-
-        private async Task RunMobileConnectionSetupPromptIfNeededAsync(System.Windows.Window owner)
-        {
-            if (_isDisposed || !AppConfig.ShouldPromptMobileConnection(Config))
-                return;
-
-            Task<bool> startupTask = _webServerStartupTask;
-            if (startupTask != null)
-            {
-                bool webServerReady;
-                try
-                {
-                    webServerReady = await startupTask;
-                }
-                catch
-                {
-                    return;
-                }
-
-                if (!webServerReady)
-                    return;
-            }
-
-            ShowMobileConnectionSetupPromptIfReady(owner);
-        }
-
-        private void ShowMobileConnectionSetupPromptIfReady(System.Windows.Window owner)
-        {
-            if (!AppConfig.ShouldPromptMobileConnection(Config)
-                || !TryGetMobileConnectionUrl(out string url))
-            {
-                return;
-            }
-
-            ShowMobileConnectionWindow(owner, url);
-
-            var nextConfig = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(Config)) ?? new AppConfig();
-            AppConfig.MarkMobileConnectionSetupCompleted(nextConfig);
-            if (!SaveConfig(nextConfig, notifyUser: true))
-                return;
-
-            Config = nextConfig;
-            RuntimeLog.Info("MobileConnection", "Mobile connection setup prompt completed");
-        }
-
         public bool SuspendCameraForSetupWizard()
         {
             if (IsRecording || _isDisposed)
@@ -2028,13 +1876,6 @@ namespace ExpressPackingMonitoring.ViewModels
 
             _consecutiveRestartFailures = 0;
             RestartCamera();
-        }
-
-        private void OpenStatsWindow()
-        {
-            var statsWin = new StatisticsWindow(_db);
-            if (Application.Current?.MainWindow != null) statsWin.Owner = Application.Current.MainWindow;
-            statsWin.ShowDialog();
         }
 
         private void OpenPlaybackWindow()
@@ -2541,38 +2382,6 @@ namespace ExpressPackingMonitoring.ViewModels
                 : "";
         }
 
-        public void ShowMobileConnection(System.Windows.Window owner = null)
-        {
-            string unavailableMessage = GetMobileConnectionUnavailableMessage();
-            string url = "";
-            if (string.IsNullOrEmpty(unavailableMessage))
-                TryGetMobileConnectionUrl(out url);
-
-            var dialogOwner = owner ?? Application.Current?.MainWindow;
-            var dialog = new MobileConnectionWindow(
-                url,
-                Config.RequireWebAccessKey,
-                unavailableMessage,
-                canOpenSettings: true)
-            {
-                Owner = dialogOwner
-            };
-
-            MainWindow mainWindow = Application.Current?.MainWindow as MainWindow;
-            mainWindow?.SuspendCapsLockForModalWindow();
-            try
-            {
-                dialog.ShowDialog();
-            }
-            finally
-            {
-                mainWindow?.ResumeCapsLockAfterModalWindow();
-            }
-
-            if (dialog.OpenSettingsRequested)
-                OpenSettings();
-        }
-
         public void CopyMobileConnectionUrl()
         {
             if (!TryGetMobileConnectionUrl(out string url))
@@ -2591,21 +2400,6 @@ namespace ExpressPackingMonitoring.ViewModels
             catch (Exception ex)
             {
                 ShowToast($"复制网址失败: {ex.Message}");
-            }
-        }
-
-        private void ShowMobileConnectionWindow(System.Windows.Window owner, string url)
-        {
-            var dialog = new MobileConnectionWindow(url, Config.RequireWebAccessKey) { Owner = owner };
-            MainWindow mainWindow = Application.Current?.MainWindow as MainWindow;
-            mainWindow?.SuspendCapsLockForModalWindow();
-            try
-            {
-                dialog.ShowDialog();
-            }
-            finally
-            {
-                mainWindow?.ResumeCapsLockAfterModalWindow();
             }
         }
 
@@ -2637,38 +2431,6 @@ namespace ExpressPackingMonitoring.ViewModels
             }
 
             return "";
-        }
-
-        public void SwitchWorkstation()
-        {
-            var selector = new WorkstationSelectionWindow { Owner = Application.Current?.MainWindow };
-            if (selector.ShowDialog() == true && !string.IsNullOrWhiteSpace(selector.SelectedRole))
-            {
-                if (string.Equals(_activeWorkstationRole, selector.SelectedRole, StringComparison.OrdinalIgnoreCase))
-                {
-                    if (!string.Equals(Config.WorkstationRole, _activeWorkstationRole, StringComparison.OrdinalIgnoreCase))
-                    {
-                        string currentRoleBeforeSave = Config.WorkstationRole;
-                        Config.WorkstationRole = _activeWorkstationRole;
-                        if (!SaveConfig(notifyUser: true))
-                        {
-                            Config.WorkstationRole = currentRoleBeforeSave;
-                            return;
-                        }
-                    }
-                    ShowToast($"当前已经是{WorkstationRoles.GetDisplayName(_activeWorkstationRole)}");
-                    return;
-                }
-
-                string previousRole = Config.WorkstationRole;
-                Config.WorkstationRole = selector.SelectedRole;
-                if (!SaveConfig(notifyUser: true))
-                {
-                    Config.WorkstationRole = previousRole;
-                    return;
-                }
-                WorkstationNetwork.AskRestart(Application.Current?.MainWindow);
-            }
         }
 
         /// <summary>收到油猴脚本推送的订单信息时，提前生成 TTS 缓存</summary>

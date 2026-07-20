@@ -591,4 +591,6 @@
   <data name="恢复已保存" xml:space="preserve"><value>Restore saved</value></data>
   <data name="设置已保存并应用" xml:space="preserve"><value>Settings saved and applied</value></data>
   <data name="已恢复为上次保存的设置" xml:space="preserve"><value>Restored the last saved settings</value></data>
+  <data name="开始配置" xml:space="preserve"><value>Start setup</value></data>
+  <data name="打包数据分析" xml:space="preserve"><value>Packing analytics</value></data>
 </root>
