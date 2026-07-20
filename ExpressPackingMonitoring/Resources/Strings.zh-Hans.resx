@@ -532,4 +532,26 @@
   <data name="订单信息可以同时发送到当前电脑和多台远程录像/备份电脑" xml:space="preserve"><value>订单信息可以同时发送到当前电脑和多台远程录像/备份电脑</value></data><data name="当前电脑接收订单信息" xml:space="preserve"><value>当前电脑接收订单信息</value></data><data name="远程目标" xml:space="preserve"><value>远程目标</value></data>
   <data name="启用" xml:space="preserve"><value>启用</value></data><data name="名称" xml:space="preserve"><value>名称</value></data><data name="地址（IP:端口）" xml:space="preserve"><value>地址（IP:端口）</value></data><data name="添加目标" xml:space="preserve"><value>添加目标</value></data><data name="删除" xml:space="preserve"><value>删除</value></data><data name="测试连接" xml:space="preserve"><value>测试连接</value></data>
   <data name="安装或更新油猴脚本" xml:space="preserve"><value>安装或更新油猴脚本</value></data><data name="保存配置" xml:space="preserve"><value>保存配置</value></data><data name="始终开启" xml:space="preserve"><value>始终开启</value></data>
+  <data name="手机独立录像，电脑负责接收、校验并统一保存到录像库" xml:space="preserve"><value>手机独立录像，电脑负责接收、校验并统一保存到录像库</value></data>
+  <data name="重新运行向导" xml:space="preserve"><value>重新运行向导</value></data>
+  <data name="连接这台电脑" xml:space="preserve"><value>连接这台电脑</value></data>
+  <data name="二维码暂不可用" xml:space="preserve"><value>二维码暂不可用</value></data>
+  <data name="局域网设置" xml:space="preserve"><value>局域网设置</value></data>
+  <data name="手机设备" xml:space="preserve"><value>手机设备</value></data>
+  <data name="手机 APP 连接后将在这里显示设备名称" xml:space="preserve"><value>手机 APP 连接后将在这里显示设备名称</value></data>
+  <data name="上传与校验" xml:space="preserve"><value>上传与校验</value></data>
+  <data name="最近手机录像" xml:space="preserve"><value>最近手机录像</value></data>
+  <data name="进入录像库" xml:space="preserve"><value>进入录像库</value></data>
+  <data name="本机和多台远程电脑可以同时接收留言、备注、商品与退款信息" xml:space="preserve"><value>本机和多台远程电脑可以同时接收留言、备注、商品与退款信息</value></data>
+  <data name="接收目标" xml:space="preserve"><value>接收目标</value></data>
+  <data name="测试结果" xml:space="preserve"><value>测试结果</value></data>
+  <data name="删除所选" xml:space="preserve"><value>删除所选</value></data>
+  <data name="测试所选" xml:space="preserve"><value>测试所选</value></data>
+  <data name="保存目标" xml:space="preserve"><value>保存目标</value></data>
+  <data name="油猴脚本" xml:space="preserve"><value>油猴脚本</value></data>
+  <data name="安装页会写入当前启用的全部目标，不再逐个 IP 嗅探" xml:space="preserve"><value>安装页会写入当前启用的全部目标，不再逐个 IP 嗅探</value></data>
+  <data name="联动测试" xml:space="preserve"><value>联动测试</value></data>
+  <data name="向所有启用目标发送测试订单，并分别显示是否确认收到" xml:space="preserve"><value>向所有启用目标发送测试订单，并分别显示是否确认收到</value></data>
+  <data name="发送测试订单" xml:space="preserve"><value>发送测试订单</value></data>
+  <data name="最近收到的订单" xml:space="preserve"><value>最近收到的订单</value></data>
 </root>

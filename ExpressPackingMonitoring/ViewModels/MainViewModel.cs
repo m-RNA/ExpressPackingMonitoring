@@ -42,6 +42,8 @@ namespace ExpressPackingMonitoring.ViewModels
         private readonly string _dbFilePath = AppPaths.VideoDatabasePath;
         private VideoDatabase _db;
 
+        internal VideoDatabase Database => _db;
+
         /// <summary>启动时缓存的可用 GPU 编码器列表</summary>
         public static List<GpuEncoderOption> CachedEncoderOptions { get; private set; }
 
@@ -2501,6 +2503,9 @@ namespace ExpressPackingMonitoring.ViewModels
             ConnectedDeviceToolTip = string.Join("\n", details);
         }
 
+        internal IReadOnlyList<ConnectedClientInfo> GetConnectedClientsSnapshot() =>
+            _webServer?.GetConnectedClients() ?? Array.Empty<ConnectedClientInfo>();
+
         private void SetConnectedDeviceUnavailable(string text, string tooltip)
         {
             HasConnectedDevices = false;
@@ -2630,7 +2635,7 @@ namespace ExpressPackingMonitoring.ViewModels
             }
         }
 
-        private bool TryGetMobileConnectionUrl(out string url)
+        internal bool TryGetMobileConnectionUrl(out string url)
         {
             url = "";
             return Config.EnableWebServer

@@ -11,6 +11,7 @@ using ExpressPackingMonitoring.Localization;
 using ExpressPackingMonitoring.ViewModels;
 using ExpressPackingMonitoring.Services;
 using System.Text.Json;
+using ExpressPackingMonitoring.UI.Pages;
 
 namespace ExpressPackingMonitoring.UI
 {
@@ -123,6 +124,21 @@ namespace ExpressPackingMonitoring.UI
             Shell = new MainShellViewModel(initialModule);
             InitializeComponent();
             DataContext = _runtimeHost.Main;
+            var mobileBackupPage = new MobileBackupPage { DataContext = _runtimeHost.MobileBackup };
+            mobileBackupPage.SetupRequested += (_, _) =>
+            {
+                if (ConfigureMobileBackup(_runtimeHost.Main)) _runtimeHost.MobileBackup.Refresh();
+            };
+            mobileBackupPage.SettingsRequested += (_, _) => ShowModule(AppModules.Settings);
+            mobileBackupPage.VideoLibraryRequested += (_, _) => ShowModule(AppModules.VideoLibrary);
+            MobileBackupContentHost.Content = mobileBackupPage;
+
+            var orderIntegrationPage = new OrderIntegrationPage { DataContext = _runtimeHost.OrderIntegration };
+            orderIntegrationPage.SetupRequested += (_, _) =>
+            {
+                if (ConfigureOrderIntegration(_runtimeHost.Main)) _runtimeHost.OrderIntegration.ReloadTargets();
+            };
+            OrderIntegrationContentHost.Content = orderIntegrationPage;
             if (CameraBarcodeRuntimeOptions.ShadowMode)
             {
                 RuntimeLog.Warn(
@@ -299,7 +315,7 @@ namespace ExpressPackingMonitoring.UI
 
         private void ExecuteMobileConnection()
         {
-            if (DataContext is MainViewModel viewModel) viewModel.ShowMobileConnection(this);
+            ShowModule(AppModules.MobileBackup);
         }
 
         private void NavigationButton_Click(object sender, RoutedEventArgs e)
@@ -411,16 +427,6 @@ namespace ExpressPackingMonitoring.UI
             return viewModel.ApplyModuleConfiguration(result);
         }
 
-        private void BtnConfigureMobileBackup_Click(object sender, RoutedEventArgs e)
-        {
-            if (DataContext is MainViewModel viewModel && ConfigureMobileBackup(viewModel)) RefreshModuleStates();
-        }
-
-        private void BtnConfigureOrderIntegration_Click(object sender, RoutedEventArgs e)
-        {
-            if (DataContext is MainViewModel viewModel && ConfigureOrderIntegration(viewModel)) RefreshModuleStates();
-        }
-
         private void BtnTogglePcRecording_Click(object sender, RoutedEventArgs e)
         {
             if (DataContext is not MainViewModel viewModel) return;
@@ -432,18 +438,6 @@ namespace ExpressPackingMonitoring.UI
             ToggleModule(viewModel, AppModules.PcRecording, !viewModel.Config.EnablePcCameraRecording);
         }
 
-        private void BtnToggleMobileBackup_Click(object sender, RoutedEventArgs e)
-        {
-            if (DataContext is MainViewModel viewModel)
-                ToggleModule(viewModel, AppModules.MobileBackup, !viewModel.Config.EnableMobileBackup);
-        }
-
-        private void BtnToggleOrderIntegration_Click(object sender, RoutedEventArgs e)
-        {
-            if (DataContext is MainViewModel viewModel)
-                ToggleModule(viewModel, AppModules.OrderIntegration, !viewModel.Config.EnableOrderIntegration);
-        }
-
         private void ToggleModule(MainViewModel viewModel, string module, bool enabled)
         {
             AppConfig result = CloneConfig(viewModel.Config);
@@ -452,8 +446,6 @@ namespace ExpressPackingMonitoring.UI
             if (module == AppModules.OrderIntegration) result.EnableOrderIntegration = enabled;
             if (viewModel.ApplyModuleConfiguration(result)) RefreshModuleStates();
         }
-
-        private void BtnDownloadMobileApp_Click(object sender, RoutedEventArgs e) => WorkstationNetwork.OpenUrl(GlobalOnboardingWindow.MobileDownloadUrl);
 
         private void BtnOpenVideoLibrary_Click(object sender, RoutedEventArgs e)
         {
@@ -467,19 +459,12 @@ namespace ExpressPackingMonitoring.UI
             OverviewPcStatus.Text = GetModuleStatus(viewModel.Config.PcRecordingSetupVersion, viewModel.Config.EnablePcCameraRecording, AppConfig.CurrentPcRecordingSetupVersion);
             OverviewMobileStatus.Text = GetModuleStatus(viewModel.Config.MobileBackupSetupVersion, viewModel.Config.EnableMobileBackup, AppConfig.CurrentMobileBackupSetupVersion);
             OverviewOrderStatus.Text = GetModuleStatus(viewModel.Config.OrderIntegrationSetupVersion, viewModel.Config.EnableOrderIntegration, AppConfig.CurrentOrderIntegrationSetupVersion);
-            MobileBackupStateText.Text = $"状态：{OverviewMobileStatus.Text}";
-            OrderIntegrationStateText.Text = $"状态：{OverviewOrderStatus.Text}";
-            OrderTargetsList.ItemsSource = viewModel.Config.OrderIntegrationTargets
-                .Where(t => t.Enabled)
-                .Select(t => $"{t.DisplayName}  ·  {(t.IsLocal ? "当前电脑" : t.Address)}")
-                .ToList();
             ShellLanStatusText.Text = string.IsNullOrWhiteSpace(viewModel.MonitorAccessAddress)
                 ? "局域网服务准备中"
                 : $"局域网  {viewModel.MonitorAccessAddress}\n{viewModel.ConnectedDeviceText}";
             ShellVersionText.Text = $"版本 {AppVersion.Current}";
             BtnTogglePcRecording.Content = viewModel.Config.EnablePcCameraRecording ? "暂停电脑录像" : "恢复电脑录像";
-            BtnToggleMobileBackup.Content = viewModel.Config.EnableMobileBackup ? "暂停备份" : "恢复备份";
-            BtnToggleOrderIntegration.Content = viewModel.Config.EnableOrderIntegration ? "暂停订单联动" : "恢复订单联动";
+            _runtimeHost.MobileBackup.Refresh();
         }
 
         private static string GetModuleStatus(int setupVersion, bool enabled, int currentVersion) =>

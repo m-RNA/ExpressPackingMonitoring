@@ -111,6 +111,7 @@
     <Compile Include="Services\AppRuntimeHost.cs" />
     <Compile Include="Services\CameraBarcodeRecognitionService.cs" />
     <Compile Include="Services\ConnectedClientRegistry.cs" />
+    <Compile Include="Services\DashboardDataService.cs" />
     <Compile Include="Services\MobileConnectionService.cs" />
     <Compile Include="Services\MobileBackupService.cs" />
     <Compile Include="Services\MobileOrderReceiverRegistry.cs" />
@@ -123,6 +124,8 @@
     <Compile Include="ViewModels\MainViewModel.Encoder.cs" />
     <Compile Include="ViewModels\MainViewModel.Recording.cs" />
     <Compile Include="ViewModels\MainShellViewModel.cs" />
+    <Compile Include="ViewModels\MobileBackupViewModel.cs" />
+    <Compile Include="ViewModels\OrderIntegrationViewModel.cs" />
     <Compile Include="UI\ConfirmDialog.xaml.cs" />
     <Compile Include="UI\CameraBarcodeUpgradeDialog.xaml.cs" />
     <Compile Include="UI\DriveSelectionDialog.cs" />
@@ -132,6 +135,8 @@
     <Compile Include="UI\MarkdownFlowDocumentRenderer.cs" />
     <Compile Include="UI\MobileConnectionWindow.xaml.cs" />
     <Compile Include="UI\MobileBackupSetupWindow.xaml.cs" />
+    <Compile Include="UI\Pages\MobileBackupPage.xaml.cs" />
+    <Compile Include="UI\Pages\OrderIntegrationPage.xaml.cs" />
     <Compile Include="UI\OrderIntegrationSetupWindow.xaml.cs" />
     <Compile Include="UI\PlaybackWindow.xaml.cs" />
     <Compile Include="UI\SettingsWindow.xaml.cs" />

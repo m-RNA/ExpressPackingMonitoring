@@ -565,4 +565,26 @@
   <data name="安装或更新油猴脚本" xml:space="preserve"><value>Install or update userscript</value></data>
   <data name="保存配置" xml:space="preserve"><value>Save configuration</value></data>
   <data name="始终开启" xml:space="preserve"><value>Always on</value></data>
+  <data name="手机独立录像，电脑负责接收、校验并统一保存到录像库" xml:space="preserve"><value>Record on mobile; this PC receives, verifies, and stores recordings in one library</value></data>
+  <data name="重新运行向导" xml:space="preserve"><value>Run wizard again</value></data>
+  <data name="连接这台电脑" xml:space="preserve"><value>Connect to this PC</value></data>
+  <data name="二维码暂不可用" xml:space="preserve"><value>QR code unavailable</value></data>
+  <data name="局域网设置" xml:space="preserve"><value>LAN settings</value></data>
+  <data name="手机设备" xml:space="preserve"><value>Mobile devices</value></data>
+  <data name="手机 APP 连接后将在这里显示设备名称" xml:space="preserve"><value>Connected mobile apps will appear here</value></data>
+  <data name="上传与校验" xml:space="preserve"><value>Uploads and verification</value></data>
+  <data name="最近手机录像" xml:space="preserve"><value>Recent mobile recordings</value></data>
+  <data name="进入录像库" xml:space="preserve"><value>Open video library</value></data>
+  <data name="本机和多台远程电脑可以同时接收留言、备注、商品与退款信息" xml:space="preserve"><value>This PC and multiple remote PCs can receive messages, notes, products, and refunds together</value></data>
+  <data name="接收目标" xml:space="preserve"><value>Receiving targets</value></data>
+  <data name="测试结果" xml:space="preserve"><value>Test result</value></data>
+  <data name="删除所选" xml:space="preserve"><value>Delete selected</value></data>
+  <data name="测试所选" xml:space="preserve"><value>Test selected</value></data>
+  <data name="保存目标" xml:space="preserve"><value>Save targets</value></data>
+  <data name="油猴脚本" xml:space="preserve"><value>Userscript</value></data>
+  <data name="安装页会写入当前启用的全部目标，不再逐个 IP 嗅探" xml:space="preserve"><value>The installer writes all enabled targets without scanning IP addresses one by one</value></data>
+  <data name="联动测试" xml:space="preserve"><value>Integration test</value></data>
+  <data name="向所有启用目标发送测试订单，并分别显示是否确认收到" xml:space="preserve"><value>Send a test order to every enabled target and show each acknowledgement</value></data>
+  <data name="发送测试订单" xml:space="preserve"><value>Send test order</value></data>
+  <data name="最近收到的订单" xml:space="preserve"><value>Recently received orders</value></data>
 </root>

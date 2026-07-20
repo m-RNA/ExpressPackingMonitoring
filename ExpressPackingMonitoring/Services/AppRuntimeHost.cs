@@ -18,12 +18,21 @@ public sealed class AppRuntimeHost : IDisposable
     internal AppRuntimeHost(MainViewModel mainViewModel)
     {
         Main = mainViewModel ?? throw new ArgumentNullException(nameof(mainViewModel));
+        Dashboard = new DashboardDataService(Main.Database);
+        MobileBackup = new MobileBackupViewModel(Main, Dashboard);
+        OrderIntegration = new OrderIntegrationViewModel(Main, Dashboard);
         InstanceId = Guid.NewGuid();
     }
 
     public Guid InstanceId { get; }
 
     public MainViewModel Main { get; }
+
+    public DashboardDataService Dashboard { get; }
+
+    public MobileBackupViewModel MobileBackup { get; }
+
+    public OrderIntegrationViewModel OrderIntegration { get; }
 
     public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
 
@@ -32,6 +41,8 @@ public sealed class AppRuntimeHost : IDisposable
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
+        MobileBackup.Dispose();
+        OrderIntegration.Dispose();
         Main.Dispose();
     }
 }

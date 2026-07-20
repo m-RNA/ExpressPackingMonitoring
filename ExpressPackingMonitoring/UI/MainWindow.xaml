@@ -824,38 +824,12 @@
             </StackPanel>
         </ScrollViewer>
 
-        <Grid x:Name="MobileBackupModule" Visibility="Collapsed" Margin="32">
-            <StackPanel MaxWidth="900" HorizontalAlignment="Left">
-                <TextBlock Text="手机备份" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}"/>
-                <TextBlock Text="手机录像与电脑录像互不影响，备份完成后统一进入录像库" Margin="0,6,0,24" Foreground="{DynamicResource TextSecondary}"/>
-                <Border Padding="24" CornerRadius="12" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                    <StackPanel>
-                        <TextBlock x:Name="MobileBackupStateText" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
-                        <TextBlock Text="手机版是独立 APP，APK 不包含在电脑版安装包中" Margin="0,10,0,18" Foreground="{DynamicResource TextSecondary}"/>
-                        <WrapPanel>
-                            <Button x:Name="BtnConfigureMobileBackup" Content="运行配置向导" Height="40" Margin="0,0,10,0" Style="{StaticResource PrimaryButtonStyle}" Focusable="False" Click="BtnConfigureMobileBackup_Click"/>
-                            <Button x:Name="BtnToggleMobileBackup" Height="40" Margin="0,0,10,0" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Click="BtnToggleMobileBackup_Click"/>
-                            <Button Content="显示连接二维码" Height="40" Margin="0,0,10,0" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Click="BtnMobileConnection_Click"/>
-                            <Button Content="下载手机版" Height="40" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Click="BtnDownloadMobileApp_Click"/>
-                        </WrapPanel>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
+        <Grid x:Name="MobileBackupModule" Visibility="Collapsed">
+            <ContentControl x:Name="MobileBackupContentHost"/>
         </Grid>
 
-        <Grid x:Name="OrderIntegrationModule" Visibility="Collapsed" Margin="32">
-            <StackPanel MaxWidth="900" HorizontalAlignment="Left">
-                <TextBlock Text="订单联动" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}"/>
-                <TextBlock Text="本机和多个远程录像电脑可以同时接收留言、备注、商品与退款信息" Margin="0,6,0,24" Foreground="{DynamicResource TextSecondary}"/>
-                <Border Padding="24" CornerRadius="12" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                    <StackPanel>
-                        <TextBlock x:Name="OrderIntegrationStateText" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
-                        <ItemsControl x:Name="OrderTargetsList" Margin="0,14,0,16"/>
-                        <Button x:Name="BtnConfigureOrderIntegration" Content="配置订单联动" Width="150" Height="40" HorizontalAlignment="Left" Style="{StaticResource PrimaryButtonStyle}" Focusable="False" Click="BtnConfigureOrderIntegration_Click"/>
-                        <Button x:Name="BtnToggleOrderIntegration" Width="150" Height="40" Margin="0,10,0,0" HorizontalAlignment="Left" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Click="BtnToggleOrderIntegration_Click"/>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
+        <Grid x:Name="OrderIntegrationModule" Visibility="Collapsed">
+            <ContentControl x:Name="OrderIntegrationContentHost"/>
         </Grid>
 
         <Grid x:Name="VideoLibraryModule" Visibility="Collapsed" Margin="32">

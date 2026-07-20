@@ -1,0 +1,100 @@
+<UserControl x:Class="ExpressPackingMonitoring.UI.Pages.OrderIntegrationPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="Transparent">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="28" MaxWidth="1180" HorizontalAlignment="Stretch">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="订单联动" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}"/>
+                    <TextBlock Text="本机和多台远程电脑可以同时接收留言、备注、商品与退款信息" Margin="0,6,0,0" Foreground="{DynamicResource TextSecondary}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Padding="10,5" Margin="0,0,10,0" CornerRadius="12" Background="{DynamicResource BadgePackBg}">
+                        <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource BadgePackText}"/>
+                    </Border>
+                    <Button Content="重新运行向导" Height="38" Margin="0,0,10,0" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Click="Setup_Click"/>
+                    <Button Content="{Binding ToggleText}" Height="38" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Command="{Binding ToggleEnabledCommand}"/>
+                </StackPanel>
+            </Grid>
+
+            <Border Margin="0,22,0,16" Padding="20" CornerRadius="12" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition MinHeight="220"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid>
+                        <TextBlock Text="接收目标" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="{Binding ConnectionSummary}" HorizontalAlignment="Right" Foreground="{DynamicResource TextSecondary}"/>
+                    </Grid>
+                    <DataGrid Grid.Row="1" ItemsSource="{Binding Targets}" SelectedItem="{Binding SelectedTarget}" Margin="0,14,0,12"
+                              AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" HeadersVisibility="Column"
+                              GridLinesVisibility="Horizontal" BorderBrush="{DynamicResource BorderDefault}" Background="{DynamicResource ControlBackground}"
+                              Foreground="{DynamicResource TextPrimary}" RowBackground="{DynamicResource ControlBackground}" AlternatingRowBackground="{DynamicResource ControlBackgroundHover}">
+                        <DataGrid.Columns>
+                            <DataGridCheckBoxColumn Header="启用" Binding="{Binding Enabled}" Width="64"/>
+                            <DataGridTextColumn Header="名称" Binding="{Binding DisplayName, UpdateSourceTrigger=PropertyChanged}" Width="180"/>
+                            <DataGridTemplateColumn Header="地址（IP:端口）" Width="*">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding Address, UpdateSourceTrigger=PropertyChanged}" Padding="6,3" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource TextPrimary}">
+                                            <TextBox.Style>
+                                                <Style TargetType="TextBox">
+                                                    <Setter Property="IsReadOnly" Value="False"/>
+                                                    <Style.Triggers><DataTrigger Binding="{Binding IsLocal}" Value="True"><Setter Property="IsReadOnly" Value="True"/><Setter Property="Foreground" Value="{DynamicResource TextMuted}"/></DataTrigger></Style.Triggers>
+                                                </Style>
+                                            </TextBox.Style>
+                                        </TextBox>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="测试结果" Binding="{Binding TestResult}" IsReadOnly="True" Width="220"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <WrapPanel Grid.Row="2">
+                        <Button Content="添加目标" Height="36" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Command="{Binding AddTargetCommand}"/>
+                        <Button Content="删除所选" Height="36" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Command="{Binding DeleteTargetCommand}"/>
+                        <Button Content="测试所选" Height="36" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Command="{Binding TestTargetCommand}"/>
+                        <Button Content="保存目标" Height="36" Margin="0,0,8,8" Style="{StaticResource PrimaryButtonStyle}" Focusable="False" Command="{Binding SaveTargetsCommand}"/>
+                    </WrapPanel>
+                </Grid>
+            </Border>
+
+            <WrapPanel>
+                <Border Width="430" Margin="0,0,16,16" Padding="20" CornerRadius="12" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock Text="油猴脚本" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="安装页会写入当前启用的全部目标，不再逐个 IP 嗅探" Margin="0,9,0,14" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}"/>
+                        <Button Content="安装或更新油猴脚本" Height="38" HorizontalAlignment="Left" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Command="{Binding InstallScriptCommand}"/>
+                    </StackPanel>
+                </Border>
+                <Border Width="430" Margin="0,0,0,16" Padding="20" CornerRadius="12" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock Text="联动测试" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="向所有启用目标发送测试订单，并分别显示是否确认收到" Margin="0,9,0,14" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}"/>
+                        <Button Content="发送测试订单" Height="38" HorizontalAlignment="Left" Style="{StaticResource PrimaryButtonStyle}" Focusable="False" Command="{Binding SendTestOrderCommand}"/>
+                    </StackPanel>
+                </Border>
+            </WrapPanel>
+
+            <Border Padding="20" CornerRadius="12" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="最近收到的订单" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                    <ItemsControl ItemsSource="{Binding RecentOrders}" Margin="0,12,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,6">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="2*"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding TrackingNumber}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding OrderId}" Foreground="{DynamicResource TextSecondary}"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding PushTimeText}" Foreground="{DynamicResource TextMuted}"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding Summary}" Foreground="{DynamicResource TextSecondary}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="{Binding OperationMessage}" Margin="0,12,0,0" Foreground="{DynamicResource AccentBlue}" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
