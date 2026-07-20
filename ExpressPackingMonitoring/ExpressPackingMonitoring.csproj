@@ -108,6 +108,7 @@
     <Compile Include="Services\UpdateCheckOptions.cs" />
     <Compile Include="Services\UpdateCheckService.cs" />
     <Compile Include="Services\AlertService.cs" />
+    <Compile Include="Services\AppRuntimeHost.cs" />
     <Compile Include="Services\CameraBarcodeRecognitionService.cs" />
     <Compile Include="Services\ConnectedClientRegistry.cs" />
     <Compile Include="Services\MobileConnectionService.cs" />
@@ -121,6 +122,7 @@
     <Compile Include="ViewModels\MainViewModel.cs" />
     <Compile Include="ViewModels\MainViewModel.Encoder.cs" />
     <Compile Include="ViewModels\MainViewModel.Recording.cs" />
+    <Compile Include="ViewModels\MainShellViewModel.cs" />
     <Compile Include="UI\ConfirmDialog.xaml.cs" />
     <Compile Include="UI\CameraBarcodeUpgradeDialog.xaml.cs" />
     <Compile Include="UI\DriveSelectionDialog.cs" />

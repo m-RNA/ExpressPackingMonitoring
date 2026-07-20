@@ -17,6 +17,7 @@ namespace ExpressPackingMonitoring
     public partial class App : Application
     {
         private WorkstationInstanceCoordinator? _instanceCoordinator;
+        private AppRuntimeHost? _runtimeHost;
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -50,7 +51,8 @@ namespace ExpressPackingMonitoring
                 return;
             }
 
-            Window window = new MainWindow();
+            _runtimeHost = new AppRuntimeHost();
+            Window window = new MainWindow(_runtimeHost, startupModule);
             window.SourceInitialized += (_, _) =>
             {
                 if (PresentationSource.FromVisual(window) is HwndSource source)
@@ -73,6 +75,8 @@ namespace ExpressPackingMonitoring
             RuntimeLog.Info("App", $"Session exit session={RuntimeLog.CurrentSessionId}, pid={Environment.ProcessId}, exitCode={e.ApplicationExitCode}, source={source}, detail={detail}");
             _instanceCoordinator?.Dispose();
             _instanceCoordinator = null;
+            _runtimeHost?.Dispose();
+            _runtimeHost = null;
             base.OnExit(e);
         }
 

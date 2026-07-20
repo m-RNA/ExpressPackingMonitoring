@@ -16,6 +16,10 @@ namespace ExpressPackingMonitoring.UI
 {
     public partial class MainWindow : Window
     {
+        private readonly AppRuntimeHost _runtimeHost;
+
+        public MainShellViewModel Shell { get; }
+
         [DllImport("user32.dll")]
         private static extern short GetKeyState(int nVirtKey);
         [DllImport("user32.dll")]
@@ -109,8 +113,16 @@ namespace ExpressPackingMonitoring.UI
         }
 
         public MainWindow()
+            : this(new AppRuntimeHost(), AppModules.Overview)
         {
+        }
+
+        public MainWindow(AppRuntimeHost runtimeHost, string initialModule)
+        {
+            _runtimeHost = runtimeHost ?? throw new ArgumentNullException(nameof(runtimeHost));
+            Shell = new MainShellViewModel(initialModule);
             InitializeComponent();
+            DataContext = _runtimeHost.Main;
             if (CameraBarcodeRuntimeOptions.ShadowMode)
             {
                 RuntimeLog.Warn(
@@ -190,8 +202,8 @@ namespace ExpressPackingMonitoring.UI
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
                     (DataContext as MainViewModel)?.RunStartupSetupFlowsIfNeeded(this);
-                    string initialModule = Application.Current.Properties["StartupModule"] as string ?? AppModules.Overview;
-                    ShowModule(initialModule);
+                    string startupModule = Application.Current.Properties["StartupModule"] as string ?? Shell.CurrentModule;
+                    ShowModule(startupModule);
                 }), DispatcherPriority.ContextIdle);
             };
             SourceInitialized += (_, __) =>
@@ -320,6 +332,7 @@ namespace ExpressPackingMonitoring.UI
                 && !ConfigureOrderIntegration(viewModel))
                 module = AppModules.Overview;
 
+            Shell.Navigate(module);
             OverviewModule.Visibility = module == AppModules.Overview ? Visibility.Visible : Visibility.Collapsed;
             PcRecordingModule.Visibility = module == AppModules.PcRecording ? Visibility.Visible : Visibility.Collapsed;
             MobileBackupModule.Visibility = module == AppModules.MobileBackup ? Visibility.Visible : Visibility.Collapsed;
@@ -699,8 +712,7 @@ namespace ExpressPackingMonitoring.UI
 
             try
             {
-                if (vm is System.IDisposable disposable)
-                    await Task.Run(disposable.Dispose);
+                await Task.Run(_runtimeHost.Dispose);
             }
             catch (Exception ex)
             {
