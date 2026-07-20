@@ -127,8 +127,21 @@ namespace ExpressPackingMonitoring.ViewModels
 
         // 摄像头空闲休眠
         private bool _isCameraSleeping = false;
+        private CameraDeviceAvailability _cameraDeviceAvailability = CameraDeviceAvailability.Unknown;
         private DateTime _lastActivityTime = DateTime.Now;
         public bool IsCameraSleeping { get => _isCameraSleeping; private set => SetProperty(ref _isCameraSleeping, value); }
+        public CameraDeviceAvailability CameraAvailability
+        {
+            get => _cameraDeviceAvailability;
+            private set
+            {
+                if (!SetProperty(ref _cameraDeviceAvailability, value)) return;
+                OnPropertyChanged(nameof(HasCameraDevice));
+                OnPropertyChanged(nameof(HasNoCameraDevice));
+            }
+        }
+        public bool HasCameraDevice => CameraAvailability == CameraDeviceAvailability.Available;
+        public bool HasNoCameraDevice => CameraAvailability == CameraDeviceAvailability.NoDevice;
         private Task _videoTask;
         private object _videoLock = new object();
 
@@ -2626,6 +2639,24 @@ namespace ExpressPackingMonitoring.ViewModels
             RestartCamera();
         }
 
+        public bool RefreshCameraDeviceAvailability()
+        {
+            try
+            {
+                var videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
+                CameraAvailability = videoDevices.Count == 0
+                    ? CameraDeviceAvailability.NoDevice
+                    : CameraDeviceAvailability.Available;
+                return videoDevices.Count > 0;
+            }
+            catch (Exception ex)
+            {
+                CameraAvailability = CameraDeviceAvailability.Unknown;
+                RuntimeLog.Warn("Camera", $"Camera device enumeration failed: {ex.Message}");
+                return false;
+            }
+        }
+
         /// <summary>
         /// 注册用户活跃信号（扫码/鼠标/键盘/按钮等），如果摄像头休眠中则唤醒
         /// </summary>
@@ -2752,6 +2783,9 @@ namespace ExpressPackingMonitoring.ViewModels
                 int previewSessionId = BeginPreviewSession(clearFrame: true);
 
                 var videoDevices = new FilterInfoCollection(FilterCategory.VideoInputDevice);
+                CameraAvailability = videoDevices.Count == 0
+                    ? CameraDeviceAvailability.NoDevice
+                    : CameraDeviceAvailability.Available;
                 if (videoDevices.Count == 0) 
                 { 
                     RuntimeLog.Warn("Camera", "StartCamera found no video devices");
@@ -2860,6 +2894,7 @@ namespace ExpressPackingMonitoring.ViewModels
             }
             catch (Exception ex)
             {
+                CameraAvailability = CameraDeviceAvailability.Unknown;
                 RuntimeLog.Error("Camera", "StartCamera failed", ex);
                 ShowToast("摄像头启动失败");
             }

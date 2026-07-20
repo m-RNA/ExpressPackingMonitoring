@@ -82,13 +82,7 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition x:Name="RecordingSidebarColumn" Width="360"/>
             </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-            <Button x:Name="BtnTogglePcRecording" Grid.Row="0" Grid.ColumnSpan="2" Width="120" Height="34" Margin="0,0,0,10" HorizontalAlignment="Right" Panel.ZIndex="20" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Click="BtnTogglePcRecording_Click"/>
-
-            <Grid x:Name="RecordingMainColumn" Grid.Row="1" Grid.Column="0" Margin="0,0,24,0">
+            <Grid x:Name="RecordingMainColumn" Grid.Column="0" Margin="0,0,24,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
@@ -226,7 +220,7 @@
                     </Grid>
                 </Border>
 
-                <Border Grid.Row="1" Background="{DynamicResource VideoPlaceholder}" CornerRadius="10" ClipToBounds="True">
+                <Border x:Name="CameraPreviewBorder" Grid.Row="1" Background="{DynamicResource VideoPlaceholder}" CornerRadius="10" ClipToBounds="True" MouseEnter="CameraPreviewBorder_MouseEnter" MouseLeave="CameraPreviewBorder_MouseLeave">
                     <Grid>
                         <Image x:Name="VideoImage" Source="{Binding VideoFrame}" Stretch="Uniform"/>
                         <Rectangle x:Name="ZoomPreviewBorder"
@@ -410,17 +404,27 @@
                                 <TextBlock Text="点击任意位置唤醒，再将面单放入识别框" FontSize="14" Foreground="#88FFFFFF" HorizontalAlignment="Center" Margin="0,8,0,0"/>
                             </StackPanel>
                         </Grid>
+                        <Grid x:Name="CameraNoDeviceOverlay" Visibility="Collapsed" Panel.ZIndex="50" Background="#E61A1A2E">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Path Data="{StaticResource FluentCameraIcon}" Width="54" Height="54" Stretch="Uniform" Fill="#CCFFFFFF" HorizontalAlignment="Center" Margin="0,0,0,14"/>
+                                <TextBlock Text="请连接摄像头以使用电脑录像" FontSize="22" FontWeight="SemiBold" Foreground="White" HorizontalAlignment="Center"/>
+                                <Button Content="重新检测" Width="112" Height="38" Margin="0,18,0,0" Style="{StaticResource PrimaryButtonStyle}" Focusable="False" Click="BtnRefreshCamera_Click"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid x:Name="PcRecordingControlOverlay" Visibility="Collapsed" Panel.ZIndex="45" Background="#8F0F172A">
+                            <Button x:Name="BtnPreviewTogglePcRecording" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="Transparent" BorderThickness="0" Focusable="False" Cursor="Hand" Click="BtnTogglePcRecording_Click">
+                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Path x:Name="PcRecordingControlIcon" Data="{StaticResource FluentPauseIcon}" Width="58" Height="58" Stretch="Uniform" Fill="White" HorizontalAlignment="Center"/>
+                                    <TextBlock x:Name="PcRecordingControlText" Text="点击停用电脑录像" Margin="0,12,0,0" FontSize="18" FontWeight="SemiBold" Foreground="White" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
                     </Grid>
                 </Border>
 
                 <Border Grid.Row="2" Background="{DynamicResource PanelBackground}" CornerRadius="10" Padding="20,12" Margin="0,20,0,0">
                     <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                             <TextBlock Text="本机今日:" FontSize="15" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Bottom" Margin="0,0,8,3"/>
                             <TextBlock FontSize="24" FontWeight="Black" Foreground="{DynamicResource AccentBlueDark}" Margin="0,0,24,0">
                                 <Run Text="{Binding TotalPieces, Mode=OneWay}"/><Run Text="件" FontSize="15"/>
@@ -439,31 +443,11 @@
                             </TextBlock>
                         </StackPanel>
 
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Style="{StaticResource ModernBtn}" Click="BtnStats_Click" Background="{DynamicResource ControlBackgroundHover}" BorderBrush="{DynamicResource BorderStrong}" BorderThickness="2" Width="120" Height="42" Margin="0,0,10,0">
-                                <StackPanel Orientation="Horizontal">
-                                    <Path Data="{StaticResource FluentDataIcon}" Width="18" Height="18" Stretch="Uniform" Fill="{DynamicResource AccentBlue}" Margin="0,0,7,0"/>
-                                    <TextBlock Text="数据" Foreground="{DynamicResource TextPrimary}"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Style="{StaticResource ModernBtn}" Command="{Binding OpenPlaybackCommand}" Background="{DynamicResource ControlBackgroundHover}" BorderBrush="{DynamicResource BorderStrong}" BorderThickness="2" Width="120" Height="42" Margin="0,0,10,0">
-                                <StackPanel Orientation="Horizontal">
-                                    <Path Data="{StaticResource FluentVideoIcon}" Width="18" Height="18" Stretch="Uniform" Fill="{DynamicResource AccentBlue}" Margin="0,0,7,0"/>
-                                    <TextBlock Text="回放" Foreground="{DynamicResource TextPrimary}"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Style="{StaticResource ModernBtn}" Click="BtnSettings_Click" Background="{DynamicResource ControlBackgroundHover}" BorderBrush="{DynamicResource BorderStrong}" BorderThickness="2" Width="120" Height="42">
-                                <StackPanel Orientation="Horizontal">
-                                    <Path Data="{StaticResource FluentSettingsIcon}" Width="18" Height="18" Stretch="Uniform" Fill="{DynamicResource TextSecondary}" Margin="0,0,7,0"/>
-                                    <TextBlock Text="设置" Foreground="{DynamicResource TextPrimary}"/>
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
                     </Grid>
                 </Border>
             </Grid>
 
-            <Border x:Name="RecordingSidebar" Grid.Row="1" Grid.Column="1" Background="{DynamicResource PanelBackground}" CornerRadius="10" Padding="16,12">
+            <Border x:Name="RecordingSidebar" Grid.Column="1" Background="{DynamicResource PanelBackground}" CornerRadius="10" Padding="16,12">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -750,20 +734,5 @@
             </Border>
         </Grid>
 
-        <Grid x:Name="StatisticsOverlay" Visibility="Collapsed" Panel.ZIndex="100" Background="#99000000">
-            <Border Margin="32" CornerRadius="12" Background="{DynamicResource WindowBackground}" BorderBrush="{DynamicResource BorderStrong}" BorderThickness="1">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-                    <Grid Grid.Row="0" Margin="20,14,14,10">
-                        <TextBlock Text="打包数据分析" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
-                        <Button Content="关闭" Width="76" Height="34" HorizontalAlignment="Right" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Click="CloseStats_Click"/>
-                    </Grid>
-                    <ContentControl x:Name="StatisticsContentHost" Grid.Row="1"/>
-                </Grid>
-            </Border>
-        </Grid>
     </Grid>
 </UserControl>

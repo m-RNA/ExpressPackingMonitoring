@@ -1,7 +1,6 @@
 using ExpressPackingMonitoring.Config;
 using ExpressPackingMonitoring.Input;
 using ExpressPackingMonitoring.Services;
-using ExpressPackingMonitoring.UI.Components;
 using ExpressPackingMonitoring.ViewModels;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
@@ -25,7 +24,6 @@ public partial class PcRecordingPage : UserControl, IDisposable
     private readonly MainViewModel _runtime;
     private readonly DispatcherTimer _capsCheckTimer;
     private readonly DispatcherTimer _scanAutoSubmitTimer;
-    private readonly StatisticsPanel _statisticsPanel;
     private readonly List<double> _scanInputIntervalsMs = new();
     private Window? _hostWindow;
     private bool _capsLockStateBeforeFocus;
@@ -42,9 +40,6 @@ public partial class PcRecordingPage : UserControl, IDisposable
         _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         InitializeComponent();
         DataContext = runtime;
-        _statisticsPanel = new StatisticsPanel(runtime.Database);
-        StatisticsContentHost.Content = _statisticsPanel;
-
         BtnMobileConnection.Click += BtnMobileConnection_Click;
         BtnMobileConnection.PreviewMouseLeftButtonUp += BtnMobileConnection_PreviewMouseLeftButtonUp;
         _capsCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -100,8 +95,22 @@ public partial class PcRecordingPage : UserControl, IDisposable
 
     public void RefreshState()
     {
-        if (BtnTogglePcRecording != null)
-            BtnTogglePcRecording.Content = _runtime.Config.EnablePcCameraRecording ? "暂停电脑录像" : "恢复电脑录像";
+        if (CameraNoDeviceOverlay == null || PcRecordingControlOverlay == null) return;
+
+        CameraNoDeviceOverlay.Visibility = _runtime.HasNoCameraDevice ? Visibility.Visible : Visibility.Collapsed;
+        if (_runtime.HasNoCameraDevice)
+        {
+            PcRecordingControlOverlay.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        bool enabled = _runtime.Config.EnablePcCameraRecording;
+        PcRecordingControlIcon.Data = FindResource(enabled ? "FluentPauseIcon" : "FluentPlayIcon") as System.Windows.Media.Geometry;
+        PcRecordingControlText.Text = enabled
+            ? _runtime.IsRecording ? "录像中，停止后可停用" : "点击停用电脑录像"
+            : "点击启用电脑录像";
+        BtnPreviewTogglePcRecording.IsEnabled = !enabled || !_runtime.IsRecording;
+        PcRecordingControlOverlay.Visibility = enabled ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void PcRecordingPage_Loaded(object sender, RoutedEventArgs e)
@@ -128,7 +137,9 @@ public partial class PcRecordingPage : UserControl, IDisposable
         {
             Dispatcher.BeginInvoke(new Action(UpdateCameraOverlays));
         }
-        else if (e.PropertyName == nameof(MainViewModel.Config))
+        else if (e.PropertyName is nameof(MainViewModel.Config)
+            or nameof(MainViewModel.IsRecording)
+            or nameof(MainViewModel.CameraAvailability))
         {
             RefreshState();
         }
@@ -247,16 +258,6 @@ public partial class PcRecordingPage : UserControl, IDisposable
         CameraBarcodeGuide.Height = sourceHeight * CameraBarcodeFrameDecoder.GuideHeightRatio * scale;
     }
 
-    private void BtnSettings_Click(object sender, RoutedEventArgs e) => RequestModule(AppModules.Settings);
-
-    private void BtnStats_Click(object sender, RoutedEventArgs e)
-    {
-        StatisticsOverlay.Visibility = Visibility.Visible;
-        _statisticsPanel.Refresh();
-    }
-
-    private void CloseStats_Click(object sender, RoutedEventArgs e) => StatisticsOverlay.Visibility = Visibility.Collapsed;
-
     private void PcRecordingPage_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         bool compact = e.NewSize.Width < 920;
@@ -296,6 +297,38 @@ public partial class PcRecordingPage : UserControl, IDisposable
         AppConfig next = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(_runtime.Config)) ?? new AppConfig();
         next.EnablePcCameraRecording = !next.EnablePcCameraRecording;
         if (_runtime.ApplyModuleConfiguration(next)) RefreshState();
+    }
+
+    private void BtnRefreshCamera_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_runtime.RefreshCameraDeviceAvailability())
+        {
+            _runtime.ShowToast("仍未检测到摄像头，请检查连接");
+            RefreshState();
+            return;
+        }
+
+        if (_runtime.Config.PcRecordingSetupVersion < AppConfig.CurrentPcRecordingSetupVersion)
+        {
+            RequestModule(AppModules.PcRecording);
+            return;
+        }
+
+        if (_runtime.Config.EnablePcCameraRecording)
+            _runtime.ManualRestartCamera();
+        RefreshState();
+    }
+
+    private void CameraPreviewBorder_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (_runtime.HasNoCameraDevice || !_runtime.Config.EnablePcCameraRecording) return;
+        PcRecordingControlOverlay.Visibility = Visibility.Visible;
+    }
+
+    private void CameraPreviewBorder_MouseLeave(object sender, MouseEventArgs e)
+    {
+        if (_runtime.Config.EnablePcCameraRecording)
+            PcRecordingControlOverlay.Visibility = Visibility.Collapsed;
     }
 
     private void ScanInputTextBox_PreviewKeyDown(object sender, KeyEventArgs e)

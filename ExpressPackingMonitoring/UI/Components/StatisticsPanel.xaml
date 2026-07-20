@@ -29,7 +29,6 @@
         </Style>
     </UserControl.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
     <Grid Margin="20" MinHeight="520">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/> <!-- 筛选栏 -->
@@ -181,5 +180,4 @@
             </Grid>
         </Border>
     </Grid>
-    </ScrollViewer>
 </UserControl>

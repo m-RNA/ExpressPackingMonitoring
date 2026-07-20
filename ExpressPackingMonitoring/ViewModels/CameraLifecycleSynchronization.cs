@@ -1,5 +1,12 @@
 namespace ExpressPackingMonitoring.ViewModels;
 
+public enum CameraDeviceAvailability
+{
+    Unknown,
+    Available,
+    NoDevice
+}
+
 internal sealed class PreviewSessionGate
 {
     private int _sessionId;

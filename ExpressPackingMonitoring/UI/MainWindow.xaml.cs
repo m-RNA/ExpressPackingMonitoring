@@ -9,6 +9,7 @@ using ExpressPackingMonitoring.ViewModels;
 using ExpressPackingMonitoring.Services;
 using System.Text.Json;
 using ExpressPackingMonitoring.UI.Pages;
+using ExpressPackingMonitoring.UI.Components;
 
 namespace ExpressPackingMonitoring.UI
 {
@@ -18,6 +19,7 @@ namespace ExpressPackingMonitoring.UI
         private readonly PcRecordingPage _pcRecordingPage;
         private readonly VideoLibraryPage _videoLibraryPage;
         private readonly SettingsPage _settingsPage;
+        private readonly StatisticsPanel _statisticsPanel;
 
         public MainShellViewModel Shell { get; }
 
@@ -43,6 +45,8 @@ namespace ExpressPackingMonitoring.UI
             Shell = new MainShellViewModel(initialModule);
             InitializeComponent();
             DataContext = _runtimeHost.Main;
+            _statisticsPanel = new StatisticsPanel(_runtimeHost.Main.Database);
+            OverviewStatisticsContentHost.Content = _statisticsPanel;
             _pcRecordingPage = new PcRecordingPage(_runtimeHost.Main);
             _pcRecordingPage.ModuleNavigationRequested += (_, module) => ShowModule(module);
             PcRecordingContentHost.Content = _pcRecordingPage;
@@ -129,10 +133,14 @@ namespace ExpressPackingMonitoring.UI
         {
             if (DataContext is not MainViewModel viewModel) return;
 
-            if (module == AppModules.PcRecording
-                && viewModel.Config.PcRecordingSetupVersion < AppConfig.CurrentPcRecordingSetupVersion
-                && !ConfigurePcRecording(viewModel))
-                module = AppModules.Overview;
+            if (module == AppModules.PcRecording)
+            {
+                bool hasCamera = viewModel.RefreshCameraDeviceAvailability();
+                if (hasCamera
+                    && viewModel.Config.PcRecordingSetupVersion < AppConfig.CurrentPcRecordingSetupVersion
+                    && !ConfigurePcRecording(viewModel))
+                    module = AppModules.Overview;
+            }
             if (module == AppModules.MobileBackup
                 && viewModel.Config.MobileBackupSetupVersion < AppConfig.CurrentMobileBackupSetupVersion
                 && !ConfigureMobileBackup(viewModel))
@@ -149,9 +157,10 @@ namespace ExpressPackingMonitoring.UI
             OrderIntegrationModule.Visibility = module == AppModules.OrderIntegration ? Visibility.Visible : Visibility.Collapsed;
             VideoLibraryModule.Visibility = module == AppModules.VideoLibrary ? Visibility.Visible : Visibility.Collapsed;
             SettingsModule.Visibility = module == AppModules.Settings ? Visibility.Visible : Visibility.Collapsed;
-            ShellModuleTitle.Text = GetModuleDisplayName(module);
             UpdateNavigationState(module);
 
+            if (module == AppModules.Overview)
+                _statisticsPanel.Refresh();
             if (module == AppModules.VideoLibrary)
                 _ = _videoLibraryPage.RefreshAsync();
             if (module == AppModules.Settings)
@@ -235,10 +244,6 @@ namespace ExpressPackingMonitoring.UI
             ShellLanStatusText.Text = string.IsNullOrWhiteSpace(viewModel.MonitorAccessAddress)
                 ? "局域网服务准备中"
                 : $"局域网  {viewModel.MonitorAccessAddress}\n{viewModel.ConnectedDeviceText}";
-            ShellConnectedStatusText.Text = viewModel.ConnectedDeviceText;
-            ShellAddressStatusText.Text = string.IsNullOrWhiteSpace(viewModel.MonitorAccessAddress)
-                ? "局域网服务准备中"
-                : viewModel.MonitorAccessAddress;
             ShellVersionText.Text = $"版本 {AppVersion.Current}";
             _pcRecordingPage.RefreshState();
             _runtimeHost.MobileBackup.Refresh();
@@ -249,16 +254,6 @@ namespace ExpressPackingMonitoring.UI
 
         private static string GetModuleActionText(int setupVersion, int currentVersion) =>
             setupVersion < currentVersion ? "开始配置" : "打开";
-
-        private static string GetModuleDisplayName(string module) => module switch
-        {
-            AppModules.PcRecording => "电脑录像",
-            AppModules.MobileBackup => "手机备份",
-            AppModules.OrderIntegration => "订单联动",
-            AppModules.VideoLibrary => "录像库",
-            AppModules.Settings => "设置",
-            _ => "概览"
-        };
 
         private void UpdateNavigationState(string activeModule)
         {

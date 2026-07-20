@@ -48,6 +48,11 @@
   <data name="发货模式" xml:space="preserve"><value>Shipping mode</value></data>
   <data name="退货模式" xml:space="preserve"><value>Return mode</value></data>
   <data name="重新检测" xml:space="preserve"><value>Detect again</value></data>
+  <data name="请连接摄像头以使用电脑录像" xml:space="preserve"><value>Connect a camera to use PC recording</value></data>
+  <data name="点击停用电脑录像" xml:space="preserve"><value>Click to disable PC recording</value></data>
+  <data name="点击启用电脑录像" xml:space="preserve"><value>Click to enable PC recording</value></data>
+  <data name="录像中，停止后可停用" xml:space="preserve"><value>Recording in progress. Disable it after recording stops</value></data>
+  <data name="仍未检测到摄像头，请检查连接" xml:space="preserve"><value>No camera detected. Check the connection</value></data>
   <data name="检查更新" xml:space="preserve"><value>Check for updates</value></data>
   <data name="播放选区" xml:space="preserve"><value>Play selection</value></data>
   <data name="生成并下载" xml:space="preserve"><value>Create and download</value></data>

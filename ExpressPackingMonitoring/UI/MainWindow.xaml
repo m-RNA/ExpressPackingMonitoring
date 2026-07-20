@@ -41,21 +41,6 @@
         </Border>
 
         <Grid Grid.Column="1">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-        <Border Grid.Row="0" MinHeight="48" Padding="22,8" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-            <Grid>
-                <TextBlock x:Name="ShellModuleTitle" Text="概览" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <TextBlock x:Name="ShellConnectedStatusText" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
-                    <Border Width="1" Height="18" Margin="12,0" Background="{DynamicResource BorderDefault}"/>
-                    <TextBlock x:Name="ShellAddressStatusText" MaxWidth="360" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Grid>
-        </Border>
-        <Grid Grid.Row="1">
         <Grid x:Name="PcRecordingModule" Visibility="Collapsed">
             <ContentControl x:Name="PcRecordingContentHost"/>
         </Grid>
@@ -98,6 +83,8 @@
                         <StackPanel Grid.Column="2"><TextBlock Text="局域网地址" Foreground="{DynamicResource TextMuted}"/><TextBlock Text="{Binding MonitorAccessAddress}" Margin="0,6,0,0" FontSize="16" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis"/></StackPanel>
                     </Grid>
                 </Border>
+                <TextBlock Text="打包数据分析" Margin="0,28,0,4" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                <ContentControl x:Name="OverviewStatisticsContentHost"/>
             </StackPanel>
         </ScrollViewer>
 
@@ -115,7 +102,6 @@
 
         <Grid x:Name="SettingsModule" Visibility="Collapsed">
             <ContentControl x:Name="SettingsContentHost"/>
-        </Grid>
         </Grid>
         </Grid>
 
