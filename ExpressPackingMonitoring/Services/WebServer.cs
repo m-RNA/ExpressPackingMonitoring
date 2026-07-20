@@ -80,6 +80,7 @@ namespace ExpressPackingMonitoring.Services
         private readonly string _accessKey;
         private readonly Func<string> _mobileConnectionUrlProvider;
         private readonly MobileBackupService _mobileBackupService;
+        private readonly MobileOrderReceiverRegistry _mobileOrderReceivers;
         private readonly ConnectedClientRegistry _connectedClients;
         private readonly string _mobileBackupComputerId;
         private readonly string _mobileBackupComputerName;
@@ -156,11 +157,15 @@ namespace ExpressPackingMonitoring.Services
             _listener = CreateListener(port, listenerHost);
             MigrateLegacyOrderInfoCache();
             LoadOrderInfoCacheFromDatabase();
+            string resolvedMobileBackupStateDirectory = mobileBackupStateDirectory
+                ?? Path.Combine(AppPaths.CacheDir, "mobile-backup");
             _mobileBackupService = new MobileBackupService(
                 _db,
-                mobileBackupStateDirectory ?? Path.Combine(AppPaths.CacheDir, "mobile-backup"),
+                resolvedMobileBackupStateDirectory,
                 mobileBackupRecordingRootResolver ?? (() => Path.Combine(AppPaths.UserDataDir, "mobile-backup-recordings")),
                 GetOrderInfo);
+            _mobileOrderReceivers = new MobileOrderReceiverRegistry(
+                Path.Combine(resolvedMobileBackupStateDirectory, "order-receivers.json"));
             _connectedClients = new ConnectedClientRegistry();
             _connectedClients.Changed += clients =>
             {
@@ -620,7 +625,10 @@ namespace ExpressPackingMonitoring.Services
         {
             string headerKey = ctx.Request.Headers["X-EPM-Access-Key"];
             missingKey = string.IsNullOrWhiteSpace(headerKey);
-            return !missingKey && AccessKeysEqual(headerKey, _accessKey);
+            bool authorized = !missingKey && AccessKeysEqual(headerKey, _accessKey);
+            if (authorized)
+                _mobileOrderReceivers.Register(ctx.Request.RemoteEndPoint?.Address);
+            return authorized;
         }
 
         private static bool IsMobileBackupUploadPath(string path, string suffix, out string uploadId)
@@ -2312,13 +2320,14 @@ namespace ExpressPackingMonitoring.Services
             ctx.Response.OutputStream.Close();
         }
 
-        private static void ServeInstallGuidePage(HttpListenerContext ctx)
+        private void ServeInstallGuidePage(HttpListenerContext ctx)
         {
             string authority = ctx.Request.Url?.Authority ?? $"127.0.0.1:{ctx.Request.LocalEndPoint?.Port ?? 5280}";
             List<Uri> monitorAddresses = GetUserscriptMonitorAddresses(ctx, authority);
             string encodedAddresses = Uri.EscapeDataString(string.Join(',', monitorAddresses.Select(uri => uri.Authority)));
             string scriptUrl = $"{ctx.Request.Url?.Scheme ?? "http"}://{authority}/kuaidizs-order-push.user.js?connect={encodedAddresses}";
-            string html = PrintToolInstallGuide.RenderForWeb(authority, scriptUrl);
+            string displayedAuthority = monitorAddresses.FirstOrDefault()?.Authority ?? authority;
+            string html = PrintToolInstallGuide.RenderForWeb(displayedAuthority, scriptUrl);
             ctx.Response.StatusCode = 200;
             ctx.Response.ContentType = "text/html; charset=utf-8";
             byte[] bytes = Encoding.UTF8.GetBytes(html);
@@ -2327,7 +2336,7 @@ namespace ExpressPackingMonitoring.Services
             ctx.Response.OutputStream.Close();
         }
 
-        private static void ServeUserscript(HttpListenerContext ctx)
+        private void ServeUserscript(HttpListenerContext ctx)
         {
             string scriptPath = PrintToolInstallGuide.ResolveUserscriptPath();
             if (!File.Exists(scriptPath))
@@ -2350,12 +2359,38 @@ namespace ExpressPackingMonitoring.Services
             ctx.Response.OutputStream.Close();
         }
 
-        private static List<Uri> GetUserscriptMonitorAddresses(HttpListenerContext ctx, string currentAuthority)
+        private List<Uri> GetUserscriptMonitorAddresses(HttpListenerContext ctx, string currentAuthority)
         {
-            var requested = new List<string> { currentAuthority };
+            string primaryAuthority = ResolveUserscriptPrimaryAuthority(currentAuthority);
+            var requested = new List<string> { primaryAuthority };
+            requested.AddRange(_mobileOrderReceivers.GetAuthorities());
             string[] values = ctx.Request.QueryString.GetValues("connect") ?? Array.Empty<string>();
             requested.AddRange(values);
-            return PrintToolInstallGuide.NormalizeMonitorAddresses(requested);
+            List<Uri> addresses = PrintToolInstallGuide.NormalizeMonitorAddresses(requested);
+            bool hasLanPrimary = Uri.TryCreate("http://" + primaryAuthority, UriKind.Absolute, out Uri primary)
+                && !primary.IsLoopback;
+            if (hasLanPrimary)
+                addresses.RemoveAll(address => address.IsLoopback);
+            return addresses;
+        }
+
+        private string ResolveUserscriptPrimaryAuthority(string currentAuthority)
+        {
+            if (Uri.TryCreate("http://" + currentAuthority, UriKind.Absolute, out Uri current)
+                && !current.IsLoopback)
+                return current.Authority;
+
+            try
+            {
+                string accessUrl = _mobileConnectionUrlProvider()?.Trim() ?? "";
+                if (Uri.TryCreate(accessUrl, UriKind.Absolute, out Uri lanAddress)
+                    && !lanAddress.IsLoopback
+                    && string.Equals(lanAddress.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase))
+                    return lanAddress.Authority;
+            }
+            catch { }
+
+            return currentAuthority;
         }
 
         public void Dispose()

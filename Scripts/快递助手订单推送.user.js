@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         订单备注播报插件
 // @namespace    https://github.com/ExpressPackingMonitoring
-// @version      2.8
-// @description  从快递助手批量打印页面提取订单备注和打印后退款状态，发送到监控工位，打包时自动播报或报警。
+// @version      2.9
+// @description  从快递助手批量打印页面提取订单备注和打印后退款状态，同时发送到已配对的电脑和手机
 // @author       ExpressPackingMonitoring
 // @icon         https://raw.githubusercontent.com/m-RNA/ExpressPackingMonitoring/main/ExpressPackingMonitoring/app.ico
 // @match        *://p4.kuaidizs.cn/*
@@ -30,8 +30,10 @@
     const DEFAULT_PORT = 5280;
     const DEFAULT_ADDRESS = `${DEFAULT_HOST}:${DEFAULT_PORT}`;
     const INSTALL_MONITOR_ADDRESSES = [];
+    const INSTALL_PRIMARY_MONITOR_ADDRESS = '';
     const MONITOR_ADDRESSES_KEY = 'monitor_addresses';
     const INSTALLED_MONITOR_ADDRESSES_KEY = 'installed_monitor_addresses';
+    const INSTALLED_PRIMARY_MONITOR_ADDRESS_KEY = 'installed_primary_monitor_address';
     const MAX_MONITOR_ADDRESSES = 8;
     const DISCOVERY_DONE_KEY = 'monitor_auto_discovery_done';
     const DISCOVERY_LAST_ATTEMPT_KEY = 'monitor_auto_discovery_last_attempt';
@@ -56,7 +58,7 @@
     const CONNECTION_HEARTBEAT_INTERVAL_MS = 15000;
     const IS_REFUND_WORKER = new URL(location.href).searchParams.get(REFUND_WORKER_PARAM) === '1';
     const REFUND_WORKER_TOKEN = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const CHANGELOG = 'v2.8：支持配对和切换多个监控工位';
+    const CHANGELOG = 'v2.9：订单同时推送到已配对的电脑和手机';
     const DEBUG_LOG = false;
 
     let lastUserActivityAt = Date.now();
@@ -331,20 +333,32 @@
 
         const previousValue = GM_getValue(INSTALLED_MONITOR_ADDRESSES_KEY, []);
         const previous = normalizeAddressList(Array.isArray(previousValue) ? previousValue : []);
+        const installedPrimary = INSTALL_PRIMARY_MONITOR_ADDRESS
+            ? formatAddress(normalizeAddress(INSTALL_PRIMARY_MONITOR_ADDRESS, DEFAULT_PORT))
+            : installed[0];
+        const previousPrimary = String(GM_getValue(INSTALLED_PRIMARY_MONITOR_ADDRESS_KEY, '') || '');
         const legacyInstalled = GM_getValue('installed_monitor_address', '');
         if (legacyInstalled) previous.push(formatAddress(normalizeAddress(legacyInstalled, DEFAULT_PORT)));
-        if (JSON.stringify(previous) === JSON.stringify(installed)) return;
+        if (JSON.stringify(previous) === JSON.stringify(installed) && previousPrimary === installedPrimary) return;
 
         const retained = getPairedMonitorAddresses().filter(address => !previous.includes(address));
         const addresses = normalizeAddressList([...installed, ...retained]);
         GM_setValue(MONITOR_ADDRESSES_KEY, addresses);
         GM_setValue(INSTALLED_MONITOR_ADDRESSES_KEY, installed);
+        GM_setValue(INSTALLED_PRIMARY_MONITOR_ADDRESS_KEY, installedPrimary || '');
         GM_setValue('installed_monitor_address', '');
 
-        if (!addresses.includes(getMonitorAddressText())) {
+        if (installedPrimary && addresses.includes(installedPrimary)) {
+            const active = normalizeAddress(installedPrimary, DEFAULT_PORT);
+            setActiveMonitorAddress(active.host, active.port);
+        } else if (!addresses.includes(getMonitorAddressText())) {
             const active = normalizeAddress(addresses[0], DEFAULT_PORT);
             setActiveMonitorAddress(active.host, active.port);
         }
+    }
+
+    function parseJsonResponse(text) {
+        try { return JSON.parse(text || '{}'); } catch (e) { return {}; }
     }
 
     function gmGet(url, timeout) {
@@ -353,15 +367,19 @@
                 method: 'GET',
                 url,
                 timeout,
-                onload: res => resolve(res.status >= 200 && res.status < 300),
-                onerror: () => resolve(false),
-                ontimeout: () => resolve(false)
+                onload: res => resolve({
+                    ok: res.status >= 200 && res.status < 300,
+                    response: parseJsonResponse(res.responseText)
+                }),
+                onerror: () => resolve({ ok: false, response: {} }),
+                ontimeout: () => resolve({ ok: false, response: {} })
             });
         });
     }
 
     async function canConnectMonitor(host, port) {
-        return gmGet(getStorageUrl(host, port), DISCOVERY_TIMEOUT);
+        const result = await gmGet(getStorageUrl(host, port), DISCOVERY_TIMEOUT);
+        return result.ok && result.response?.service !== 'packingproof-mobile';
     }
 
     async function findMonitorAddress(showProgress) {
@@ -637,55 +655,55 @@
     }
 
     // ============ 推送到上位机 ============
-    function parseJsonResponse(text) {
-        try { return JSON.parse(text || '{}'); } catch (e) { return {}; }
+    function pushOrdersToAddress(addressText, orders) {
+        const address = normalizeAddress(addressText, DEFAULT_PORT);
+        return new Promise(resolve => {
+            GM_xmlhttpRequest({
+                method: 'POST',
+                url: `${getBaseUrl(address.host, address.port)}/api/orderinfo`,
+                headers: { 'Content-Type': 'application/json' },
+                data: JSON.stringify(orders),
+                timeout: 5000,
+                onload: res => resolve({
+                    address: formatAddress(address),
+                    ok: res.status === 200,
+                    status: res.status,
+                    response: parseJsonResponse(res.responseText)
+                }),
+                onerror: () => resolve({ address: formatAddress(address), ok: false, error: 'connect' }),
+                ontimeout: () => resolve({ address: formatAddress(address), ok: false, error: 'timeout' })
+            });
+        });
     }
 
     async function pushToMonitor(orders, options) {
         options = options || {};
         if (!orders || orders.length === 0) return { ok: false, confirmed: false, error: 'empty' };
-        if (!options.skipAddressDiscovery)
-            await ensureMonitorAddress(false);
+        const addresses = getPairedMonitorAddresses();
+        const results = await Promise.all(addresses.map(address => pushOrdersToAddress(address, orders)));
+        const successful = results.filter(result => result.ok);
+        const confirmed = !options.isTest || successful.some(result => Number(result.response?.testCount || 0) > 0);
+        debugLog(`[打包监控] 订单广播完成: ${successful.length}/${addresses.length} 台`, results);
 
-        return new Promise(resolve => {
-            GM_xmlhttpRequest({
-                method: 'POST',
-                url: getApiUrl(),
-                headers: { 'Content-Type': 'application/json' },
-                data: JSON.stringify(orders),
-                timeout: 5000,
-                onload: function (res) {
-                    const response = parseJsonResponse(res.responseText);
-                    if (res.status === 200) {
-                        debugLog(`[打包监控] 推送成功: ${orders.length} 条`, response);
-                        const confirmed = !options.isTest || Number(response.testCount || 0) > 0;
-                        if (options.silent) {
-                            debugLog(`[打包监控] 后台推送成功: ${orders.length} 条`);
-                        } else if (options.isTest) {
-                            showNotification(confirmed ? '监控工位已收到测试订单' : '测试订单已发送，请查看监控端是否播报');
-                        } else {
-                            showNotification(`已推送 ${orders.length} 条订单到打包监控`);
-                        }
-                        resolve({ ok: true, confirmed, response });
-                        return;
-                    }
+        if (!options.silent) {
+            if (successful.length === 0) {
+                showNotification(options.isTest ? '测试发送失败，请检查接收设备地址' : '订单发送失败，请检查接收设备网络');
+            } else if (options.isTest) {
+                showNotification(confirmed
+                    ? `已有 ${successful.length}/${addresses.length} 台设备收到测试订单`
+                    : `测试订单已发送至 ${successful.length}/${addresses.length} 台设备`);
+            } else {
+                showNotification(`已向 ${successful.length}/${addresses.length} 台设备推送 ${orders.length} 条订单`);
+            }
+        }
 
-                    console.warn('[打包监控] 推送失败:', res.status, res.responseText);
-                    if (!options.silent) showNotification(options.isTest ? '测试发送失败，请检查监控工位地址' : `推送失败: ${res.status}`);
-                    resolve({ ok: false, confirmed: false, status: res.status, response });
-                },
-                onerror: function (err) {
-                    console.warn('[打包监控] 连接失败，请确认上位机已启动 Web 服务:', err);
-                    if (!options.silent) showNotification(options.isTest ? '测试发送失败，请检查监控工位地址' : '无法连接上位机，请检查 IP/端口设置');
-                    resolve({ ok: false, confirmed: false, error: 'connect' });
-                },
-                ontimeout: function () {
-                    console.warn('[打包监控] 推送超时');
-                    if (!options.silent) showNotification(options.isTest ? '测试发送超时，请检查监控工位地址' : '推送超时，请检查网络');
-                    resolve({ ok: false, confirmed: false, error: 'timeout' });
-                }
-            });
-        });
+        return {
+            ok: successful.length > 0,
+            confirmed,
+            successfulCount: successful.length,
+            targetCount: addresses.length,
+            results
+        };
     }
 
     function requestMonitor(method, url, data, timeout) {

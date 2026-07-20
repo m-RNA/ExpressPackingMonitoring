@@ -1,4 +1,5 @@
 using ExpressPackingMonitoring.Config;
+using ExpressPackingMonitoring.Services;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -21,7 +22,9 @@ internal static class PrintToolInstallGuide
         if (File.Exists(sourceScriptPath))
         {
             string script = File.ReadAllText(sourceScriptPath, Encoding.UTF8);
-            File.WriteAllText(scriptPath, AddMonitorConnectPermissions(script, new[] { monitorAddress }), Encoding.UTF8);
+            IEnumerable<string> addresses = new[] { monitorAddress }
+                .Concat(MobileOrderReceiverRegistry.GetDefaultAuthorities());
+            File.WriteAllText(scriptPath, AddMonitorConnectPermissions(script, addresses), Encoding.UTF8);
         }
         string scriptUrl = File.Exists(scriptPath) ? new Uri(scriptPath).AbsoluteUri : "";
         string html = Render(monitorAddress, BuildScriptLink(scriptUrl));
@@ -61,6 +64,10 @@ internal static class PrintToolInstallGuide
         string customized = script.Replace(
             "const INSTALL_MONITOR_ADDRESSES = [];",
             $"const INSTALL_MONITOR_ADDRESSES = {JsonSerializer.Serialize(addresses.Select(uri => uri.Authority))};",
+            StringComparison.Ordinal);
+        customized = customized.Replace(
+            "const INSTALL_PRIMARY_MONITOR_ADDRESS = '';",
+            $"const INSTALL_PRIMARY_MONITOR_ADDRESS = {JsonSerializer.Serialize(addresses[0].Authority)};",
             StringComparison.Ordinal);
         string newline = customized.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
 

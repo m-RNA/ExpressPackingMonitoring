@@ -111,7 +111,7 @@ test('saved refund worker tab prevents duplicate even with stale heartbeat', asy
   assert.equal(opened.length, 0);
 });
 
-function createDiscoveryContext(initialStore, reachableHosts, installAddress = '') {
+function createDiscoveryContext(initialStore, reachableHosts, installAddress = '', mobileHosts = new Set()) {
   const store = initialStore instanceof Map ? initialStore : new Map(Object.entries(initialStore));
   let requestCount = 0;
   const document = {
@@ -121,8 +121,10 @@ function createDiscoveryContext(initialStore, reachableHosts, installAddress = '
   const context = {
     DEFAULT_HOST: '127.0.0.1', DEFAULT_PORT: 5280, DEFAULT_ADDRESS: '127.0.0.1:5280',
     INSTALL_MONITOR_ADDRESSES: installAddress ? [installAddress] : [],
+    INSTALL_PRIMARY_MONITOR_ADDRESS: installAddress || '',
     MONITOR_ADDRESSES_KEY: 'monitor_addresses',
     INSTALLED_MONITOR_ADDRESSES_KEY: 'installed_monitor_addresses',
+    INSTALLED_PRIMARY_MONITOR_ADDRESS_KEY: 'installed_primary_monitor_address',
     MAX_MONITOR_ADDRESSES: 8,
     DISCOVERY_DONE_KEY: 'monitor_auto_discovery_done',
     DISCOVERY_LAST_ATTEMPT_KEY: 'monitor_auto_discovery_last_attempt',
@@ -137,7 +139,10 @@ function createDiscoveryContext(initialStore, reachableHosts, installAddress = '
     GM_xmlhttpRequest: options => {
       requestCount += 1;
       const host = new URL(options.url).hostname;
-      queueMicrotask(() => options.onload({ status: reachableHosts.has(host) ? 200 : 503 }));
+      queueMicrotask(() => options.onload({
+        status: reachableHosts.has(host) ? 200 : 503,
+        responseText: JSON.stringify(mobileHosts.has(host) ? { service: 'packingproof-mobile' } : {})
+      }));
     },
     window: {}, document, setTimeout, clearTimeout, URL, Promise, Set, Array, String, Number, Boolean, Math, Date
   };
@@ -178,6 +183,66 @@ test('paired monitor list fails over only among explicitly configured addresses'
   assert.equal(await context.findMonitor(false), '192.168.31.11:5280');
   assert.equal(store.get('monitor_address'), '192.168.31.11:5280');
   assert.equal(getRequestCount(), 2);
+});
+
+test('mobile order receiver is broadcast target but never selected as refund controller', async () => {
+  const phone = '192.168.31.205';
+  const computer = '192.168.31.250';
+  const { context, store, getRequestCount } = createDiscoveryContext(
+    {
+      monitor_address: `${phone}:5280`,
+      monitor_addresses: [`${phone}:5280`, `${computer}:5280`]
+    },
+    new Set([phone, computer]),
+    '',
+    new Set([phone]));
+
+  assert.equal(await context.findMonitor(false), `${computer}:5280`);
+  assert.equal(store.get('monitor_address'), `${computer}:5280`);
+  assert.equal(getRequestCount(), 2);
+});
+
+test('order push broadcasts to every paired receiver and tolerates one offline device', async () => {
+  const requests = [];
+  const notifications = [];
+  const context = {
+    DEFAULT_PORT: 5280,
+    normalizeAddress: value => {
+      const [host, port = '5280'] = String(value).split(':');
+      return { host, port: Number(port) };
+    },
+    formatAddress: address => `${address.host}:${address.port}`,
+    getBaseUrl: (host, port) => `http://${host}:${port}`,
+    getPairedMonitorAddresses: () => ['192.168.31.250:5280', '192.168.31.205:5280'],
+    parseJsonResponse: text => JSON.parse(text || '{}'),
+    GM_xmlhttpRequest: options => {
+      requests.push(options.url);
+      queueMicrotask(() => {
+        if (options.url.includes('192.168.31.250'))
+          options.onload({ status: 200, responseText: '{"ok":true,"testCount":1}' });
+        else
+          options.onerror(new Error('offline'));
+      });
+    },
+    showNotification: message => notifications.push(message),
+    debugLog: () => {},
+    Promise,
+    Number,
+    JSON
+  };
+  vm.createContext(context);
+  vm.runInContext(
+    between('    function pushOrdersToAddress(', '    function requestMonitor(') +
+      ';globalThis.pushOrders=pushToMonitor;',
+    context);
+
+  const result = await context.pushOrders([{ trackingNumber: 'TRACK-1' }], { isTest: true });
+  assert.equal(requests.length, 2);
+  assert.equal(result.ok, true);
+  assert.equal(result.confirmed, true);
+  assert.equal(result.successfulCount, 1);
+  assert.equal(result.targetCount, 2);
+  assert.match(notifications[0], /1\/2/);
 });
 
 test('updated install list removes withdrawn monitor permissions from stored pairing', () => {

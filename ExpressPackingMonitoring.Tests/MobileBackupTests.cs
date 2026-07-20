@@ -421,6 +421,44 @@ public sealed class MobileBackupTests
     }
 
     [Fact]
+    public async Task UserscriptUpdateIncludesKnownMobileOrderReceiverAddress()
+    {
+        string directory = CreateTempDirectory();
+        int port = GetFreeTcpPort();
+        string stateDirectory = Path.Combine(directory, "state");
+        try
+        {
+            var receivers = new MobileOrderReceiverRegistry(Path.Combine(stateDirectory, "order-receivers.json"));
+            receivers.Register(IPAddress.Parse("192.168.31.205"));
+
+            using var database = new VideoDatabase(Path.Combine(directory, "videos.db"));
+            using var server = new WebServer(
+                database,
+                port,
+                requireAccessKey: false,
+                accessKey: AccessKey,
+                listenerHost: "127.0.0.1",
+                mobileConnectionUrlProvider: () => $"http://192.168.31.250:{port}/?key={AccessKey}",
+                mobileBackupStateDirectory: stateDirectory);
+            server.Start();
+            using var client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+
+            string script = await client.GetStringAsync(
+                $"/kuaidizs-order-push.user.js?connect=127.0.0.1:{port}",
+                TestContext.Current.CancellationToken);
+
+            Assert.Contains($"const INSTALL_MONITOR_ADDRESSES = [\"192.168.31.250:{port}\",\"192.168.31.205:5280\"]", script);
+            Assert.Contains($"const INSTALL_PRIMARY_MONITOR_ADDRESS = \"192.168.31.250:{port}\"", script);
+            Assert.Contains("// @connect      192.168.31.205", script);
+            Assert.DoesNotContain("const INSTALL_MONITOR_ADDRESSES = [\"127.0.0.1", script);
+        }
+        finally
+        {
+            DeleteTempDirectory(directory);
+        }
+    }
+
+    [Fact]
     public async Task RecordingLibraryReusesWebPaginationAndStatusEndpoints()
     {
         string directory = CreateTempDirectory();
