@@ -1,0 +1,38 @@
+<Window x:Class="ExpressPackingMonitoring.UI.GlobalOnboardingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="欢迎使用打包监控" Width="760" Height="540" WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize" Background="{DynamicResource WindowBackground}" FontFamily="Microsoft YaHei UI, Segoe UI">
+    <Grid Margin="32">
+        <Grid.RowDefinitions><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Grid x:Name="Pages">
+            <StackPanel x:Name="WelcomePage" VerticalAlignment="Center">
+                <TextBlock Text="欢迎使用打包监控" FontSize="30" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Center"/>
+                <TextBlock Text="一套程序，同时管理电脑录像、手机录像备份和订单联动" Margin="0,18,0,0" FontSize="16" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center"/>
+            </StackPanel>
+            <StackPanel x:Name="FeaturesPage" Visibility="Collapsed" VerticalAlignment="Center">
+                <TextBlock Text="功能始终可用，无需提前选择" FontSize="26" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Center"/>
+                <UniformGrid Columns="3" Margin="0,28,0,0">
+                    <Border Margin="6" Padding="18" CornerRadius="10" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"><StackPanel><TextBlock Text="电脑录像" FontSize="18" FontWeight="SemiBold"/><TextBlock Text="摄像头识别面单，也兼容扫码枪" Margin="0,10,0,0" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}"/></StackPanel></Border>
+                    <Border Margin="6" Padding="18" CornerRadius="10" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"><StackPanel><TextBlock Text="手机备份" FontSize="18" FontWeight="SemiBold"/><TextBlock Text="手机独立录像，电脑负责校验和保存" Margin="0,10,0,0" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}"/></StackPanel></Border>
+                    <Border Margin="6" Padding="18" CornerRadius="10" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"><StackPanel><TextBlock Text="订单联动" FontSize="18" FontWeight="SemiBold"/><TextBlock Text="同步留言、备注、商品和退款信息" Margin="0,10,0,0" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}"/></StackPanel></Border>
+                </UniformGrid>
+                <TextBlock Text="第一次进入某个功能时，再完成该功能自己的配置" Margin="0,22,0,0" HorizontalAlignment="Center" Foreground="{DynamicResource AccentBlue}"/>
+            </StackPanel>
+            <StackPanel x:Name="MobilePage" Visibility="Collapsed" VerticalAlignment="Center">
+                <TextBlock Text="手机与局域网" FontSize="26" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Center"/>
+                <TextBlock Text="手机版是独立 APP，使用与电脑版相同的网盘下载入口。电脑、手机和打印电脑需要连接同一个局域网。" Width="560" Margin="0,24,0,0" FontSize="16" LineHeight="26" TextWrapping="Wrap" TextAlignment="Center" Foreground="{DynamicResource TextSecondary}"/>
+                <Button Content="打开电脑版与手机版下载页" Width="240" Height="40" Margin="0,24,0,0" Style="{StaticResource SecondaryButtonStyle}" Click="Download_Click"/>
+            </StackPanel>
+            <StackPanel x:Name="DonePage" Visibility="Collapsed" VerticalAlignment="Center">
+                <TextBlock Text="准备完成" FontSize="30" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Center"/>
+                <TextBlock Text="进入概览后，选择你现在要使用的功能即可。录像、备份和订单联动可以同时运行。" Width="560" Margin="0,20,0,0" FontSize="16" LineHeight="26" TextWrapping="Wrap" TextAlignment="Center" Foreground="{DynamicResource TextSecondary}"/>
+            </StackPanel>
+        </Grid>
+        <Grid Grid.Row="1" Margin="0,24,0,0">
+            <Button x:Name="PreviousButton" Content="上一步" Width="100" Height="38" HorizontalAlignment="Left" Style="{StaticResource SecondaryButtonStyle}" Click="Previous_Click" Visibility="Collapsed"/>
+            <TextBlock x:Name="ProgressText" Text="1 / 4" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextMuted}"/>
+            <Button x:Name="NextButton" Content="下一步" Width="110" Height="38" HorizontalAlignment="Right" Style="{StaticResource PrimaryButtonStyle}" Click="Next_Click"/>
+        </Grid>
+    </Grid>
+</Window>

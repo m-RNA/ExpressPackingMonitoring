@@ -825,36 +825,6 @@
                                             <ColumnDefinition Width="260"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
-                                            <TextBlock Text="工位用途" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="选择这台电脑负责录像还是打印"
-                                                       Style="{StaticResource FieldHintStyle}"/>
-                                        </StackPanel>
-                                        <ComboBox Grid.Column="2"
-                                                  SelectedValue="{Binding Config.WorkstationRole}"
-                                                  SelectedValuePath="Tag"
-                                                  Cursor="Hand">
-                                            <ComboBoxItem Tag="CameraMonitor">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <Path Data="{StaticResource FluentVideoIcon}" Width="16" Height="16" Stretch="Uniform" Fill="{DynamicResource AccentBlue}" Margin="0,0,8,0"/>
-                                                    <TextBlock Text="摄像头监控工位"/>
-                                                </StackPanel>
-                                            </ComboBoxItem>
-                                            <ComboBoxItem Tag="PrintStation">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <Path Data="{StaticResource FluentPrinterIcon}" Width="16" Height="16" Stretch="Uniform" Fill="{DynamicResource AccentOrange}" Margin="0,0,8,0"/>
-                                                    <TextBlock Text="快递单打印工位"/>
-                                                </StackPanel>
-                                            </ComboBoxItem>
-                                        </ComboBox>
-                                    </Grid>
-
-                                    <Grid Style="{StaticResource SettingRowStyle}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="24"/>
-                                            <ColumnDefinition Width="260"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="界面语言" Style="{StaticResource FieldLabelStyle}"/>
                                             <TextBlock Text="默认跟随 Windows 显示语言，修改后重启生效"
                                                        Style="{StaticResource FieldHintStyle}"/>
@@ -2102,11 +2072,7 @@
                                             <TextBlock Text="同一网络里的电脑或手机可以用浏览器查看录像，首次开启可能请求管理员权限"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
-                                        <CheckBox Grid.Column="2"
-                                                  IsChecked="{Binding Config.EnableWebServer}"
-                                                  VerticalAlignment="Center"
-                                                  HorizontalAlignment="Left"
-                                                  Style="{StaticResource ToggleSwitchStyle}"/>
+                                        <TextBlock Grid.Column="2" Text="始终开启" VerticalAlignment="Center" Foreground="{DynamicResource AccentGreen}" FontWeight="SemiBold"/>
                                     </Grid>
 
                                     <Grid Style="{StaticResource SettingRowStyle}"

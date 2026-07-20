@@ -505,4 +505,64 @@
   <data name="手机或其他电脑连接同一个局域网后，可扫码或复制网址打开录像网页" xml:space="preserve"><value>Connect the phone or another computer to the same LAN, then scan or copy the URL to open the recordings page</value></data>
   <data name="显示二维码" xml:space="preserve"><value>Show QR code</value></data>
   <data name="连接网址已复制" xml:space="preserve"><value>Connection URL copied</value></data>
+  <data name="首次介绍状态保存失败，下次启动会重新显示" xml:space="preserve"><value>Failed to save the welcome guide status. It will be shown again next time.</value></data>
+  <data name="请先完成当前录像，再配置电脑录像" xml:space="preserve"><value>Finish the current recording before configuring PC recording.</value></data>
+  <data name="欢迎使用打包监控" xml:space="preserve"><value>Welcome to Packing Monitor</value></data>
+  <data name="一套程序，同时管理电脑录像、手机录像备份和订单联动" xml:space="preserve"><value>One app for PC recording, mobile backup, and order integration</value></data>
+  <data name="功能始终可用，无需提前选择" xml:space="preserve"><value>All features stay available</value></data>
+  <data name="电脑录像" xml:space="preserve"><value>PC Recording</value></data>
+  <data name="摄像头识别面单，也兼容扫码枪" xml:space="preserve"><value>Camera waybill recognition with scanner support</value></data>
+  <data name="手机备份" xml:space="preserve"><value>Mobile Backup</value></data>
+  <data name="手机独立录像，电脑负责校验和保存" xml:space="preserve"><value>Record on mobile and verify and store on the PC</value></data>
+  <data name="订单联动" xml:space="preserve"><value>Order Integration</value></data>
+  <data name="同步留言、备注、商品和退款信息" xml:space="preserve"><value>Sync messages, notes, products, and refunds</value></data>
+  <data name="第一次进入某个功能时，再完成该功能自己的配置" xml:space="preserve"><value>Configure each feature when you first open it</value></data>
+  <data name="手机与局域网" xml:space="preserve"><value>Mobile and LAN</value></data>
+  <data name="手机版是独立 APP，使用与电脑版相同的网盘下载入口。电脑、手机和打印电脑需要连接同一个局域网。" xml:space="preserve"><value>The mobile app is separate and uses the same download page as the PC app. Keep all devices on the same LAN.</value></data>
+  <data name="打开电脑版与手机版下载页" xml:space="preserve"><value>Open PC and mobile downloads</value></data>
+  <data name="准备完成" xml:space="preserve"><value>Ready</value></data>
+  <data name="进入概览后，选择你现在要使用的功能即可。录像、备份和订单联动可以同时运行。" xml:space="preserve"><value>Choose any feature from Overview. Recording, backup, and order integration can run together.</value></data>
+  <data name="录像 · 备份 · 订单" xml:space="preserve"><value>Recording · Backup · Orders</value></data>
+  <data name="概览" xml:space="preserve"><value>Overview</value></data>
+  <data name="录像库" xml:space="preserve"><value>Video Library</value></data>
+  <data name="局域网服务准备中" xml:space="preserve"><value>LAN service is starting</value></data>
+  <data name="电脑录像、手机备份和订单联动可以同时使用" xml:space="preserve"><value>PC recording, mobile backup, and order integration can run together</value></data>
+  <data name="未配置" xml:space="preserve"><value>Not configured</value></data>
+  <data name="使用电脑摄像头录像，可用摄像头识别面单，也兼容扫码枪" xml:space="preserve"><value>Record with the PC camera and recognize waybills by camera or scanner</value></data>
+  <data name="开始使用" xml:space="preserve"><value>Get started</value></data>
+  <data name="手机可独立录像，完成后备份到这台电脑并统一进入录像库" xml:space="preserve"><value>Record on mobile, then back up to this PC and the shared video library</value></data>
+  <data name="同步留言、备注、商品和退款信息，可同时发送到多台电脑" xml:space="preserve"><value>Sync order details to multiple PCs at the same time</value></data>
+  <data name="当前录像" xml:space="preserve"><value>Current recording</value></data>
+  <data name="在线设备" xml:space="preserve"><value>Online devices</value></data>
+  <data name="局域网地址" xml:space="preserve"><value>LAN address</value></data>
+  <data name="手机录像与电脑录像互不影响，备份完成后统一进入录像库" xml:space="preserve"><value>Mobile and PC recording work independently and share one video library</value></data>
+  <data name="手机版是独立 APP，APK 不包含在电脑版安装包中" xml:space="preserve"><value>The mobile app is separate; its APK is not included in the PC package</value></data>
+  <data name="运行配置向导" xml:space="preserve"><value>Run setup wizard</value></data>
+  <data name="显示连接二维码" xml:space="preserve"><value>Show connection QR code</value></data>
+  <data name="下载手机版" xml:space="preserve"><value>Download mobile app</value></data>
+  <data name="本机和多个远程录像电脑可以同时接收留言、备注、商品与退款信息" xml:space="preserve"><value>This PC and multiple remote PCs can receive order details together</value></data>
+  <data name="配置订单联动" xml:space="preserve"><value>Configure order integration</value></data>
+  <data name="电脑录像和手机备份录像统一保存在这里，并保留来源标签" xml:space="preserve"><value>PC and mobile recordings are stored here with source labels</value></data>
+  <data name="打开录像查询" xml:space="preserve"><value>Open video search</value></data>
+  <data name="配置手机备份" xml:space="preserve"><value>Configure mobile backup</value></data>
+  <data name="手机录像和电脑录像可以同时使用，都会进入同一个录像库" xml:space="preserve"><value>Mobile and PC recording can run together and share one library</value></data>
+  <data name="1  备份存储" xml:space="preserve"><value>1  Backup storage</value></data>
+  <data name="2  局域网连接" xml:space="preserve"><value>2  LAN connection</value></data>
+  <data name="预览连接二维码" xml:space="preserve"><value>Preview connection QR code</value></data>
+  <data name="3  安装手机版" xml:space="preserve"><value>3  Install mobile app</value></data>
+  <data name="APK 不包含在电脑版安装包中。安装后点击“连接电脑”并扫描上面的二维码，录像完成后会自动加入备份队列。" xml:space="preserve"><value>The APK is separate. Install it, tap Connect to PC, scan the QR code, and completed recordings will enter the backup queue.</value></data>
+  <data name="打开网盘下载" xml:space="preserve"><value>Open cloud download</value></data>
+  <data name="完成配置" xml:space="preserve"><value>Finish setup</value></data>
+  <data name="订单信息可以同时发送到当前电脑和多台远程录像/备份电脑" xml:space="preserve"><value>Send order information to this PC and multiple remote PCs</value></data>
+  <data name="当前电脑接收订单信息" xml:space="preserve"><value>Receive orders on this PC</value></data>
+  <data name="远程目标" xml:space="preserve"><value>Remote targets</value></data>
+  <data name="启用" xml:space="preserve"><value>Enabled</value></data>
+  <data name="名称" xml:space="preserve"><value>Name</value></data>
+  <data name="地址（IP:端口）" xml:space="preserve"><value>Address (IP:port)</value></data>
+  <data name="添加目标" xml:space="preserve"><value>Add target</value></data>
+  <data name="删除" xml:space="preserve"><value>Delete</value></data>
+  <data name="测试连接" xml:space="preserve"><value>Test connection</value></data>
+  <data name="安装或更新油猴脚本" xml:space="preserve"><value>Install or update userscript</value></data>
+  <data name="保存配置" xml:space="preserve"><value>Save configuration</value></data>
+  <data name="始终开启" xml:space="preserve"><value>Always on</value></data>
 </root>

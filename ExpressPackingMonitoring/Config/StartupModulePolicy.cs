@@ -24,6 +24,10 @@ public static class StartupModulePolicy
         for (int i = 0; i < args.Length; i++)
         {
             string value = args[i] ?? "";
+            if (value.StartsWith("--temporary-role=", StringComparison.OrdinalIgnoreCase))
+                return FromLegacyRole(value[17..]);
+            if (string.Equals(value, "--temporary-role", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                return FromLegacyRole(args[i + 1]);
             if (value.StartsWith("--role=", StringComparison.OrdinalIgnoreCase))
                 return FromLegacyRole(value[7..]);
             if (string.Equals(value, "--role", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)

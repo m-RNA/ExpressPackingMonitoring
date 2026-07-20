@@ -125,9 +125,12 @@
     <Compile Include="UI\CameraBarcodeUpgradeDialog.xaml.cs" />
     <Compile Include="UI\DriveSelectionDialog.cs" />
     <Compile Include="UI\FirstUseSetupWizardWindow.xaml.cs" />
+    <Compile Include="UI\GlobalOnboardingWindow.xaml.cs" />
     <Compile Include="UI\MainWindow.xaml.cs" />
     <Compile Include="UI\MarkdownFlowDocumentRenderer.cs" />
     <Compile Include="UI\MobileConnectionWindow.xaml.cs" />
+    <Compile Include="UI\MobileBackupSetupWindow.xaml.cs" />
+    <Compile Include="UI\OrderIntegrationSetupWindow.xaml.cs" />
     <Compile Include="UI\PlaybackWindow.xaml.cs" />
     <Compile Include="UI\SettingsWindow.xaml.cs" />
     <Compile Include="UI\StatisticsWindow.xaml.cs" />

@@ -10,6 +10,7 @@ using ExpressPackingMonitoring.Config;
 using ExpressPackingMonitoring.Localization;
 using ExpressPackingMonitoring.ViewModels;
 using ExpressPackingMonitoring.Services;
+using System.Text.Json;
 
 namespace ExpressPackingMonitoring.UI
 {
@@ -118,8 +119,6 @@ namespace ExpressPackingMonitoring.UI
             }
             BtnMobileConnection.Click += BtnMobileConnection_Click;
             BtnMobileConnection.PreviewMouseLeftButtonUp += BtnMobileConnection_PreviewMouseLeftButtonUp;
-            BtnSwitchWorkstation.Click += BtnSwitchWorkstation_Click;
-            BtnSwitchWorkstation.PreviewMouseLeftButtonUp += BtnSwitchWorkstation_PreviewMouseLeftButtonUp;
             _capsCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _capsCheckTimer.Tick += (s, e) =>
             {
@@ -191,6 +190,8 @@ namespace ExpressPackingMonitoring.UI
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
                     (DataContext as MainViewModel)?.RunStartupSetupFlowsIfNeeded(this);
+                    string initialModule = Application.Current.Properties["StartupModule"] as string ?? AppModules.Overview;
+                    ShowModule(initialModule);
                 }), DispatcherPriority.ContextIdle);
             };
             SourceInitialized += (_, __) =>
@@ -278,21 +279,9 @@ namespace ExpressPackingMonitoring.UI
             e.Handled = true;
         }
 
-        private void BtnSwitchWorkstation_Click(object sender, RoutedEventArgs e)
-        {
-            ExecuteSwitchWorkstation();
-            e.Handled = true;
-        }
-
         private void BtnMobileConnection_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
             ExecuteMobileConnection();
-            e.Handled = true;
-        }
-
-        private void BtnSwitchWorkstation_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-        {
-            ExecuteSwitchWorkstation();
             e.Handled = true;
         }
 
@@ -301,10 +290,190 @@ namespace ExpressPackingMonitoring.UI
             if (DataContext is MainViewModel viewModel) viewModel.ShowMobileConnection(this);
         }
 
-        private void ExecuteSwitchWorkstation()
+        private void NavigationButton_Click(object sender, RoutedEventArgs e)
         {
-            if (DataContext is MainViewModel viewModel) viewModel.SwitchWorkstation();
+            if (sender is Button button && button.Tag is string module)
+                ShowModule(module);
+            e.Handled = true;
         }
+
+        private void ShowModule(string module)
+        {
+            if (DataContext is not MainViewModel viewModel) return;
+            if (module == AppModules.Settings)
+            {
+                viewModel.OpenSettings();
+                RefreshModuleStates();
+                return;
+            }
+
+            if (module == AppModules.PcRecording
+                && viewModel.Config.PcRecordingSetupVersion < AppConfig.CurrentPcRecordingSetupVersion
+                && !ConfigurePcRecording(viewModel))
+                module = AppModules.Overview;
+            if (module == AppModules.MobileBackup
+                && viewModel.Config.MobileBackupSetupVersion < AppConfig.CurrentMobileBackupSetupVersion
+                && !ConfigureMobileBackup(viewModel))
+                module = AppModules.Overview;
+            if (module == AppModules.OrderIntegration
+                && viewModel.Config.OrderIntegrationSetupVersion < AppConfig.CurrentOrderIntegrationSetupVersion
+                && !ConfigureOrderIntegration(viewModel))
+                module = AppModules.Overview;
+
+            OverviewModule.Visibility = module == AppModules.Overview ? Visibility.Visible : Visibility.Collapsed;
+            PcRecordingModule.Visibility = module == AppModules.PcRecording ? Visibility.Visible : Visibility.Collapsed;
+            MobileBackupModule.Visibility = module == AppModules.MobileBackup ? Visibility.Visible : Visibility.Collapsed;
+            OrderIntegrationModule.Visibility = module == AppModules.OrderIntegration ? Visibility.Visible : Visibility.Collapsed;
+            VideoLibraryModule.Visibility = module == AppModules.VideoLibrary ? Visibility.Visible : Visibility.Collapsed;
+
+            if (module == AppModules.PcRecording)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    ScanInputTextBox.Focus();
+                    ApplyCapsLockForScanInput();
+                }));
+            }
+            else
+            {
+                _capsCheckTimer.Stop();
+                RestoreCapsLockState();
+            }
+            RefreshModuleStates();
+        }
+
+        private bool ConfigurePcRecording(MainViewModel viewModel)
+        {
+            if (!viewModel.BeginPcRecordingSetup()) return false;
+            try
+            {
+                var clone = CloneConfig(viewModel.Config);
+                var wizard = new FirstUseSetupWizardWindow(clone) { Owner = this };
+                SuspendCapsLockForModalWindow();
+                bool accepted;
+                try { accepted = wizard.ShowDialog() == true && !wizard.WasSkipped; }
+                finally { ResumeCapsLockAfterModalWindow(); }
+                if (!accepted) return false;
+
+                AppConfig result = wizard.ResultConfig;
+                AppConfig.ApplyFirstUseDefaults(result);
+                result.EnablePcCameraRecording = true;
+                result.PcRecordingSetupVersion = AppConfig.CurrentPcRecordingSetupVersion;
+                return viewModel.ApplyModuleConfiguration(result);
+            }
+            finally
+            {
+                viewModel.EndPcRecordingSetup();
+            }
+        }
+
+        private bool ConfigureMobileBackup(MainViewModel viewModel)
+        {
+            var wizard = new MobileBackupSetupWindow(viewModel.Config, viewModel.MonitorAccessAddress) { Owner = this };
+            SuspendCapsLockForModalWindow();
+            bool accepted;
+            try { accepted = wizard.ShowDialog() == true; }
+            finally { ResumeCapsLockAfterModalWindow(); }
+            if (!accepted) return false;
+
+            AppConfig result = CloneConfig(viewModel.Config);
+            result.EnableMobileBackup = true;
+            result.MobileBackupSetupVersion = AppConfig.CurrentMobileBackupSetupVersion;
+            return viewModel.ApplyModuleConfiguration(result);
+        }
+
+        private bool ConfigureOrderIntegration(MainViewModel viewModel)
+        {
+            var wizard = new OrderIntegrationSetupWindow(viewModel.Config) { Owner = this };
+            SuspendCapsLockForModalWindow();
+            bool accepted;
+            try { accepted = wizard.ShowDialog() == true; }
+            finally { ResumeCapsLockAfterModalWindow(); }
+            if (!accepted) return false;
+
+            AppConfig result = CloneConfig(viewModel.Config);
+            result.OrderIntegrationTargets = wizard.ResultTargets.ToList();
+            result.EnableOrderIntegration = true;
+            result.OrderIntegrationSetupVersion = AppConfig.CurrentOrderIntegrationSetupVersion;
+            return viewModel.ApplyModuleConfiguration(result);
+        }
+
+        private void BtnConfigureMobileBackup_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is MainViewModel viewModel && ConfigureMobileBackup(viewModel)) RefreshModuleStates();
+        }
+
+        private void BtnConfigureOrderIntegration_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is MainViewModel viewModel && ConfigureOrderIntegration(viewModel)) RefreshModuleStates();
+        }
+
+        private void BtnTogglePcRecording_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is not MainViewModel viewModel) return;
+            if (viewModel.IsRecording && viewModel.Config.EnablePcCameraRecording)
+            {
+                MessageBox.Show(this, "请先安全完成当前录像，再暂停电脑录像", "正在录像", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            ToggleModule(viewModel, AppModules.PcRecording, !viewModel.Config.EnablePcCameraRecording);
+        }
+
+        private void BtnToggleMobileBackup_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is MainViewModel viewModel)
+                ToggleModule(viewModel, AppModules.MobileBackup, !viewModel.Config.EnableMobileBackup);
+        }
+
+        private void BtnToggleOrderIntegration_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is MainViewModel viewModel)
+                ToggleModule(viewModel, AppModules.OrderIntegration, !viewModel.Config.EnableOrderIntegration);
+        }
+
+        private void ToggleModule(MainViewModel viewModel, string module, bool enabled)
+        {
+            AppConfig result = CloneConfig(viewModel.Config);
+            if (module == AppModules.PcRecording) result.EnablePcCameraRecording = enabled;
+            if (module == AppModules.MobileBackup) result.EnableMobileBackup = enabled;
+            if (module == AppModules.OrderIntegration) result.EnableOrderIntegration = enabled;
+            if (viewModel.ApplyModuleConfiguration(result)) RefreshModuleStates();
+        }
+
+        private void BtnDownloadMobileApp_Click(object sender, RoutedEventArgs e) => WorkstationNetwork.OpenUrl(GlobalOnboardingWindow.MobileDownloadUrl);
+
+        private void BtnOpenVideoLibrary_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is MainViewModel viewModel && viewModel.OpenPlaybackCommand.CanExecute(null))
+                viewModel.OpenPlaybackCommand.Execute(null);
+        }
+
+        private void RefreshModuleStates()
+        {
+            if (DataContext is not MainViewModel viewModel) return;
+            OverviewPcStatus.Text = GetModuleStatus(viewModel.Config.PcRecordingSetupVersion, viewModel.Config.EnablePcCameraRecording, AppConfig.CurrentPcRecordingSetupVersion);
+            OverviewMobileStatus.Text = GetModuleStatus(viewModel.Config.MobileBackupSetupVersion, viewModel.Config.EnableMobileBackup, AppConfig.CurrentMobileBackupSetupVersion);
+            OverviewOrderStatus.Text = GetModuleStatus(viewModel.Config.OrderIntegrationSetupVersion, viewModel.Config.EnableOrderIntegration, AppConfig.CurrentOrderIntegrationSetupVersion);
+            MobileBackupStateText.Text = $"状态：{OverviewMobileStatus.Text}";
+            OrderIntegrationStateText.Text = $"状态：{OverviewOrderStatus.Text}";
+            OrderTargetsList.ItemsSource = viewModel.Config.OrderIntegrationTargets
+                .Where(t => t.Enabled)
+                .Select(t => $"{t.DisplayName}  ·  {(t.IsLocal ? "当前电脑" : t.Address)}")
+                .ToList();
+            ShellLanStatusText.Text = string.IsNullOrWhiteSpace(viewModel.MonitorAccessAddress)
+                ? "局域网服务准备中"
+                : $"局域网  {viewModel.MonitorAccessAddress}\n{viewModel.ConnectedDeviceText}";
+            ShellVersionText.Text = $"版本 {AppVersion.Current}";
+            BtnTogglePcRecording.Content = viewModel.Config.EnablePcCameraRecording ? "暂停电脑录像" : "恢复电脑录像";
+            BtnToggleMobileBackup.Content = viewModel.Config.EnableMobileBackup ? "暂停备份" : "恢复备份";
+            BtnToggleOrderIntegration.Content = viewModel.Config.EnableOrderIntegration ? "暂停订单联动" : "恢复订单联动";
+        }
+
+        private static string GetModuleStatus(int setupVersion, bool enabled, int currentVersion) =>
+            setupVersion < currentVersion ? "未配置" : enabled ? "运行正常" : "已暂停";
+
+        private static AppConfig CloneConfig(AppConfig config) =>
+            JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(config)) ?? new AppConfig();
 
         private void ScanInputTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
         {

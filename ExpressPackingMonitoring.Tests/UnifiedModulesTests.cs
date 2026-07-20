@@ -62,6 +62,7 @@ public class UnifiedModulesTests
     [InlineData("--monitor", AppModules.PcRecording)]
     [InlineData("--print-station", AppModules.OrderIntegration)]
     [InlineData("--role=PrintStation", AppModules.OrderIntegration)]
+    [InlineData("--temporary-role", "PrintStation", AppModules.OrderIntegration)]
     [InlineData("--role", "CameraMonitor", AppModules.PcRecording)]
     public void LegacyArguments_SelectModuleWithoutChangingConfiguration(params string[] values)
     {
@@ -69,5 +70,14 @@ public class UnifiedModulesTests
         string[] args = values[..^1];
 
         Assert.Equal(expected, StartupModulePolicy.Resolve(args));
+    }
+
+    [Theory]
+    [InlineData("/api/orderinfo", true)]
+    [InlineData("/api/order-lookup/pending", true)]
+    [InlineData("/api/videos", false)]
+    public void OrderIntegrationPaths_AreSeparatedFromLanViewing(string path, bool expected)
+    {
+        Assert.Equal(expected, ExpressPackingMonitoring.Services.WebServer.IsOrderIntegrationPath(path));
     }
 }

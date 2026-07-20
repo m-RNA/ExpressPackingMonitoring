@@ -70,7 +70,19 @@ try {
     $env:EPM_INSTANCE_SCOPE = "automation$PID"
     $wpfProcess = $null
     try {
-        $wpfProcess = Start-Process -FilePath $appExecutable -ArgumentList @("--temporary-role", "PrintStation") -PassThru -WindowStyle Hidden
+        $orderConfig = @{
+            UnifiedModulesMigrationVersion = 1
+            GlobalOnboardingVersion = 1
+            OrderIntegrationSetupVersion = 1
+            EnableOrderIntegration = $true
+            EnableGlobalKeyboard = $false
+            Language = "zh-Hans"
+        } | ConvertTo-Json
+        [System.IO.File]::WriteAllText(
+            (Join-Path $wpfDataRoot "config.json"),
+            $orderConfig,
+            [System.Text.UTF8Encoding]::new($false))
+        $wpfProcess = Start-Process -FilePath $appExecutable -ArgumentList @("--print-station") -PassThru -WindowStyle Hidden
         $deadline = [DateTime]::UtcNow.AddSeconds(15)
         do {
             Start-Sleep -Milliseconds 200
@@ -78,15 +90,23 @@ try {
             if ($wpfProcess.HasExited) { throw "The isolated WPF process exited before showing its main window." }
         } while ($wpfProcess.MainWindowHandle -eq 0 -and [DateTime]::UtcNow -lt $deadline)
         if ($wpfProcess.MainWindowHandle -eq 0) { throw "The isolated WPF main window did not appear." }
-        if ($wpfProcess.MainWindowTitle -ne "快递单打印工位") {
+        $titleDeadline = [DateTime]::UtcNow.AddSeconds(5)
+        do {
+            Start-Sleep -Milliseconds 100
+            $wpfProcess.Refresh()
+        } while (-not $wpfProcess.MainWindowTitle.StartsWith("快递打包监控", [System.StringComparison]::Ordinal) -and
+                 [DateTime]::UtcNow -lt $titleDeadline)
+        if (-not $wpfProcess.MainWindowTitle.StartsWith("快递打包监控", [System.StringComparison]::Ordinal)) {
             throw "Unexpected WPF window title: $($wpfProcess.MainWindowTitle)"
         }
         $wpfProcess.CloseMainWindow() | Out-Null
         if (-not $wpfProcess.WaitForExit(5000)) { throw "The isolated WPF process did not shut down cleanly." }
 
         $cameraConfig = @{
-            WorkstationRole = "CameraMonitor"
-            FirstUseWizardCompleted = $true
+            UnifiedModulesMigrationVersion = 1
+            GlobalOnboardingVersion = 1
+            PcRecordingSetupVersion = 1
+            EnablePcCameraRecording = $true
             CameraBarcodeSetupVersion = 1
             MobileConnectionSetupVersion = 1
             EnableCameraBarcodeRecognition = $false
@@ -99,7 +119,7 @@ try {
             [System.Text.UTF8Encoding]::new($false))
 
         $env:EPM_INSTANCE_SCOPE = "automation-camera$PID"
-        $wpfProcess = Start-Process -FilePath $appExecutable -ArgumentList @("--temporary-role", "CameraMonitor") -PassThru -WindowStyle Hidden
+        $wpfProcess = Start-Process -FilePath $appExecutable -ArgumentList @("--monitor") -PassThru -WindowStyle Hidden
         $deadline = [DateTime]::UtcNow.AddSeconds(15)
         do {
             Start-Sleep -Milliseconds 200

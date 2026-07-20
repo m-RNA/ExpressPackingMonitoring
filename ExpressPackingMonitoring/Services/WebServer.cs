@@ -84,6 +84,8 @@ namespace ExpressPackingMonitoring.Services
         private readonly ConnectedClientRegistry _connectedClients;
         private readonly string _mobileBackupComputerId;
         private readonly string _mobileBackupComputerName;
+        private readonly Func<bool> _mobileBackupEnabledProvider;
+        private readonly Func<bool> _orderIntegrationEnabledProvider;
         private readonly CancellationTokenSource _cts = new();
         private readonly SemaphoreSlim _requestSlots = new(32, 32);
         private Task _listenTask;
@@ -138,7 +140,9 @@ namespace ExpressPackingMonitoring.Services
             string mobileBackupComputerId = null,
             string mobileBackupComputerName = null,
             string mobileBackupStateDirectory = null,
-            Func<string> mobileBackupRecordingRootResolver = null)
+            Func<string> mobileBackupRecordingRootResolver = null,
+            Func<bool> mobileBackupEnabledProvider = null,
+            Func<bool> orderIntegrationEnabledProvider = null)
         {
             _db = db ?? throw new ArgumentNullException(nameof(db));
             _isRecordingProvider = isRecordingProvider ?? (() => false);
@@ -151,6 +155,8 @@ namespace ExpressPackingMonitoring.Services
             _mobileBackupComputerName = string.IsNullOrWhiteSpace(mobileBackupComputerName)
                 ? Environment.MachineName
                 : mobileBackupComputerName.Trim();
+            _mobileBackupEnabledProvider = mobileBackupEnabledProvider ?? (() => true);
+            _orderIntegrationEnabledProvider = orderIntegrationEnabledProvider ?? (() => true);
             _clipService = new VideoClipService(_db, WriteLog, _mkvConverter, IsCurrentRecordingFile, () => Task.Run(CleanWebCache));
             Port = port;
             _transCacheMaxBytes = (long)transCacheMaxMB * 1024 * 1024;
@@ -468,6 +474,18 @@ namespace ExpressPackingMonitoring.Services
                     return;
                 }
 
+                if (IsMobileBackupPath(path) && !_mobileBackupEnabledProvider())
+                {
+                    SendJson(ctx, 503, new { errorCode = "mobile_backup_paused", error = "这台电脑尚未启用手机备份" });
+                    return;
+                }
+
+                if (IsOrderIntegrationPath(path) && !_orderIntegrationEnabledProvider())
+                {
+                    SendJson(ctx, 503, new { errorCode = "order_integration_paused", error = "这台电脑尚未启用订单联动" });
+                    return;
+                }
+
                 if (IsMobileBackupPath(path) && !TryAuthorizeMobileBackupRequest(ctx, out bool missingBackupKey))
                 {
                     SendJson(ctx, missingBackupKey ? 401 : 403, new
@@ -620,6 +638,9 @@ namespace ExpressPackingMonitoring.Services
 
         internal static bool IsMobileBackupPath(string path) =>
             path?.StartsWith("/api/mobile-backup", StringComparison.OrdinalIgnoreCase) == true;
+
+        internal static bool IsOrderIntegrationPath(string path) =>
+            path is "/api/orderinfo" or "/api/order-lookup/pending" or "/api/order-lookup/result";
 
         private bool TryAuthorizeMobileBackupRequest(HttpListenerContext ctx, out bool missingKey)
         {

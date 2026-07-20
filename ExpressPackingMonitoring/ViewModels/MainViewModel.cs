@@ -1643,11 +1643,6 @@ namespace ExpressPackingMonitoring.ViewModels
                 Config.AudioSyncOffsetMs = 0;
                 configMigrated = true;
             }
-            if (!WorkstationRoles.IsKnown(Config.WorkstationRole))
-            {
-                Config.WorkstationRole = WorkstationRoles.CameraMonitor;
-                configMigrated = true;
-            }
             int normalizedAudioSyncOffsetMs = Math.Clamp(Config.AudioSyncOffsetMs, -5000, 5000);
             if (Config.AudioSyncOffsetMs != normalizedAudioSyncOffsetMs)
             {
@@ -1719,7 +1714,6 @@ namespace ExpressPackingMonitoring.ViewModels
                     bool themeChanged = Config.Theme != nextConfig.Theme;
                     bool globalKeyChanged = Config.EnableGlobalKeyboard != nextConfig.EnableGlobalKeyboard;
                     bool cameraBarcodeChanged = Config.EnableCameraBarcodeRecognition != nextConfig.EnableCameraBarcodeRecognition;
-                    bool workstationChanged = !string.Equals(_activeWorkstationRole, nextConfig.WorkstationRole, StringComparison.OrdinalIgnoreCase);
                     bool aiTtsChanged = Config.EnableAiTts != nextConfig.EnableAiTts
                         || Config.AiTtsEngine != nextConfig.AiTtsEngine;
                     bool webServerChanged = Config.EnableWebServer != nextConfig.EnableWebServer
@@ -1772,7 +1766,7 @@ namespace ExpressPackingMonitoring.ViewModels
                             _globalKeyHook.Stop();
                     }
                     bool webServerApplied = true;
-                    bool webServerShouldApply = (webServerChanged || webServerNeedsRecovery) && !workstationChanged;
+                    bool webServerShouldApply = webServerChanged || webServerNeedsRecovery;
                     if (webServerShouldApply)
                     {
                         ShowToast("正在应用局域网服务设置...");
@@ -1783,11 +1777,7 @@ namespace ExpressPackingMonitoring.ViewModels
                         _ = RefreshWorkstationStatusAsync();
                     }
 
-                    if (workstationChanged)
-                    {
-                        WorkstationNetwork.AskRestart(Application.Current?.MainWindow);
-                    }
-                    else if (cameraChanged)
+                    if (cameraChanged)
                     {
                         if (IsRecording)
                         {
@@ -1815,17 +1805,70 @@ namespace ExpressPackingMonitoring.ViewModels
             }
         }
 
-        public async void RunStartupSetupFlowsIfNeeded(System.Windows.Window owner)
+        public void RunStartupSetupFlowsIfNeeded(System.Windows.Window owner)
         {
-            bool isExistingUser = Config.FirstUseWizardCompleted;
-            if (!isExistingUser)
-            {
-                await RunFirstUseSetupWizardIfNeededAsync(owner);
+            if (_isDisposed || Config.GlobalOnboardingVersion >= AppConfig.CurrentGlobalOnboardingVersion)
                 return;
+
+            var guide = new GlobalOnboardingWindow { Owner = owner };
+            MainWindow setupOwner = owner as MainWindow;
+            setupOwner?.SuspendCapsLockForModalWindow();
+            try
+            {
+                guide.ShowDialog();
+            }
+            finally
+            {
+                setupOwner?.ResumeCapsLockAfterModalWindow();
             }
 
-            RunCameraBarcodeUpgradePromptIfNeeded(owner);
-            await RunMobileConnectionSetupPromptIfNeededAsync(owner);
+            var nextConfig = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(Config)) ?? new AppConfig();
+            nextConfig.GlobalOnboardingVersion = AppConfig.CurrentGlobalOnboardingVersion;
+            if (!ApplyModuleConfiguration(nextConfig))
+                ShowToast("首次介绍状态保存失败，下次启动会重新显示");
+        }
+
+        public bool ApplyModuleConfiguration(AppConfig nextConfig)
+        {
+            ArgumentNullException.ThrowIfNull(nextConfig);
+            bool pcRecordingWasEnabled = Config.EnablePcCameraRecording;
+            AppConfig.NormalizeAfterLoad(nextConfig);
+            if (!SaveConfig(nextConfig, notifyUser: true))
+                return false;
+
+            Config = nextConfig;
+            if (pcRecordingWasEnabled && !Config.EnablePcCameraRecording)
+                StopCamera();
+            else if (!pcRecordingWasEnabled && Config.EnablePcCameraRecording)
+                RestartCamera();
+            ResetCameraBarcodeRecognition();
+            ApplyGlobalKeyboardConfig();
+            if (_globalKeyHook != null)
+            {
+                if (Config.EnablePcCameraRecording && (Config.EnableGlobalKeyboard || Config.EnableScannerAutoSubmit))
+                    _globalKeyHook.Start();
+                else
+                    _globalKeyHook.Stop();
+            }
+            return true;
+        }
+
+        public bool BeginPcRecordingSetup()
+        {
+            if (IsRecording)
+            {
+                ShowToast("请先完成当前录像，再配置电脑录像");
+                return false;
+            }
+            _isSetupWizardActive = true;
+            return StopCamera();
+        }
+
+        public void EndPcRecordingSetup()
+        {
+            _isSetupWizardActive = false;
+            if (!_isDisposed && Config.EnablePcCameraRecording && !IsVideoSourceRunning())
+                RestartCamera();
         }
 
         private async Task RunFirstUseSetupWizardIfNeededAsync(System.Windows.Window owner)
@@ -2156,7 +2199,8 @@ namespace ExpressPackingMonitoring.ViewModels
             _cts = new CancellationTokenSource();
             _lastActivityTime = DateTime.Now;
             RuntimeLog.Info("System", "InitializeSystem");
-            StartCamera();
+            if (Config.EnablePcCameraRecording)
+                StartCamera();
             _videoTask = Task.Run(() => VideoProcessLoop(_cts.Token), _cts.Token);
             Task.Run(CheckDiskAndCleanup);
             Task.Run(CameraIdleWatchdog);
@@ -2333,7 +2377,9 @@ namespace ExpressPackingMonitoring.ViewModels
                         mobileBackupComputerId: Config.MobileBackupComputerId,
                         mobileBackupComputerName: Environment.MachineName,
                         mobileBackupStateDirectory: Path.Combine(AppPaths.CacheDir, "mobile-backup"),
-                        mobileBackupRecordingRootResolver: ResolveBestStoragePath)
+                        mobileBackupRecordingRootResolver: ResolveBestStoragePath,
+                        mobileBackupEnabledProvider: () => Config.EnableMobileBackup,
+                        orderIntegrationEnabledProvider: () => Config.EnableOrderIntegration)
                     {
                         EnableOrderInfoLog = enableOrderInfoLog
                     };
@@ -2845,7 +2891,7 @@ namespace ExpressPackingMonitoring.ViewModels
         public void NotifyUserActivity()
         {
             _lastActivityTime = DateTime.Now;
-            if (_isSetupWizardActive)
+            if (_isSetupWizardActive || !Config.EnablePcCameraRecording)
                 return;
 
             if (_isCameraSleeping)
@@ -2872,6 +2918,7 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 await Task.Delay(10_000); // 每10秒检查一次
                 if (_isDisposed || _shutdownRequested) break;
+                if (!Config.EnablePcCameraRecording) continue;
                 if (!Config.EnableCameraIdle || Config.CameraIdleMinutes <= 0) continue;
                 if (_isSetupWizardActive) continue;
                 if (IsRecording || _isCameraSleeping) continue;

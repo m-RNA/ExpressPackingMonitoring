@@ -87,11 +87,45 @@
     </Window.Resources>
 
     <Grid>
-        <Grid Margin="24">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="224"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+            <Grid Margin="16,20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <StackPanel Margin="8,0,8,24">
+                    <TextBlock Text="打包监控" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}"/>
+                    <TextBlock Text="录像 · 备份 · 订单" Margin="0,5,0,0" FontSize="12" Foreground="{DynamicResource TextMuted}"/>
+                </StackPanel>
+                <StackPanel Grid.Row="1">
+                    <Button x:Name="NavOverview" Content="概览" Tag="overview" Height="44" Margin="0,0,0,6" HorizontalContentAlignment="Left" Padding="16,0" Focusable="False" Click="NavigationButton_Click"/>
+                    <Button x:Name="NavPcRecording" Content="电脑录像" Tag="pc-recording" Height="44" Margin="0,0,0,6" HorizontalContentAlignment="Left" Padding="16,0" Focusable="False" Click="NavigationButton_Click"/>
+                    <Button x:Name="NavMobileBackup" Content="手机备份" Tag="mobile-backup" Height="44" Margin="0,0,0,6" HorizontalContentAlignment="Left" Padding="16,0" Focusable="False" Click="NavigationButton_Click"/>
+                    <Button x:Name="NavOrderIntegration" Content="订单联动" Tag="order-integration" Height="44" Margin="0,0,0,6" HorizontalContentAlignment="Left" Padding="16,0" Focusable="False" Click="NavigationButton_Click"/>
+                    <Button x:Name="NavVideoLibrary" Content="录像库" Tag="video-library" Height="44" Margin="0,0,0,6" HorizontalContentAlignment="Left" Padding="16,0" Focusable="False" Click="NavigationButton_Click"/>
+                    <Button x:Name="NavSettings" Content="设置" Tag="settings" Height="44" HorizontalContentAlignment="Left" Padding="16,0" Focusable="False" Click="NavigationButton_Click"/>
+                </StackPanel>
+                <StackPanel Grid.Row="3" Margin="8,18,8,0">
+                    <TextBlock x:Name="ShellLanStatusText" Text="局域网服务准备中" FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="ShellVersionText" Margin="0,6,0,0" FontSize="11" Foreground="{DynamicResource TextMuted}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Column="1">
+        <Grid x:Name="PcRecordingModule" Margin="24" Visibility="Collapsed">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="360"/>
             </Grid.ColumnDefinitions>
+            <Button x:Name="BtnTogglePcRecording" Grid.Column="1" Width="120" Height="34" HorizontalAlignment="Right" VerticalAlignment="Top" Panel.ZIndex="20" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Click="BtnTogglePcRecording_Click"/>
 
             <Grid Grid.Column="0" Margin="0,0,24,0">
                 <Grid.RowDefinitions>
@@ -664,10 +698,10 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{Binding WorkstationPrintStatusText}" Foreground="{DynamicResource TextMuted}" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                <Button x:Name="BtnSwitchWorkstation" Grid.Column="1" Width="126" Height="32" Margin="8,0,0,0" Padding="9,0" Style="{StaticResource SecondaryButtonStyle}" ToolTip="切换工位" Cursor="Hand" Focusable="False">
+                                <Button Grid.Column="1" Width="126" Height="32" Margin="8,0,0,0" Padding="9,0" Style="{StaticResource SecondaryButtonStyle}" ToolTip="订单联动" Cursor="Hand" Focusable="False" Tag="order-integration" Click="NavigationButton_Click">
                                     <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                                         <Path Data="{StaticResource FluentArrowSwapIcon}" Width="14" Height="14" Stretch="Uniform" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-                                        <TextBlock Text="切换工位" Margin="5,0,0,0" FontSize="12" VerticalAlignment="Center"/>
+                                        <TextBlock Text="订单联动" Margin="5,0,0,0" FontSize="12" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                             </Grid>
@@ -755,7 +789,91 @@
             </Border>
         </Grid>
 
-        <Border Background="{DynamicResource ToastBackground}" CornerRadius="8" Padding="32,16" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Panel.ZIndex="1000">
+        <ScrollViewer x:Name="OverviewModule" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="32" MaxWidth="1120" HorizontalAlignment="Stretch">
+                <TextBlock Text="概览" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}"/>
+                <TextBlock Text="电脑录像、手机备份和订单联动可以同时使用" Margin="0,6,0,24" FontSize="14" Foreground="{DynamicResource TextSecondary}"/>
+                <UniformGrid Columns="3">
+                    <Border Margin="0,0,8,0" Padding="20" CornerRadius="12" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="电脑录像" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                            <TextBlock x:Name="OverviewPcStatus" Text="未配置" Margin="0,8,0,12" Foreground="{DynamicResource AccentBlue}"/>
+                            <TextBlock Text="使用电脑摄像头录像，可用摄像头识别面单，也兼容扫码枪" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}"/>
+                            <Button Content="开始使用" Tag="pc-recording" Height="38" Margin="0,18,0,0" Style="{StaticResource PrimaryButtonStyle}" Focusable="False" Click="NavigationButton_Click"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Margin="8,0" Padding="20" CornerRadius="12" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="手机备份" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                            <TextBlock x:Name="OverviewMobileStatus" Text="未配置" Margin="0,8,0,12" Foreground="{DynamicResource AccentBlue}"/>
+                            <TextBlock Text="手机可独立录像，完成后备份到这台电脑并统一进入录像库" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}"/>
+                            <Button Content="开始使用" Tag="mobile-backup" Height="38" Margin="0,18,0,0" Style="{StaticResource PrimaryButtonStyle}" Focusable="False" Click="NavigationButton_Click"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Margin="8,0,0,0" Padding="20" CornerRadius="12" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="订单联动" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                            <TextBlock x:Name="OverviewOrderStatus" Text="未配置" Margin="0,8,0,12" Foreground="{DynamicResource AccentBlue}"/>
+                            <TextBlock Text="同步留言、备注、商品和退款信息，可同时发送到多台电脑" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}"/>
+                            <Button Content="开始使用" Tag="order-integration" Height="38" Margin="0,18,0,0" Style="{StaticResource PrimaryButtonStyle}" Focusable="False" Click="NavigationButton_Click"/>
+                        </StackPanel>
+                    </Border>
+                </UniformGrid>
+                <Border Margin="0,24,0,0" Padding="20" CornerRadius="12" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                        <StackPanel><TextBlock Text="当前录像" Foreground="{DynamicResource TextMuted}"/><TextBlock Text="{Binding CurrentOrderId, TargetNullValue=未在录像}" Margin="0,6,0,0" FontSize="16" Foreground="{DynamicResource TextPrimary}"/></StackPanel>
+                        <StackPanel Grid.Column="1"><TextBlock Text="在线设备" Foreground="{DynamicResource TextMuted}"/><TextBlock Text="{Binding ConnectedDeviceText}" Margin="0,6,0,0" FontSize="16" Foreground="{DynamicResource TextPrimary}"/></StackPanel>
+                        <StackPanel Grid.Column="2"><TextBlock Text="局域网地址" Foreground="{DynamicResource TextMuted}"/><TextBlock Text="{Binding MonitorAccessAddress}" Margin="0,6,0,0" FontSize="16" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis"/></StackPanel>
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Grid x:Name="MobileBackupModule" Visibility="Collapsed" Margin="32">
+            <StackPanel MaxWidth="900" HorizontalAlignment="Left">
+                <TextBlock Text="手机备份" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}"/>
+                <TextBlock Text="手机录像与电脑录像互不影响，备份完成后统一进入录像库" Margin="0,6,0,24" Foreground="{DynamicResource TextSecondary}"/>
+                <Border Padding="24" CornerRadius="12" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock x:Name="MobileBackupStateText" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="手机版是独立 APP，APK 不包含在电脑版安装包中" Margin="0,10,0,18" Foreground="{DynamicResource TextSecondary}"/>
+                        <WrapPanel>
+                            <Button x:Name="BtnConfigureMobileBackup" Content="运行配置向导" Height="40" Margin="0,0,10,0" Style="{StaticResource PrimaryButtonStyle}" Focusable="False" Click="BtnConfigureMobileBackup_Click"/>
+                            <Button x:Name="BtnToggleMobileBackup" Height="40" Margin="0,0,10,0" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Click="BtnToggleMobileBackup_Click"/>
+                            <Button Content="显示连接二维码" Height="40" Margin="0,0,10,0" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Click="BtnMobileConnection_Click"/>
+                            <Button Content="下载手机版" Height="40" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Click="BtnDownloadMobileApp_Click"/>
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <Grid x:Name="OrderIntegrationModule" Visibility="Collapsed" Margin="32">
+            <StackPanel MaxWidth="900" HorizontalAlignment="Left">
+                <TextBlock Text="订单联动" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}"/>
+                <TextBlock Text="本机和多个远程录像电脑可以同时接收留言、备注、商品与退款信息" Margin="0,6,0,24" Foreground="{DynamicResource TextSecondary}"/>
+                <Border Padding="24" CornerRadius="12" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock x:Name="OrderIntegrationStateText" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                        <ItemsControl x:Name="OrderTargetsList" Margin="0,14,0,16"/>
+                        <Button x:Name="BtnConfigureOrderIntegration" Content="配置订单联动" Width="150" Height="40" HorizontalAlignment="Left" Style="{StaticResource PrimaryButtonStyle}" Focusable="False" Click="BtnConfigureOrderIntegration_Click"/>
+                        <Button x:Name="BtnToggleOrderIntegration" Width="150" Height="40" Margin="0,10,0,0" HorizontalAlignment="Left" Style="{StaticResource SecondaryButtonStyle}" Focusable="False" Click="BtnToggleOrderIntegration_Click"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <Grid x:Name="VideoLibraryModule" Visibility="Collapsed" Margin="32">
+            <StackPanel>
+                <TextBlock Text="录像库" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}"/>
+                <TextBlock Text="电脑录像和手机备份录像统一保存在这里，并保留来源标签" Margin="0,6,0,24" Foreground="{DynamicResource TextSecondary}"/>
+                <Button Content="打开录像查询" Width="150" Height="40" HorizontalAlignment="Left" Style="{StaticResource PrimaryButtonStyle}" Focusable="False" Click="BtnOpenVideoLibrary_Click"/>
+            </StackPanel>
+        </Grid>
+        </Grid>
+
+        <Border Grid.ColumnSpan="2" Background="{DynamicResource ToastBackground}" CornerRadius="8" Padding="32,16" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" Panel.ZIndex="1000">
             <Border.Style>
                 <Style TargetType="Border">
                     <Setter Property="Opacity" Value="0"/>

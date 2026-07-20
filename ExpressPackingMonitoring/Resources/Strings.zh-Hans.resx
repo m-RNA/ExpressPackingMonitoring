@@ -505,4 +505,31 @@
   <data name="手机或其他电脑连接同一个局域网后，可扫码或复制网址打开录像网页" xml:space="preserve"><value>手机或其他电脑连接同一个局域网后，可扫码或复制网址打开录像网页</value></data>
   <data name="显示二维码" xml:space="preserve"><value>显示二维码</value></data>
   <data name="连接网址已复制" xml:space="preserve"><value>连接网址已复制</value></data>
+  <data name="首次介绍状态保存失败，下次启动会重新显示" xml:space="preserve"><value>首次介绍状态保存失败，下次启动会重新显示</value></data>
+  <data name="请先完成当前录像，再配置电脑录像" xml:space="preserve"><value>请先完成当前录像，再配置电脑录像</value></data>
+  <data name="欢迎使用打包监控" xml:space="preserve"><value>欢迎使用打包监控</value></data>
+  <data name="一套程序，同时管理电脑录像、手机录像备份和订单联动" xml:space="preserve"><value>一套程序，同时管理电脑录像、手机录像备份和订单联动</value></data>
+  <data name="功能始终可用，无需提前选择" xml:space="preserve"><value>功能始终可用，无需提前选择</value></data>
+  <data name="电脑录像" xml:space="preserve"><value>电脑录像</value></data><data name="摄像头识别面单，也兼容扫码枪" xml:space="preserve"><value>摄像头识别面单，也兼容扫码枪</value></data>
+  <data name="手机备份" xml:space="preserve"><value>手机备份</value></data><data name="手机独立录像，电脑负责校验和保存" xml:space="preserve"><value>手机独立录像，电脑负责校验和保存</value></data>
+  <data name="订单联动" xml:space="preserve"><value>订单联动</value></data><data name="同步留言、备注、商品和退款信息" xml:space="preserve"><value>同步留言、备注、商品和退款信息</value></data>
+  <data name="第一次进入某个功能时，再完成该功能自己的配置" xml:space="preserve"><value>第一次进入某个功能时，再完成该功能自己的配置</value></data><data name="手机与局域网" xml:space="preserve"><value>手机与局域网</value></data>
+  <data name="手机版是独立 APP，使用与电脑版相同的网盘下载入口。电脑、手机和打印电脑需要连接同一个局域网。" xml:space="preserve"><value>手机版是独立 APP，使用与电脑版相同的网盘下载入口。电脑、手机和打印电脑需要连接同一个局域网。</value></data>
+  <data name="打开电脑版与手机版下载页" xml:space="preserve"><value>打开电脑版与手机版下载页</value></data><data name="准备完成" xml:space="preserve"><value>准备完成</value></data>
+  <data name="进入概览后，选择你现在要使用的功能即可。录像、备份和订单联动可以同时运行。" xml:space="preserve"><value>进入概览后，选择你现在要使用的功能即可。录像、备份和订单联动可以同时运行。</value></data>
+  <data name="录像 · 备份 · 订单" xml:space="preserve"><value>录像 · 备份 · 订单</value></data><data name="概览" xml:space="preserve"><value>概览</value></data><data name="录像库" xml:space="preserve"><value>录像库</value></data><data name="局域网服务准备中" xml:space="preserve"><value>局域网服务准备中</value></data>
+  <data name="电脑录像、手机备份和订单联动可以同时使用" xml:space="preserve"><value>电脑录像、手机备份和订单联动可以同时使用</value></data><data name="未配置" xml:space="preserve"><value>未配置</value></data>
+  <data name="使用电脑摄像头录像，可用摄像头识别面单，也兼容扫码枪" xml:space="preserve"><value>使用电脑摄像头录像，可用摄像头识别面单，也兼容扫码枪</value></data><data name="开始使用" xml:space="preserve"><value>开始使用</value></data>
+  <data name="手机可独立录像，完成后备份到这台电脑并统一进入录像库" xml:space="preserve"><value>手机可独立录像，完成后备份到这台电脑并统一进入录像库</value></data><data name="同步留言、备注、商品和退款信息，可同时发送到多台电脑" xml:space="preserve"><value>同步留言、备注、商品和退款信息，可同时发送到多台电脑</value></data>
+  <data name="当前录像" xml:space="preserve"><value>当前录像</value></data><data name="在线设备" xml:space="preserve"><value>在线设备</value></data><data name="局域网地址" xml:space="preserve"><value>局域网地址</value></data>
+  <data name="手机录像与电脑录像互不影响，备份完成后统一进入录像库" xml:space="preserve"><value>手机录像与电脑录像互不影响，备份完成后统一进入录像库</value></data><data name="手机版是独立 APP，APK 不包含在电脑版安装包中" xml:space="preserve"><value>手机版是独立 APP，APK 不包含在电脑版安装包中</value></data>
+  <data name="运行配置向导" xml:space="preserve"><value>运行配置向导</value></data><data name="显示连接二维码" xml:space="preserve"><value>显示连接二维码</value></data><data name="下载手机版" xml:space="preserve"><value>下载手机版</value></data>
+  <data name="本机和多个远程录像电脑可以同时接收留言、备注、商品与退款信息" xml:space="preserve"><value>本机和多个远程录像电脑可以同时接收留言、备注、商品与退款信息</value></data><data name="配置订单联动" xml:space="preserve"><value>配置订单联动</value></data>
+  <data name="电脑录像和手机备份录像统一保存在这里，并保留来源标签" xml:space="preserve"><value>电脑录像和手机备份录像统一保存在这里，并保留来源标签</value></data><data name="打开录像查询" xml:space="preserve"><value>打开录像查询</value></data>
+  <data name="配置手机备份" xml:space="preserve"><value>配置手机备份</value></data><data name="手机录像和电脑录像可以同时使用，都会进入同一个录像库" xml:space="preserve"><value>手机录像和电脑录像可以同时使用，都会进入同一个录像库</value></data>
+  <data name="1  备份存储" xml:space="preserve"><value>1  备份存储</value></data><data name="2  局域网连接" xml:space="preserve"><value>2  局域网连接</value></data><data name="预览连接二维码" xml:space="preserve"><value>预览连接二维码</value></data><data name="3  安装手机版" xml:space="preserve"><value>3  安装手机版</value></data>
+  <data name="APK 不包含在电脑版安装包中。安装后点击“连接电脑”并扫描上面的二维码，录像完成后会自动加入备份队列。" xml:space="preserve"><value>APK 不包含在电脑版安装包中。安装后点击“连接电脑”并扫描上面的二维码，录像完成后会自动加入备份队列。</value></data><data name="打开网盘下载" xml:space="preserve"><value>打开网盘下载</value></data><data name="完成配置" xml:space="preserve"><value>完成配置</value></data>
+  <data name="订单信息可以同时发送到当前电脑和多台远程录像/备份电脑" xml:space="preserve"><value>订单信息可以同时发送到当前电脑和多台远程录像/备份电脑</value></data><data name="当前电脑接收订单信息" xml:space="preserve"><value>当前电脑接收订单信息</value></data><data name="远程目标" xml:space="preserve"><value>远程目标</value></data>
+  <data name="启用" xml:space="preserve"><value>启用</value></data><data name="名称" xml:space="preserve"><value>名称</value></data><data name="地址（IP:端口）" xml:space="preserve"><value>地址（IP:端口）</value></data><data name="添加目标" xml:space="preserve"><value>添加目标</value></data><data name="删除" xml:space="preserve"><value>删除</value></data><data name="测试连接" xml:space="preserve"><value>测试连接</value></data>
+  <data name="安装或更新油猴脚本" xml:space="preserve"><value>安装或更新油猴脚本</value></data><data name="保存配置" xml:space="preserve"><value>保存配置</value></data><data name="始终开启" xml:space="preserve"><value>始终开启</value></data>
 </root>
