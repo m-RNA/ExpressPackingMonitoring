@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ExpressPackingMonitoring.Config;
+using ExpressPackingMonitoring.Localization;
 using ExpressPackingMonitoring.Services;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -20,6 +21,8 @@ public sealed class MobileBackupViewModel : ObservableObject, IDisposable
     private string _accessUrl = "";
     private string _connectionMessage = "局域网服务正在准备";
     private string _deviceSummary = "暂无手机连接";
+    private int _connectedMobileDeviceCount;
+    private int _todayVideoCount;
     private string _operationMessage = "";
     private BitmapSource? _qrCode;
     private bool _disposed;
@@ -45,6 +48,26 @@ public sealed class MobileBackupViewModel : ObservableObject, IDisposable
     public string AccessUrl { get => _accessUrl; private set => SetProperty(ref _accessUrl, value); }
     public string ConnectionMessage { get => _connectionMessage; private set => SetProperty(ref _connectionMessage, value); }
     public string DeviceSummary { get => _deviceSummary; private set => SetProperty(ref _deviceSummary, value); }
+    public int ConnectedMobileDeviceCount
+    {
+        get => _connectedMobileDeviceCount;
+        private set
+        {
+            if (SetProperty(ref _connectedMobileDeviceCount, value))
+                OnPropertyChanged(nameof(ConnectedMobileDeviceCountText));
+        }
+    }
+    public string ConnectedMobileDeviceCountText => AppLanguage.Format("Main.MobileDeviceCount", ConnectedMobileDeviceCount);
+    public int TodayVideoCount
+    {
+        get => _todayVideoCount;
+        private set
+        {
+            if (SetProperty(ref _todayVideoCount, value))
+                OnPropertyChanged(nameof(TodayVideoCountText));
+        }
+    }
+    public string TodayVideoCountText => AppLanguage.Format("Main.TodayMobileVideoCount", TodayVideoCount);
     public string OperationMessage { get => _operationMessage; set => SetProperty(ref _operationMessage, value); }
     public BitmapSource? QrCode { get => _qrCode; private set => SetProperty(ref _qrCode, value); }
     public bool IsConfigured => _runtime.Config.MobileBackupSetupVersion >= AppConfig.CurrentMobileBackupSetupVersion;
@@ -64,6 +87,7 @@ public sealed class MobileBackupViewModel : ObservableObject, IDisposable
         RefreshConnection();
         Replace(Uploads, _dashboard.GetMobileUploads());
         Replace(RecentVideos, _dashboard.GetRecentMobileVideos());
+        TodayVideoCount = _dashboard.GetTodayMobileVideoCount();
         RefreshDevices();
         OnPropertyChanged(nameof(IsConfigured));
         OnPropertyChanged(nameof(IsEnabled));
@@ -98,8 +122,10 @@ public sealed class MobileBackupViewModel : ObservableObject, IDisposable
     private void RefreshDevices()
     {
         ConnectedDevices.Clear();
-        foreach (string name in _runtime.GetConnectedClientsSnapshot()
-                     .Where(client => client.ClientType is "mobile-app" or "web-mobile")
+        ConnectedClientInfo[] mobileClients = _runtime.GetConnectedClientsSnapshot()
+            .Where(client => client.ClientType is "mobile-app" or "web-mobile")
+            .ToArray();
+        foreach (string name in mobileClients
                      .Select(client => string.IsNullOrWhiteSpace(client.DisplayName) ? "手机设备" : client.DisplayName)
                      .Distinct(StringComparer.OrdinalIgnoreCase)
                      .OrderBy(name => name))
@@ -107,9 +133,10 @@ public sealed class MobileBackupViewModel : ObservableObject, IDisposable
             ConnectedDevices.Add(name);
         }
 
-        DeviceSummary = ConnectedDevices.Count == 0
+        ConnectedMobileDeviceCount = ConnectedClientRegistry.CountDistinctAddresses(mobileClients);
+        DeviceSummary = ConnectedMobileDeviceCount == 0
             ? "暂无手机连接"
-            : $"已连接 {ConnectedDevices.Count} 台手机";
+            : $"已连接 {ConnectedMobileDeviceCount} 台手机";
     }
 
     private void ToggleEnabled()

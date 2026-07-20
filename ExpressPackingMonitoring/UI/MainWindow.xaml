@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:localization="clr-namespace:ExpressPackingMonitoring.Localization"
         Title="打包监控" Height="850" Width="1350"
-        Background="{DynamicResource WindowBackground}" WindowState="Maximized" MinWidth="760" MinHeight="520" Closing="Window_Closing" SizeChanged="Window_SizeChanged"
+        Background="{DynamicResource WindowBackground}" WindowState="Maximized" MinWidth="760" MinHeight="680" Closing="Window_Closing" SizeChanged="Window_SizeChanged"
         Icon="/app.ico"
         FontFamily="Microsoft YaHei UI, Segoe UI">
 
@@ -18,6 +18,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
@@ -26,17 +27,56 @@
                     <TextBlock x:Name="ShellBrandSubtitle" Text="录像 · 备份 · 订单" Margin="0,5,0,0" FontSize="12" Foreground="{DynamicResource TextMuted}"/>
                 </StackPanel>
                 <StackPanel Grid.Row="1">
-                    <Button x:Name="NavOverview" Content="概览" Tag="overview" Height="44" Margin="0,0,0,6" HorizontalContentAlignment="Left" Padding="16,0" Focusable="False" Click="NavigationButton_Click"/>
+                    <Button x:Name="NavOverview" Content="统计" Tag="overview" Height="44" Margin="0,0,0,6" HorizontalContentAlignment="Left" Padding="16,0" Focusable="False" Click="NavigationButton_Click"/>
                     <Button x:Name="NavPcRecording" Content="电脑录像" Tag="pc-recording" Height="44" Margin="0,0,0,6" HorizontalContentAlignment="Left" Padding="16,0" Focusable="False" Click="NavigationButton_Click"/>
                     <Button x:Name="NavMobileBackup" Content="手机备份" Tag="mobile-backup" Height="44" Margin="0,0,0,6" HorizontalContentAlignment="Left" Padding="16,0" Focusable="False" Click="NavigationButton_Click"/>
                     <Button x:Name="NavOrderIntegration" Content="订单联动" Tag="order-integration" Height="44" Margin="0,0,0,6" HorizontalContentAlignment="Left" Padding="16,0" Focusable="False" Click="NavigationButton_Click"/>
                     <Button x:Name="NavVideoLibrary" Content="录像库" Tag="video-library" Height="44" Margin="0,0,0,6" HorizontalContentAlignment="Left" Padding="16,0" Focusable="False" Click="NavigationButton_Click"/>
                     <Button x:Name="NavSettings" Content="设置" Tag="settings" Height="44" HorizontalContentAlignment="Left" Padding="16,0" Focusable="False" Click="NavigationButton_Click"/>
                 </StackPanel>
-                <StackPanel Grid.Row="3" Margin="8,18,8,0">
-                    <TextBlock x:Name="ShellLanStatusText" Text="局域网服务准备中" FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap"/>
-                    <TextBlock x:Name="ShellVersionText" Margin="0,6,0,0" FontSize="11" Foreground="{DynamicResource TextMuted}"/>
+                <StackPanel Grid.Row="2" Margin="0,18,0,0">
+                    <TextBlock Text="今日概览" Margin="8,0,8,8" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"/>
+                    <UniformGrid Columns="2">
+                        <Border Margin="0,0,3,0" Padding="8,9" CornerRadius="8" Background="{DynamicResource ControlBackground}" BorderBrush="{DynamicResource BorderDefault}" BorderThickness="1">
+                            <StackPanel>
+                                <TextBlock Text="电脑录制" FontSize="11" Foreground="{DynamicResource TextMuted}"/>
+                                <TextBlock Text="{Binding TodayPcCountText}" Margin="0,4,0,0" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Margin="3,0,0,0" Padding="8,9" CornerRadius="8" Background="{DynamicResource ControlBackground}" BorderBrush="{DynamicResource BorderDefault}" BorderThickness="1">
+                            <StackPanel>
+                                <TextBlock Text="电脑均时" FontSize="11" Foreground="{DynamicResource TextMuted}"/>
+                                <TextBlock Text="{Binding AveragePackTimeCompactText}" Margin="0,4,0,0" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </Border>
+                    </UniformGrid>
+                    <Border Margin="0,6,0,0" Padding="9,7" CornerRadius="7" Background="{DynamicResource ControlBackground}" BorderBrush="{DynamicResource BorderDefault}" BorderThickness="1">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="今日备份手机" FontSize="11" Foreground="{DynamicResource TextMuted}"/>
+                            <TextBlock Grid.Column="1" Text="{Binding MobileBackup.TodayVideoCountText, RelativeSource={RelativeSource AncestorType=Window}}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                        </Grid>
+                    </Border>
                 </StackPanel>
+                <Border Grid.Row="4" Margin="0,18,0,0" Padding="8,10,8,0" BorderBrush="{DynamicResource BorderDefault}" BorderThickness="0,1,0,0">
+                    <StackPanel>
+                        <TextBlock Text="连接状态" Margin="0,0,0,8" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"/>
+                        <TextBlock Text="局域网地址" FontSize="10" Foreground="{DynamicResource TextMuted}"/>
+                        <TextBlock Text="{Binding MonitorAccessAddressDisplay}" ToolTip="{Binding MonitorAccessAddressDisplay}" Margin="0,2,0,7" FontSize="11" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis"/>
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="手机设备" FontSize="11" Foreground="{DynamicResource TextMuted}"/>
+                            <TextBlock Grid.Column="1" Text="{Binding MobileBackup.ConnectedMobileDeviceCountText, RelativeSource={RelativeSource AncestorType=Window}}" FontSize="11" Foreground="{DynamicResource TextPrimary}"/>
+                        </Grid>
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="订单联动" FontSize="11" Foreground="{DynamicResource TextMuted}"/>
+                            <TextBlock Grid.Column="1" Text="{Binding OrderIntegration.StatusText, RelativeSource={RelativeSource AncestorType=Window}}" FontSize="11" Foreground="{DynamicResource TextPrimary}"/>
+                        </Grid>
+                        <TextBlock Text="{Binding WorkstationPrintStatusText}" ToolTip="{Binding WorkstationPrintStatusText}" Margin="0,0,0,6" FontSize="11" Foreground="{DynamicResource TextSecondary}" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock x:Name="ShellVersionText" FontSize="10" Foreground="{DynamicResource TextMuted}"/>
+                    </StackPanel>
+                </Border>
             </Grid>
         </Border>
 
@@ -46,46 +86,7 @@
         </Grid>
 
         <ScrollViewer x:Name="OverviewModule" VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="32" MaxWidth="1120" HorizontalAlignment="Stretch">
-                <TextBlock Text="概览" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}"/>
-                <TextBlock Text="电脑录像、手机备份和订单联动可以同时使用" Margin="0,6,0,24" FontSize="14" Foreground="{DynamicResource TextSecondary}"/>
-                <UniformGrid x:Name="OverviewCardsGrid" Columns="3">
-                    <Border Margin="0,0,8,0" Padding="20" CornerRadius="12" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                        <StackPanel>
-                            <TextBlock Text="电脑录像" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
-                            <TextBlock x:Name="OverviewPcStatus" Text="未配置" Margin="0,8,0,12" Foreground="{DynamicResource AccentBlue}"/>
-                            <TextBlock Text="使用电脑摄像头录像，可用摄像头识别面单，也兼容扫码枪" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}"/>
-                            <Button x:Name="OverviewPcAction" Content="开始配置" Tag="pc-recording" Height="38" Margin="0,18,0,0" Style="{StaticResource PrimaryButtonStyle}" Focusable="False" Click="NavigationButton_Click"/>
-                        </StackPanel>
-                    </Border>
-                    <Border Margin="8,0" Padding="20" CornerRadius="12" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                        <StackPanel>
-                            <TextBlock Text="手机备份" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
-                            <TextBlock x:Name="OverviewMobileStatus" Text="未配置" Margin="0,8,0,12" Foreground="{DynamicResource AccentBlue}"/>
-                            <TextBlock Text="手机可独立录像，完成后备份到这台电脑并统一进入录像库" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}"/>
-                            <Button x:Name="OverviewMobileAction" Content="开始配置" Tag="mobile-backup" Height="38" Margin="0,18,0,0" Style="{StaticResource PrimaryButtonStyle}" Focusable="False" Click="NavigationButton_Click"/>
-                        </StackPanel>
-                    </Border>
-                    <Border Margin="8,0,0,0" Padding="20" CornerRadius="12" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                        <StackPanel>
-                            <TextBlock Text="订单联动" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
-                            <TextBlock x:Name="OverviewOrderStatus" Text="未配置" Margin="0,8,0,12" Foreground="{DynamicResource AccentBlue}"/>
-                            <TextBlock Text="同步留言、备注、商品和退款信息，可同时发送到多台电脑" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}"/>
-                            <Button x:Name="OverviewOrderAction" Content="开始配置" Tag="order-integration" Height="38" Margin="0,18,0,0" Style="{StaticResource PrimaryButtonStyle}" Focusable="False" Click="NavigationButton_Click"/>
-                        </StackPanel>
-                    </Border>
-                </UniformGrid>
-                <Border Margin="0,24,0,0" Padding="20" CornerRadius="12" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                    <Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                        <StackPanel><TextBlock Text="当前录像" Foreground="{DynamicResource TextMuted}"/><TextBlock Text="{Binding CurrentOrderId, TargetNullValue=未在录像}" Margin="0,6,0,0" FontSize="16" Foreground="{DynamicResource TextPrimary}"/></StackPanel>
-                        <StackPanel Grid.Column="1"><TextBlock Text="在线设备" Foreground="{DynamicResource TextMuted}"/><TextBlock Text="{Binding ConnectedDeviceText}" Margin="0,6,0,0" FontSize="16" Foreground="{DynamicResource TextPrimary}"/></StackPanel>
-                        <StackPanel Grid.Column="2"><TextBlock Text="局域网地址" Foreground="{DynamicResource TextMuted}"/><TextBlock Text="{Binding MonitorAccessAddress}" Margin="0,6,0,0" FontSize="16" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis"/></StackPanel>
-                    </Grid>
-                </Border>
-                <TextBlock Text="打包数据分析" Margin="0,28,0,4" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
-                <ContentControl x:Name="OverviewStatisticsContentHost"/>
-            </StackPanel>
+            <ContentControl x:Name="OverviewStatisticsContentHost"/>
         </ScrollViewer>
 
         <Grid x:Name="MobileBackupModule" Visibility="Collapsed">

@@ -218,17 +218,41 @@ public sealed class VideoDatabaseTests
                 "打包手机",
                 "session-1",
                 new string('a', 64));
+            database.InsertMobileBackupRecord(
+                "PHONE-YESTERDAY",
+                Path.Combine(tempDirectory, "phone-yesterday.mp4"),
+                1024,
+                date.AddDays(-1).AddHours(10),
+                20,
+                "phone-1",
+                "打包手机",
+                "session-yesterday",
+                new string('b', 64));
+            string deletedMobilePath = Path.Combine(tempDirectory, "phone-deleted.mp4");
+            database.InsertMobileBackupRecord(
+                "PHONE-DELETED",
+                deletedMobilePath,
+                1024,
+                date.AddHours(11),
+                20,
+                "phone-1",
+                "打包手机",
+                "session-deleted",
+                new string('c', 64));
+            database.MarkVideoDeleted(deletedMobilePath, "测试删除");
 
             List<VideoRecord> allRecent = database.GetRecentCompletedVideos(date, 20);
             List<VideoRecord> pcRecent = database.GetRecentCompletedVideos(date, 20, "pc");
             List<DailyStat> allStats = database.GetAggregatedStats(date, date);
             List<DailyStat> pcStats = database.GetAggregatedStats(date, date, "day", "pc");
+            var dashboard = new DashboardDataService(database, Path.Combine(tempDirectory, "mobile-state"));
 
             Assert.Equal(2, allRecent.Count);
             Assert.Single(pcRecent);
             Assert.Equal("PC-LOCAL", pcRecent[0].OrderId);
             Assert.Equal(2, Assert.Single(allStats).TotalPieces);
             Assert.Equal(1, Assert.Single(pcStats).TotalPieces);
+            Assert.Equal(1, dashboard.GetTodayMobileVideoCount(date));
         }
         finally
         {

@@ -610,4 +610,18 @@
   <data name="已恢复为上次保存的设置" xml:space="preserve"><value>Restored the last saved settings</value></data>
   <data name="开始配置" xml:space="preserve"><value>Start setup</value></data>
   <data name="打包数据分析" xml:space="preserve"><value>Packing analytics</value></data>
+  <data name="统计" xml:space="preserve"><value>Statistics</value></data>
+  <data name="今日概览" xml:space="preserve"><value>Today</value></data>
+  <data name="电脑录制" xml:space="preserve"><value>PC recordings</value></data>
+  <data name="电脑均时" xml:space="preserve"><value>PC average</value></data>
+  <data name="今日备份手机" xml:space="preserve"><value>Mobile backups today</value></data>
+  <data name="连接状态" xml:space="preserve"><value>Connection status</value></data>
+  <data name="进入主界面后，从左侧选择需要使用的功能。录像、备份和订单联动可以同时运行" xml:space="preserve"><value>Choose features from the left navigation. Recording, backup, and order integration can run together</value></data>
+  <data name="Main.TodayPcCount" xml:space="preserve"><value>{0} recordings</value></data>
+  <data name="Main.TodayMobileVideoCount" xml:space="preserve"><value>{0} videos</value></data>
+  <data name="Main.MobileDeviceCount" xml:space="preserve"><value>{0} devices</value></data>
+  <data name="Main.AverageHoursMinutes" xml:space="preserve"><value>{0}h {1}m</value></data>
+  <data name="Main.AverageMinutesSeconds" xml:space="preserve"><value>{0}m {1}s</value></data>
+  <data name="Main.AverageSeconds" xml:space="preserve"><value>{0}s</value></data>
+  <data name="Main.Version" xml:space="preserve"><value>Version {0}</value></data>
 </root>

@@ -22,6 +22,8 @@ namespace ExpressPackingMonitoring.UI
         private readonly StatisticsPanel _statisticsPanel;
 
         public MainShellViewModel Shell { get; }
+        public MobileBackupViewModel MobileBackup => _runtimeHost.MobileBackup;
+        public OrderIntegrationViewModel OrderIntegration => _runtimeHost.OrderIntegration;
 
         private const int WM_ENTERSIZEMOVE = 0x0231;
         private const int WM_EXITSIZEMOVE = 0x0232;
@@ -210,25 +212,10 @@ namespace ExpressPackingMonitoring.UI
         private void RefreshModuleStates()
         {
             if (DataContext is not MainViewModel viewModel) return;
-            OverviewPcStatus.Text = GetModuleStatus(viewModel.Config.PcRecordingSetupVersion, viewModel.Config.EnablePcCameraRecording, AppConfig.CurrentPcRecordingSetupVersion);
-            OverviewMobileStatus.Text = GetModuleStatus(viewModel.Config.MobileBackupSetupVersion, viewModel.Config.EnableMobileBackup, AppConfig.CurrentMobileBackupSetupVersion);
-            OverviewOrderStatus.Text = GetModuleStatus(viewModel.Config.OrderIntegrationSetupVersion, viewModel.Config.EnableOrderIntegration, AppConfig.CurrentOrderIntegrationSetupVersion);
-            OverviewPcAction.Content = GetModuleActionText(viewModel.Config.PcRecordingSetupVersion, AppConfig.CurrentPcRecordingSetupVersion);
-            OverviewMobileAction.Content = GetModuleActionText(viewModel.Config.MobileBackupSetupVersion, AppConfig.CurrentMobileBackupSetupVersion);
-            OverviewOrderAction.Content = GetModuleActionText(viewModel.Config.OrderIntegrationSetupVersion, AppConfig.CurrentOrderIntegrationSetupVersion);
-            ShellLanStatusText.Text = string.IsNullOrWhiteSpace(viewModel.MonitorAccessAddress)
-                ? "局域网服务准备中"
-                : $"局域网  {viewModel.MonitorAccessAddress}\n{viewModel.ConnectedDeviceText}";
-            ShellVersionText.Text = $"版本 {AppVersion.Current}";
+            ShellVersionText.Text = AppLanguage.Format("Main.Version", AppVersion.Current);
             _pcRecordingPage.RefreshState();
             _runtimeHost.MobileBackup.Refresh();
         }
-
-        private static string GetModuleStatus(int setupVersion, bool enabled, int currentVersion) =>
-            setupVersion < currentVersion ? "未配置" : enabled ? "运行正常" : "已暂停";
-
-        private static string GetModuleActionText(int setupVersion, int currentVersion) =>
-            setupVersion < currentVersion ? "开始配置" : "打开";
 
         private void UpdateNavigationState(string activeModule)
         {
@@ -247,10 +234,9 @@ namespace ExpressPackingMonitoring.UI
         {
             if (NavigationColumn == null) return;
             bool compact = width < 1080;
-            NavigationColumn.Width = new GridLength(width < 860 ? 148 : compact ? 176 : 224);
+            NavigationColumn.Width = new GridLength(compact ? 208 : 224);
             ShellBrandSubtitle.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
             ShellBrandPanel.Margin = compact ? new Thickness(4, 0, 4, 16) : new Thickness(8, 0, 8, 24);
-            OverviewCardsGrid.Columns = width < 1040 ? 1 : 3;
         }
 
         private static AppConfig CloneConfig(AppConfig config) =>

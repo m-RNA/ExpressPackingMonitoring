@@ -577,4 +577,18 @@
   <data name="已恢复为上次保存的设置" xml:space="preserve"><value>已恢复为上次保存的设置</value></data>
   <data name="开始配置" xml:space="preserve"><value>开始配置</value></data>
   <data name="打包数据分析" xml:space="preserve"><value>打包数据分析</value></data>
+  <data name="统计" xml:space="preserve"><value>统计</value></data>
+  <data name="今日概览" xml:space="preserve"><value>今日概览</value></data>
+  <data name="电脑录制" xml:space="preserve"><value>电脑录制</value></data>
+  <data name="电脑均时" xml:space="preserve"><value>电脑均时</value></data>
+  <data name="今日备份手机" xml:space="preserve"><value>今日备份手机</value></data>
+  <data name="连接状态" xml:space="preserve"><value>连接状态</value></data>
+  <data name="进入主界面后，从左侧选择需要使用的功能。录像、备份和订单联动可以同时运行" xml:space="preserve"><value>进入主界面后，从左侧选择需要使用的功能。录像、备份和订单联动可以同时运行</value></data>
+  <data name="Main.TodayPcCount" xml:space="preserve"><value>{0} 条</value></data>
+  <data name="Main.TodayMobileVideoCount" xml:space="preserve"><value>{0} 条视频</value></data>
+  <data name="Main.MobileDeviceCount" xml:space="preserve"><value>{0} 台</value></data>
+  <data name="Main.AverageHoursMinutes" xml:space="preserve"><value>{0}时{1}分</value></data>
+  <data name="Main.AverageMinutesSeconds" xml:space="preserve"><value>{0}分{1}秒</value></data>
+  <data name="Main.AverageSeconds" xml:space="preserve"><value>{0}秒</value></data>
+  <data name="Main.Version" xml:space="preserve"><value>版本 {0}</value></data>
 </root>

@@ -66,6 +66,21 @@ public class UiCompositionTests
         Assert.True(violations.Length == 0, "Hard-coded WPF colors: " + string.Join(" | ", violations));
     }
 
+    [Fact]
+    public void OverviewModule_IsPresentedAsStatisticsWithoutSetupCards()
+    {
+        string project = Path.Combine(FindRepositoryRoot(), "ExpressPackingMonitoring");
+        string mainXaml = File.ReadAllText(Path.Combine(project, "UI", "MainWindow.xaml"));
+
+        Assert.Contains("Content=\"统计\" Tag=\"overview\"", mainXaml);
+        Assert.Contains("OverviewStatisticsContentHost", mainXaml);
+        Assert.Contains("今日概览", mainXaml);
+        Assert.Contains("ConnectedMobileDeviceCountText", mainXaml);
+        Assert.DoesNotContain("OverviewCardsGrid", mainXaml);
+        Assert.DoesNotContain("OverviewPcAction", mainXaml);
+        Assert.DoesNotContain("打包数据分析", mainXaml);
+    }
+
     private static string FindRepositoryRoot()
     {
         foreach (string start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })

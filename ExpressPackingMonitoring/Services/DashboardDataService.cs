@@ -80,6 +80,16 @@ public sealed class DashboardDataService
             .ToList();
     }
 
+    public int GetTodayMobileVideoCount(DateTime? today = null)
+    {
+        if (_database == null)
+            return 0;
+
+        DateTime date = (today ?? DateTime.Today).Date;
+        return _database.GetAggregatedStats(date, date, "day", "external")
+            .Sum(stat => stat.TotalPieces);
+    }
+
     public IReadOnlyList<RecentOrderDashboardItem> GetRecentOrders(int limit = 20)
     {
         if (_database == null)

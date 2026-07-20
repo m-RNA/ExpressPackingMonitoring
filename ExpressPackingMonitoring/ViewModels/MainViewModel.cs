@@ -267,9 +267,37 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private int _totalPieces;
         private TimeSpan _totalPackTime;
-        public int TotalPieces { get => _totalPieces; set { SetProperty(ref _totalPieces, value); OnPropertyChanged(nameof(AveragePackTimeDisplay)); } }
+        public int TotalPieces
+        {
+            get => _totalPieces;
+            set
+            {
+                SetProperty(ref _totalPieces, value);
+                OnPropertyChanged(nameof(TodayPcCountText));
+                OnPropertyChanged(nameof(AveragePackTimeDisplay));
+                OnPropertyChanged(nameof(AveragePackTimeCompactText));
+            }
+        }
+        public string TodayPcCountText => AppLanguage.Format("Main.TodayPcCount", TotalPieces);
         public DurationDisplayText TotalPackTimeDisplay => FormatDurationDisplay(_totalPackTime);
         public DurationDisplayText AveragePackTimeDisplay => TotalPieces == 0 ? DurationDisplayText.Zero : FormatDurationDisplay(TimeSpan.FromSeconds(_totalPackTime.TotalSeconds / TotalPieces));
+        public string AveragePackTimeCompactText
+        {
+            get
+            {
+                int totalSeconds = TotalPieces == 0
+                    ? 0
+                    : Math.Max(0, (int)Math.Round(_totalPackTime.TotalSeconds / TotalPieces));
+                int hours = totalSeconds / 3600;
+                int minutes = totalSeconds % 3600 / 60;
+                int seconds = totalSeconds % 60;
+                return hours > 0
+                    ? AppLanguage.Format("Main.AverageHoursMinutes", hours, minutes)
+                    : minutes > 0
+                        ? AppLanguage.Format("Main.AverageMinutesSeconds", minutes, seconds)
+                        : AppLanguage.Format("Main.AverageSeconds", seconds);
+            }
+        }
 
         public sealed class DurationDisplayText
         {
@@ -422,7 +450,18 @@ namespace ExpressPackingMonitoring.ViewModels
         public string ConnectedDeviceText { get => _connectedDeviceText; private set => SetProperty(ref _connectedDeviceText, value); }
         public string ConnectedDeviceToolTip { get => _connectedDeviceToolTip; private set => SetProperty(ref _connectedDeviceToolTip, value); }
         public bool HasConnectedDevices { get => _hasConnectedDevices; private set => SetProperty(ref _hasConnectedDevices, value); }
-        public string MonitorAccessAddress { get => _monitorAccessAddress; set => SetProperty(ref _monitorAccessAddress, value); }
+        public string MonitorAccessAddress
+        {
+            get => _monitorAccessAddress;
+            set
+            {
+                if (SetProperty(ref _monitorAccessAddress, value))
+                    OnPropertyChanged(nameof(MonitorAccessAddressDisplay));
+            }
+        }
+        public string MonitorAccessAddressDisplay => string.IsNullOrWhiteSpace(MonitorAccessAddress)
+            ? AppLanguage.Get("局域网服务准备中")
+            : MonitorAccessAddress;
 
         // 条形码（自动计算）
         private string _barcode1Label;
@@ -808,7 +847,9 @@ namespace ExpressPackingMonitoring.ViewModels
                     TotalPieces = 0;
                     _totalPackTime = TimeSpan.Zero;
                 }
-                OnPropertyChanged(nameof(TotalPackTimeDisplay)); OnPropertyChanged(nameof(AveragePackTimeDisplay));
+                OnPropertyChanged(nameof(TotalPackTimeDisplay));
+                OnPropertyChanged(nameof(AveragePackTimeDisplay));
+                OnPropertyChanged(nameof(AveragePackTimeCompactText));
             }
             catch { }
         }

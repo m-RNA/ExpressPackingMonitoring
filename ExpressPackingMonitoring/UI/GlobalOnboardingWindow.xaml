@@ -26,7 +26,7 @@
             </StackPanel>
             <StackPanel x:Name="DonePage" Visibility="Collapsed" VerticalAlignment="Center">
                 <TextBlock Text="准备完成" FontSize="30" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Center"/>
-                <TextBlock Text="进入概览后，选择你现在要使用的功能即可。录像、备份和订单联动可以同时运行。" Width="560" Margin="0,20,0,0" FontSize="16" LineHeight="26" TextWrapping="Wrap" TextAlignment="Center" Foreground="{DynamicResource TextSecondary}"/>
+                <TextBlock Text="进入主界面后，从左侧选择需要使用的功能。录像、备份和订单联动可以同时运行" Width="560" Margin="0,20,0,0" FontSize="16" LineHeight="26" TextWrapping="Wrap" TextAlignment="Center" Foreground="{DynamicResource TextSecondary}"/>
             </StackPanel>
         </Grid>
         <Grid Grid.Row="1" Margin="0,24,0,0">
