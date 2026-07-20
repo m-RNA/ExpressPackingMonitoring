@@ -554,4 +554,8 @@
   <data name="向所有启用目标发送测试订单，并分别显示是否确认收到" xml:space="preserve"><value>向所有启用目标发送测试订单，并分别显示是否确认收到</value></data>
   <data name="发送测试订单" xml:space="preserve"><value>发送测试订单</value></data>
   <data name="最近收到的订单" xml:space="preserve"><value>最近收到的订单</value></data>
+  <data name="保存设置" xml:space="preserve"><value>保存设置</value></data>
+  <data name="恢复已保存" xml:space="preserve"><value>恢复已保存</value></data>
+  <data name="设置已保存并应用" xml:space="preserve"><value>设置已保存并应用</value></data>
+  <data name="已恢复为上次保存的设置" xml:space="preserve"><value>已恢复为上次保存的设置</value></data>
 </root>

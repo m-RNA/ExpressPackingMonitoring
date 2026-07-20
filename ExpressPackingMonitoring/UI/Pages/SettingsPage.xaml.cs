@@ -95,7 +95,7 @@ namespace ExpressPackingMonitoring.UI
             targetTypes.Select(_ => Binding.DoNothing).ToArray();
     }
 
-    public partial class SettingsWindow : Window
+    public partial class SettingsPage : UserControl, IDisposable
     {
         public MainViewModel MainVM { get; set; }
         public AppConfig Config { get; set; }
@@ -131,7 +131,7 @@ namespace ExpressPackingMonitoring.UI
         private bool _isSyncingVoiceEngine;
         private bool _isSyncingScannerModes;
 
-        public SettingsWindow(MainViewModel mainVM, AppConfig clonedConfig, double diskUsagePercent, string diskUsageText, bool isRecording = false)
+        public SettingsPage(MainViewModel mainVM, AppConfig clonedConfig, double diskUsagePercent, string diskUsageText, bool isRecording = false)
         {
             InitializeComponent();
             MainVM = mainVM;
@@ -613,7 +613,7 @@ namespace ExpressPackingMonitoring.UI
         {
             var dialog = new DriveSelectionDialog(Config.StorageLocations.Select(location => location.Path))
             {
-                Owner = this
+                Owner = Window.GetWindow(this)
             };
 
             if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.SelectedRootPath))
@@ -752,10 +752,7 @@ namespace ExpressPackingMonitoring.UI
         private async void BtnOk_Click(object sender, RoutedEventArgs e)
         {
             if (await SaveAndApplyAsync())
-            {
-                DialogResult = true;
-                Close();
-            }
+                MainVM.ShowToast("设置已保存并应用");
         }
 
         private async void BtnApply_Click(object sender, RoutedEventArgs e)
@@ -935,7 +932,7 @@ namespace ExpressPackingMonitoring.UI
                         return;
                 }
 
-                var wizard = new FirstUseSetupWizardWindow(Config) { Owner = this };
+                var wizard = new FirstUseSetupWizardWindow(Config) { Owner = Window.GetWindow(this) };
                 if (wizard.ShowDialog() == true && !wizard.WasSkipped)
                 {
                     Config.FirstUseWizardCompleted = true;
@@ -1009,7 +1006,7 @@ namespace ExpressPackingMonitoring.UI
             try { Clipboard.SetDataObject(address, true); } catch { }
 
             Process.Start(new ProcessStartInfo(new Uri(guidePath).AbsoluteUri) { UseShellExecute = true });
-            MessageBox.Show(this,
+            MessageBox.Show(Window.GetWindow(this),
                 $"已打开订单备注插件安装向导，并复制监控工位地址：{address}",
                 "安装订单备注插件",
                 MessageBoxButton.OK,
@@ -1018,7 +1015,7 @@ namespace ExpressPackingMonitoring.UI
 
         private void ShowMobileConnection_Click(object sender, RoutedEventArgs e)
         {
-            MainVM?.ShowMobileConnection(this);
+            MainVM?.NavigateToModule(AppModules.MobileBackup);
         }
 
         private void CopyMobileConnectionUrl_Click(object sender, RoutedEventArgs e)
@@ -1063,8 +1060,9 @@ namespace ExpressPackingMonitoring.UI
                 && mic.Name != "未检测到麦克风";
         }
 
-        protected override void OnClosed(EventArgs e)
+        public void Dispose()
         {
+            if (_isClosing) return;
             _isClosing = true;
             var migrationCts = Interlocked.Exchange(ref _migrationCts, null);
             try { migrationCts?.Cancel(); } catch (ObjectDisposedException) { }
@@ -1072,7 +1070,6 @@ namespace ExpressPackingMonitoring.UI
             _previewSpeechService?.Stop();
             _previewSpeechService?.Dispose();
             _previewSpeechService = null;
-            base.OnClosed(e);
         }
 
         private bool ValidateEncoderSelectionBeforeSave()
@@ -1253,7 +1250,7 @@ namespace ExpressPackingMonitoring.UI
         {
             var dialog = new UpdateAvailableDialog(result)
             {
-                Owner = this
+                Owner = Window.GetWindow(this)
             };
 
             if (dialog.ShowDialog() == true)
@@ -1279,8 +1276,27 @@ namespace ExpressPackingMonitoring.UI
                     ExpressPackingMonitoring.Themes.ThemeManager.ApplyTheme(themeEnum);
                 }
             }
-            this.DialogResult = false;
-            this.Close();
+            ReloadFromRuntime(announce: true);
+        }
+
+        public void ReloadFromRuntime(bool announce = false)
+        {
+            Config = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(MainVM.Config)) ?? new AppConfig();
+            AppConfig.NormalizeAfterLoad(Config);
+            _originalTheme = Config.Theme;
+            _originalLanguage = Config.Language;
+            DataContext = null;
+            DataContext = this;
+            SyncVoiceEngineComboBoxFromConfig();
+            LoadGpuEncoders();
+            LoadVideoCodecs();
+            EnsurePrimaryStorageLocationExists();
+            SortStorageLocationsByPriority();
+            RefreshStoragePriorities();
+            UpdateStorageButtonStates();
+            MainVM.PreviewZoomScale = null;
+            if (announce)
+                MainVM.ShowToast("已恢复为上次保存的设置");
         }
 
         private SpeechService _previewSpeechService;

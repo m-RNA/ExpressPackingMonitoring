@@ -516,6 +516,7 @@ namespace ExpressPackingMonitoring.ViewModels
         public ICommand ResetEncoderDetectCommand { get; } // 重置编码器检测
         public ICommand CopyMonitorAddressCommand { get; }
         public ICommand SwitchWorkstationCommand { get; }
+        public event Action<string> ModuleNavigationRequested;
 
         public MainViewModel()
         {
@@ -1684,24 +1685,11 @@ namespace ExpressPackingMonitoring.ViewModels
                 ShowToast("处理中：编码器环境检测中，请稍后打开设置...");
                 return;
             }
-            try
-            {
-                var clonedConfig = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(Config)) ?? new AppConfig();
-                var settingsWin = new SettingsWindow(this, clonedConfig, DiskUsagePercent, DiskUsageText, IsRecording);
-                var mainWindow = Application.Current?.MainWindow as MainWindow;
-                if (mainWindow != null) settingsWin.Owner = mainWindow;
-                mainWindow?.SuspendCapsLockForModalWindow();
-                try
-                {
-                    settingsWin.ShowDialog();
-                }
-                finally
-                {
-                    mainWindow?.ResumeCapsLockAfterModalWindow();
-                }
-            }
-            catch (Exception ex) { ShowToast($"设置错误: {ex.Message}"); }
+            ModuleNavigationRequested?.Invoke(AppModules.Settings);
         }
+
+        public void NavigateToModule(string module) =>
+            ModuleNavigationRequested?.Invoke(MainShellViewModel.NormalizeModule(module));
 
         public async Task<bool> ApplySettingsAsync(AppConfig nextConfig)
         {
@@ -2051,28 +2039,14 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private void OpenPlaybackWindow()
         {
-            string folderPath;
-            try
-            {
-                folderPath = ResolveBestStoragePath();
-                if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"无法访问存储路径：{ex.Message}", "存储错误", MessageBoxButton.OK, MessageBoxImage.Error);
-                return;
-            }
+            ModuleNavigationRequested?.Invoke(AppModules.VideoLibrary);
+        }
 
-            try
-            {
-                var playbackWin = new PlaybackWindow(folderPath, _db, Config.ShowDeletedVideos);
-                if (Application.Current?.MainWindow != null) playbackWin.Owner = Application.Current.MainWindow;
-                playbackWin.ShowDialog();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"打开回放窗口失败：{ex.Message}", "回放错误", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
+        internal string ResolveVideoLibraryFolderPath()
+        {
+            string folderPath = ResolveBestStoragePath();
+            if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
+            return folderPath;
         }
 
         /// <summary>
@@ -2579,7 +2553,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 url,
                 Config.RequireWebAccessKey,
                 unavailableMessage,
-                canOpenSettings: owner is not SettingsWindow)
+                canOpenSettings: true)
             {
                 Owner = dialogOwner
             };
@@ -2595,7 +2569,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 mainWindow?.ResumeCapsLockAfterModalWindow();
             }
 
-            if (dialog.OpenSettingsRequested && owner is not SettingsWindow)
+            if (dialog.OpenSettingsRequested)
                 OpenSettings();
         }
 

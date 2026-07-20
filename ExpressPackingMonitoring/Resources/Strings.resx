@@ -587,4 +587,8 @@
   <data name="向所有启用目标发送测试订单，并分别显示是否确认收到" xml:space="preserve"><value>Send a test order to every enabled target and show each acknowledgement</value></data>
   <data name="发送测试订单" xml:space="preserve"><value>Send test order</value></data>
   <data name="最近收到的订单" xml:space="preserve"><value>Recently received orders</value></data>
+  <data name="保存设置" xml:space="preserve"><value>Save settings</value></data>
+  <data name="恢复已保存" xml:space="preserve"><value>Restore saved</value></data>
+  <data name="设置已保存并应用" xml:space="preserve"><value>Settings saved and applied</value></data>
+  <data name="已恢复为上次保存的设置" xml:space="preserve"><value>Restored the last saved settings</value></data>
 </root>

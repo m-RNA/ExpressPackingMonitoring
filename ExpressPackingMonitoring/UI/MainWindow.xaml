@@ -832,12 +832,12 @@
             <ContentControl x:Name="OrderIntegrationContentHost"/>
         </Grid>
 
-        <Grid x:Name="VideoLibraryModule" Visibility="Collapsed" Margin="32">
-            <StackPanel>
-                <TextBlock Text="录像库" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}"/>
-                <TextBlock Text="电脑录像和手机备份录像统一保存在这里，并保留来源标签" Margin="0,6,0,24" Foreground="{DynamicResource TextSecondary}"/>
-                <Button Content="打开录像查询" Width="150" Height="40" HorizontalAlignment="Left" Style="{StaticResource PrimaryButtonStyle}" Focusable="False" Click="BtnOpenVideoLibrary_Click"/>
-            </StackPanel>
+        <Grid x:Name="VideoLibraryModule" Visibility="Collapsed">
+            <ContentControl x:Name="VideoLibraryContentHost"/>
+        </Grid>
+
+        <Grid x:Name="SettingsModule" Visibility="Collapsed">
+            <ContentControl x:Name="SettingsContentHost"/>
         </Grid>
         </Grid>
 

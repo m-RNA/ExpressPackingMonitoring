@@ -65,7 +65,7 @@ namespace ExpressPackingMonitoring.UI
         public bool IsUnavailable => IsDeleted || IsMissing;
     }
 
-    public partial class PlaybackWindow : Window
+    public partial class VideoLibraryPage : UserControl, IDisposable
     {
         private readonly string _folderPath;
         private readonly VideoDatabase? _db;
@@ -83,7 +83,7 @@ namespace ExpressPackingMonitoring.UI
         private long _currentMediaLengthMs;
         private readonly SemaphoreSlim _playerSemaphore = new SemaphoreSlim(1, 1);
 
-        public PlaybackWindow(string folderPath, VideoDatabase? db = null, bool showDeletedVideos = true)
+        public VideoLibraryPage(string folderPath, VideoDatabase? db = null, bool showDeletedVideos = true)
         {
             InitializeComponent();
             _folderPath = folderPath;
@@ -96,14 +96,16 @@ namespace ExpressPackingMonitoring.UI
             BtnTogglePlay.IsEnabled = false;
             TimelineSlider.IsEnabled = false;
             TimeLabel.Text = "正在加载列表...";
-            Loaded += PlaybackWindow_Loaded;
+            Loaded += VideoLibraryPage_Loaded;
             UpdateLocateButtonState();
         }
 
-        private async void PlaybackWindow_Loaded(object sender, RoutedEventArgs e)
+        private async void VideoLibraryPage_Loaded(object sender, RoutedEventArgs e)
         {
             await LoadVideosAsync();
         }
+
+        public Task RefreshAsync() => LoadVideosAsync();
 
         private async void DateFilterChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -265,7 +267,7 @@ namespace ExpressPackingMonitoring.UI
             UpdateLocateButtonState();
         }
 
-        private void Window_Closing(object sender, CancelEventArgs e)
+        public void Dispose()
         {
             // 1. 停止计时器
             _timer?.Stop();

@@ -18,6 +18,8 @@ namespace ExpressPackingMonitoring.UI
     public partial class MainWindow : Window
     {
         private readonly AppRuntimeHost _runtimeHost;
+        private readonly VideoLibraryPage _videoLibraryPage;
+        private readonly SettingsPage _settingsPage;
 
         public MainShellViewModel Shell { get; }
 
@@ -139,6 +141,28 @@ namespace ExpressPackingMonitoring.UI
                 if (ConfigureOrderIntegration(_runtimeHost.Main)) _runtimeHost.OrderIntegration.ReloadTargets();
             };
             OrderIntegrationContentHost.Content = orderIntegrationPage;
+
+            string videoFolder;
+            try
+            {
+                videoFolder = _runtimeHost.Main.ResolveVideoLibraryFolderPath();
+            }
+            catch (Exception ex)
+            {
+                videoFolder = AppPaths.UserDataDir;
+                _runtimeHost.Main.ShowToast($"录像存储路径暂不可用：{ex.Message}");
+            }
+            _videoLibraryPage = new VideoLibraryPage(videoFolder, _runtimeHost.Main.Database, _runtimeHost.Main.Config.ShowDeletedVideos);
+            VideoLibraryContentHost.Content = _videoLibraryPage;
+
+            _settingsPage = new SettingsPage(
+                _runtimeHost.Main,
+                CloneConfig(_runtimeHost.Main.Config),
+                _runtimeHost.Main.DiskUsagePercent,
+                _runtimeHost.Main.DiskUsageText,
+                _runtimeHost.Main.IsRecording);
+            SettingsContentHost.Content = _settingsPage;
+            _runtimeHost.Main.ModuleNavigationRequested += Runtime_ModuleNavigationRequested;
             if (CameraBarcodeRuntimeOptions.ShadowMode)
             {
                 RuntimeLog.Warn(
@@ -298,7 +322,7 @@ namespace ExpressPackingMonitoring.UI
 
         private void BtnSettings_Click(object sender, RoutedEventArgs e)
         {
-            if (DataContext is MainViewModel viewModel) viewModel.OpenSettings();
+            ShowModule(AppModules.Settings);
         }
 
         private void BtnMobileConnection_Click(object sender, RoutedEventArgs e)
@@ -328,12 +352,6 @@ namespace ExpressPackingMonitoring.UI
         private void ShowModule(string module)
         {
             if (DataContext is not MainViewModel viewModel) return;
-            if (module == AppModules.Settings)
-            {
-                viewModel.OpenSettings();
-                RefreshModuleStates();
-                return;
-            }
 
             if (module == AppModules.PcRecording
                 && viewModel.Config.PcRecordingSetupVersion < AppConfig.CurrentPcRecordingSetupVersion
@@ -354,6 +372,12 @@ namespace ExpressPackingMonitoring.UI
             MobileBackupModule.Visibility = module == AppModules.MobileBackup ? Visibility.Visible : Visibility.Collapsed;
             OrderIntegrationModule.Visibility = module == AppModules.OrderIntegration ? Visibility.Visible : Visibility.Collapsed;
             VideoLibraryModule.Visibility = module == AppModules.VideoLibrary ? Visibility.Visible : Visibility.Collapsed;
+            SettingsModule.Visibility = module == AppModules.Settings ? Visibility.Visible : Visibility.Collapsed;
+
+            if (module == AppModules.VideoLibrary)
+                _ = _videoLibraryPage.RefreshAsync();
+            if (module == AppModules.Settings)
+                _settingsPage.ReloadFromRuntime();
 
             if (module == AppModules.PcRecording)
             {
@@ -447,11 +471,8 @@ namespace ExpressPackingMonitoring.UI
             if (viewModel.ApplyModuleConfiguration(result)) RefreshModuleStates();
         }
 
-        private void BtnOpenVideoLibrary_Click(object sender, RoutedEventArgs e)
-        {
-            if (DataContext is MainViewModel viewModel && viewModel.OpenPlaybackCommand.CanExecute(null))
-                viewModel.OpenPlaybackCommand.Execute(null);
-        }
+        private void Runtime_ModuleNavigationRequested(string module) =>
+            Dispatcher.BeginInvoke(new Action(() => ShowModule(module)));
 
         private void RefreshModuleStates()
         {
@@ -697,6 +718,9 @@ namespace ExpressPackingMonitoring.UI
 
             try
             {
+                _runtimeHost.Main.ModuleNavigationRequested -= Runtime_ModuleNavigationRequested;
+                _videoLibraryPage.Dispose();
+                _settingsPage.Dispose();
                 await Task.Run(_runtimeHost.Dispose);
             }
             catch (Exception ex)

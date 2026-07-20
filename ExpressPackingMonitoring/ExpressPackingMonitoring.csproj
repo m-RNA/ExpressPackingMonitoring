@@ -138,8 +138,8 @@
     <Compile Include="UI\Pages\MobileBackupPage.xaml.cs" />
     <Compile Include="UI\Pages\OrderIntegrationPage.xaml.cs" />
     <Compile Include="UI\OrderIntegrationSetupWindow.xaml.cs" />
-    <Compile Include="UI\PlaybackWindow.xaml.cs" />
-    <Compile Include="UI\SettingsWindow.xaml.cs" />
+    <Compile Include="UI\Pages\VideoLibraryPage.xaml.cs" />
+    <Compile Include="UI\Pages\SettingsPage.xaml.cs" />
     <Compile Include="UI\StatisticsWindow.xaml.cs" />
     <Compile Include="UI\UpdateAvailableDialog.xaml.cs" />
     <Compile Include="Workstations\PrintToolInstallGuide.cs" />
