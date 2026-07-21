@@ -2112,7 +2112,6 @@ namespace ExpressPackingMonitoring.ViewModels
                 }
                 else
                 {
-                    try { if (File.Exists(mp4Path)) File.Delete(mp4Path); } catch { }
                     fail++;
                     progress?.Report($"[{i + 1}/{total}] 转换失败: {fileName}");
                 }

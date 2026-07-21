@@ -2062,8 +2062,23 @@ namespace ExpressPackingMonitoring.ViewModels
                 lockTaken = true;
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (string.IsNullOrWhiteSpace(mkvPath) || !File.Exists(mkvPath))
+                if (string.IsNullOrWhiteSpace(mkvPath))
                     return MkvConversionResult.Fail("MKV 文件不存在", mkvPath ?? "");
+
+                if (!File.Exists(mkvPath))
+                {
+                    string concurrentMp4Path = Path.ChangeExtension(mkvPath, ".mp4");
+                    if (IsCompletedConcurrentMkvConversion(mkvPath, concurrentMp4Path))
+                    {
+                        _db?.UpdateVideoFilePath(mkvPath, concurrentMp4Path);
+                        RuntimeLog.Info(
+                            "MkvToMp4",
+                            $"Conversion already completed by another task, preserving MP4 file={Path.GetFileName(concurrentMp4Path)}");
+                        return MkvConversionResult.Ok(concurrentMp4Path, alreadyConverted: true);
+                    }
+
+                    return MkvConversionResult.Fail("MKV 文件不存在", mkvPath);
+                }
                 if (!mkvPath.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase))
                     return MkvConversionResult.Ok(mkvPath, alreadyConverted: true);
 
@@ -2143,6 +2158,7 @@ namespace ExpressPackingMonitoring.ViewModels
             }
             catch (Exception ex)
             {
+                DeleteIncompleteMp4WhileSourceIsPreserved(mkvPath);
                 RuntimeLog.Error("MkvToMp4", $"Convert exception file={Path.GetFileName(mkvPath ?? "")}", ex);
                 return MkvConversionResult.Fail(ex.Message, mkvPath ?? "");
             }
@@ -2151,6 +2167,37 @@ namespace ExpressPackingMonitoring.ViewModels
                 if (lockTaken)
                     _mkvConvertLock.Release();
             }
+        }
+
+        internal static bool IsCompletedConcurrentMkvConversion(string? mkvPath, string? mp4Path)
+        {
+            if (string.IsNullOrWhiteSpace(mkvPath) || string.IsNullOrWhiteSpace(mp4Path))
+                return false;
+
+            try
+            {
+                return !File.Exists(mkvPath)
+                    && File.Exists(mp4Path)
+                    && new FileInfo(mp4Path).Length > 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void DeleteIncompleteMp4WhileSourceIsPreserved(string? mkvPath)
+        {
+            if (string.IsNullOrWhiteSpace(mkvPath) || !File.Exists(mkvPath))
+                return;
+
+            try
+            {
+                string mp4Path = Path.ChangeExtension(mkvPath, ".mp4");
+                if (File.Exists(mp4Path))
+                    File.Delete(mp4Path);
+            }
+            catch { }
         }
 
         private static string? ResolveSidecarPath(string mkvPath, string extension)
