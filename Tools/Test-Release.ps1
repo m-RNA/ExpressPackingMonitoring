@@ -37,7 +37,7 @@ $requiredCoreTests = @(
     "ConfigurationAndScannerTests.AddMonitorConnectPermission_PreservesCrLfLineEndings",
     "ConnectedClientTests.ConnectedDeviceCountDeduplicatesClientsByRemoteAddress",
     "ConfigurationAndScannerTests.AlertService_CriticalAlertBlocksNormalAlertUntilDisplayEnds",
-    "ConfigurationAndScannerTests.AlertService_ForwardsIndustrialAlarmOnceAndRefundSpeechThreeTimes",
+    "ConfigurationAndScannerTests.AlertService_ForwardsIndustrialAlarmAndRefundSpeechOnce",
     "VideoDatabaseTests.GetRecentCompletedVideos_ReturnsLatestTwentyValidRecordsForDate",
     "VideoDatabaseTests.OrderIdExistsRecent_ChecksThirtyDaysAndIgnoresDeletedOrExcludedRecords",
     "VideoDatabaseTests.GetRecentOrderInfos_UsesDatabaseAsNinetyDaySourceOfTruth",
