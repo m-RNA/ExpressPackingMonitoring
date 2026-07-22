@@ -191,7 +191,11 @@ internal sealed class MobileBackupService
                     throw new MobileBackupFileHashException();
                 }
 
-                finalPath = ResolveFinalPath(sessions, fileSha256);
+                finalPath = ResolveFinalPath(
+                    sessions,
+                    fileSha256,
+                    request.SourceDeviceId,
+                    request.SourceDeviceName);
                 state.FinalPath = finalPath;
                 state.UpdatedAtUtc = DateTime.UtcNow;
                 SaveState(state);
@@ -308,7 +312,11 @@ internal sealed class MobileBackupService
         return true;
     }
 
-    private string ResolveFinalPath(IReadOnlyList<MobileBackupSessionRequest> sessions, string fileSha256)
+    private string ResolveFinalPath(
+        IReadOnlyList<MobileBackupSessionRequest> sessions,
+        string fileSha256,
+        string sourceDeviceId,
+        string sourceDeviceName)
     {
         MobileBackupSessionRequest earliest = sessions.OrderBy(session => session.StartedAt).First();
         string trackingNumber = sessions
@@ -320,7 +328,11 @@ internal sealed class MobileBackupService
         if (string.IsNullOrWhiteSpace(root))
             throw new IOException("电脑录像存储路径为空");
 
-        string dateDirectory = Path.Combine(Path.GetFullPath(root), startedAt.ToString("yyyy-MM-dd"));
+        string dateDirectory = Path.Combine(
+            Path.GetFullPath(root),
+            "手机备份",
+            GetDeviceDirectoryName(sourceDeviceId, sourceDeviceName),
+            startedAt.ToString("yyyy-MM-dd"));
         string baseName = SanitizeFileName($"{trackingNumber}_{startedAt:yyyyMMdd_HHmmss}_发货");
         string preferredPath = Path.Combine(dateDirectory, $"{baseName}.mp4");
         if (!File.Exists(preferredPath) || FileMatchesSha256(preferredPath, fileSha256))
@@ -341,6 +353,26 @@ internal sealed class MobileBackupService
             value = value.Replace(invalid, '_');
         value = value.Trim().TrimEnd('.', ' ');
         return string.IsNullOrWhiteSpace(value) ? "未识别面单" : value;
+    }
+
+    internal static string GetDeviceDirectoryName(string sourceDeviceId, string sourceDeviceName)
+    {
+        string readableName = SanitizeFileName(sourceDeviceName ?? "");
+        if (string.Equals(readableName, "未识别面单", StringComparison.Ordinal))
+            readableName = "手机";
+        if (readableName.Length > 32)
+            readableName = readableName[..32].TrimEnd('.', ' ');
+
+        string normalizedId = new((sourceDeviceId ?? "")
+            .Where(char.IsLetterOrDigit)
+            .ToArray());
+        string shortId = normalizedId.Length switch
+        {
+            0 => "未知设备",
+            <= 6 => normalizedId.ToUpperInvariant(),
+            _ => normalizedId[^6..].ToUpperInvariant()
+        };
+        return $"{readableName}-{shortId}";
     }
 
     private MobileBackupUploadState? LoadState(string uploadId)

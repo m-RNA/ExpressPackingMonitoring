@@ -133,7 +133,13 @@ public sealed class MobileBackupTests
             Assert.Equal("商品 A", record.ProductInfo);
             Assert.True(File.Exists(record.FilePath));
             Assert.Equal(
-                Path.Combine(directory, "recordings", "2026-07-19", "TRACK-001_20260719_100000_发货.mp4"),
+                Path.Combine(
+                    directory,
+                    "recordings",
+                    "手机备份",
+                    "打包手机-PHONE1",
+                    "2026-07-19",
+                    "TRACK-001_20260719_100000_发货.mp4"),
                 record.FilePath);
         }
         finally
@@ -182,7 +188,12 @@ public sealed class MobileBackupTests
         {
             byte[] file = Encoding.UTF8.GetBytes("new mobile video");
             string sha = Sha256(file);
-            string dateDirectory = Path.Combine(directory, "recordings", "2026-07-19");
+            string dateDirectory = Path.Combine(
+                directory,
+                "recordings",
+                "手机备份",
+                "手机-PHONE1",
+                "2026-07-19");
             Directory.CreateDirectory(dateDirectory);
             File.WriteAllText(Path.Combine(dateDirectory, "TRACK-001_20260719_100000_发货.mp4"), "existing video");
             using var database = new VideoDatabase(Path.Combine(directory, "videos.db"));
@@ -418,6 +429,19 @@ public sealed class MobileBackupTests
         {
             DeleteTempDirectory(directory);
         }
+    }
+
+    [Fact]
+    public void DeviceDirectoryUsesReadableNameAndStableShortId()
+    {
+        Assert.Equal(
+            "一号打包手机-ABCDEF",
+            MobileBackupService.GetDeviceDirectoryName(
+                "12345678-1234-1234-1234-1234569abcdef",
+                "一号打包手机"));
+        Assert.Equal(
+            "手机-未知设备",
+            MobileBackupService.GetDeviceDirectoryName("", ""));
     }
 
     [Fact]
