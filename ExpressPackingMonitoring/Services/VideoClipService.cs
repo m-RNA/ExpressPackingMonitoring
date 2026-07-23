@@ -337,6 +337,7 @@ namespace ExpressPackingMonitoring.Services
                 task.Status = "canceled";
                 task.Message = "剪辑已取消";
                 task.CompletedAtUtc = DateTime.UtcNow;
+                task.Cancellation.Cancel();
                 try
                 {
                     if (task.Process != null && !task.Process.HasExited)
@@ -369,9 +370,12 @@ namespace ExpressPackingMonitoring.Services
             double duration = endSeconds - startSeconds;
             string args = $"-y -ss {FormatSeconds(startSeconds)} -i {Quote(inputPath)} -t {FormatSeconds(duration)} -map 0:v:0 -map 0:a? -c copy -avoid_negative_ts make_zero -movflags +faststart -f mp4 {Quote(tmpPath)}";
             bool slotEntered = false;
+            using var taskCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                _disposeCts.Token,
+                task.Cancellation.Token);
             try
             {
-                await _clipSlots.WaitAsync(_disposeCts.Token).ConfigureAwait(false);
+                await _clipSlots.WaitAsync(taskCancellation.Token).ConfigureAwait(false);
                 slotEntered = true;
                 lock (task.Sync)
                 {
@@ -382,7 +386,7 @@ namespace ExpressPackingMonitoring.Services
                 }
 
                 int timeoutMs = (int)Math.Clamp(duration * 2000 + 60_000, 60_000, 15 * 60_000);
-                var result = RunFFmpeg(args, tmpPath, timeoutMs, task, _disposeCts.Token);
+                var result = RunFFmpeg(args, tmpPath, timeoutMs, task, taskCancellation.Token);
                 lock (task.Sync)
                 {
                     if (task.CancelRequested || task.Status == "canceled")
@@ -407,13 +411,15 @@ namespace ExpressPackingMonitoring.Services
                     RequestCacheCleanup();
                 }
             }
-            catch (OperationCanceledException) when (_disposeCts.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
                 lock (task.Sync)
                 {
                     task.CancelRequested = true;
                     task.Status = "canceled";
-                    task.Message = "服务已停止，剪辑已取消";
+                    task.Message = _disposeCts.IsCancellationRequested
+                        ? "服务已停止，剪辑已取消"
+                        : "剪辑已取消";
                 }
                 TryDelete(tmpPath);
             }
@@ -436,6 +442,7 @@ namespace ExpressPackingMonitoring.Services
                 {
                     task.Process?.Dispose();
                     task.Process = null;
+                    task.Cancellation.Dispose();
                     if (task.Status is "completed" or "failed" or "canceled")
                         task.CompletedAtUtc ??= DateTime.UtcNow;
                 }
@@ -702,6 +709,7 @@ namespace ExpressPackingMonitoring.Services
                     task.Status = "canceled";
                     task.Message = "服务已停止，剪辑已取消";
                     task.CompletedAtUtc = DateTime.UtcNow;
+                    task.Cancellation.Cancel();
                     try
                     {
                         if (task.Process != null && !task.Process.HasExited)
@@ -853,6 +861,7 @@ namespace ExpressPackingMonitoring.Services
             public string PlayUrl { get; set; }
             public bool CancelRequested { get; set; }
             public Process Process { get; set; }
+            public CancellationTokenSource Cancellation { get; } = new();
             public DateTime CreatedAtUtc { get; set; }
             public DateTime? CompletedAtUtc { get; set; }
             public object Sync { get; } = new();
