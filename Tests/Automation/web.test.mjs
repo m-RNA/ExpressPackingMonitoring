@@ -21,8 +21,23 @@ test('isolated Web server supports search, playback and clip editor entry', { sk
     await assert.doesNotReject(() => page.locator('#mobileConnectQr[src^="data:image/png;base64,"]').waitFor());
     assert.equal(await page.locator('#mobileConnectUrl').inputValue(), `http://192.168.1.20:${new URL(baseUrl).port}`);
     await page.keyboard.press('Escape');
-    await page.setViewportSize({ width: 720, height: 900 });
+    await page.setViewportSize({ width: 811, height: 900 });
     assert.equal(await mobileConnectButton.isVisible(), false);
+    const compactOverview = await page.locator('.overview').evaluate(overview => {
+      const cards = overview.querySelectorAll('.summary-card');
+      return {
+        columns: getComputedStyle(overview).gridTemplateColumns.split(' ').length,
+        storageDisplay: getComputedStyle(cards[2]).display,
+        oldestNoteDisplay: getComputedStyle(document.querySelector('#oldestNote')).display,
+        retentionNoteDisplay: getComputedStyle(document.querySelector('#retentionNote')).display
+      };
+    });
+    assert.deepEqual(compactOverview, {
+      columns: 2,
+      storageDisplay: 'none',
+      oldestNoteDisplay: 'none',
+      retentionNoteDisplay: 'none'
+    });
     await page.setViewportSize({ width: 1280, height: 900 });
 
     const search = page.getByPlaceholder('输入订单号关键词搜索');
@@ -30,6 +45,7 @@ test('isolated Web server supports search, playback and clip editor entry', { sk
     await search.press('Enter');
     const article = page.locator('article').filter({ hasText: 'AUTO_WEB_001' });
     await assert.doesNotReject(() => article.waitFor());
+    assert.match(await page.locator('#resultsInfo').innerText(), /^第 \d+ \/ \d+ 页$/);
 
     await article.getByRole('button', { name: '播放' }).click();
     await assert.doesNotReject(() => page.locator('#playerOverlay.active').waitFor());
@@ -66,6 +82,7 @@ test('Web UI follows browser language and persists an explicit override', { skip
     await search.press('Enter');
     const article = page.locator('article').filter({ hasText: 'AUTO_WEB_001' });
     await assert.doesNotReject(() => article.waitFor());
+    assert.match(await page.locator('#resultsInfo').innerText(), /^Page \d+ of \d+$/);
     await assert.doesNotReject(() => article.getByRole('button', { name: 'Play' }).waitFor());
     await assert.doesNotReject(() => article.getByRole('button', { name: 'Download' }).waitFor());
     assert.doesNotMatch(await article.innerText(), /发货|退货|文件存在|文件丢失|播放|下载/);

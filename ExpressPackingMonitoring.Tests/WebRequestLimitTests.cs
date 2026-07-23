@@ -86,11 +86,19 @@ public sealed class WebRequestLimitTests
 
         Assert.Contains("thumb.loading='lazy'", html);
         Assert.Contains("v.thumbnailUrl", html);
-        Assert.Contains("status.className='status-badge'", html);
+        Assert.Contains("status.className='status-badge'+(external?' external':'')", html);
         Assert.Contains("?'其他设备':'PC'", html);
+        Assert.Contains("tagLine.className='tag-line'", html);
+        Assert.Contains("grid-template-columns:minmax(320px,1.7fr) minmax(300px,1.4fr) auto", html);
+        Assert.Contains(".topbar{display:flex;align-items:center;", html);
+        Assert.Contains("orderLine.append(order)", html);
+        Assert.Contains("tagLine.append(badge,status)", html);
         Assert.Contains("missingBadge.className='missing-badge'", html);
         Assert.Contains("missingBadge.textContent='文件丢失'", html);
-        Assert.Contains(".status-badge,.status-badge.external{background:var(--progress-bg);color:var(--muted)}", html);
+        Assert.Contains(".status-badge{background:var(--status-bg);color:var(--ok)", html);
+        Assert.Contains(".status-badge.external{background:var(--external-status-bg);color:var(--external-status-text)}", html);
+        Assert.Contains("text('resultsInfo','第 '+res.page+' / '+totalPages+' 页')", html);
+        Assert.DoesNotContain("'共 '+res.total+' 条记录", html);
         Assert.Contains(".mobile-connect-toggle,.install-card{display:none}", html);
     }
 
@@ -99,12 +107,13 @@ public sealed class WebRequestLimitTests
     {
         string html = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Web", "index.html"));
 
-        Assert.Contains("@media (max-width:560px){.overview{grid-template-columns:repeat(2,minmax(0,1fr))", html);
+        Assert.Contains("@media (max-width:820px){.overview{grid-template-columns:repeat(2,minmax(0,1fr))", html);
         Assert.Contains(".overview .summary-card:nth-child(3){display:none}", html);
         Assert.Contains(".overview #oldestNote,.overview #retentionNote{display:none}", html);
         Assert.DoesNotContain("<p>按日期或订单号检索局域网监控端录像", html);
         Assert.Contains("localStorage.getItem(compatStorageKey)===null", html);
         Assert.Contains("window.matchMedia('(max-width:900px)').matches", html);
         Assert.Contains("localStorage.setItem(compatStorageKey,'0')", html);
+        Assert.Contains("right:16px;bottom:96px", html);
     }
 }
