@@ -170,6 +170,8 @@ namespace ExpressPackingMonitoring.ViewModels
         private WebServer _webServer;
         private Task<bool> _webServerStartupTask;
         private readonly SemaphoreSlim _webServerLifecycleLock = new(1, 1);
+        private StatisticsWindow _statisticsWindow;
+        private PlaybackWindow _playbackWindow;
         private GlobalKeyboardHook _globalKeyHook;
         private CameraBarcodeRecognitionService _cameraBarcodeRecognition;
         private CancellationTokenSource _cameraBarcodeFeedbackCts;
@@ -2019,13 +2021,26 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private void OpenStatsWindow()
         {
-            var statsWin = new StatisticsWindow(_db);
-            if (Application.Current?.MainWindow != null) statsWin.Owner = Application.Current.MainWindow;
-            statsWin.ShowDialog();
+            if (ActivateExistingWindow(_statisticsWindow))
+                return;
+
+            var statsWindow = new StatisticsWindow(_db);
+            _statisticsWindow = statsWindow;
+            statsWindow.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_statisticsWindow, statsWindow))
+                    _statisticsWindow = null;
+            };
+            if (Application.Current?.MainWindow != null)
+                statsWindow.Owner = Application.Current.MainWindow;
+            statsWindow.Show();
         }
 
         private void OpenPlaybackWindow()
         {
+            if (ActivateExistingWindow(_playbackWindow))
+                return;
+
             string folderPath;
             try
             {
@@ -2040,14 +2055,33 @@ namespace ExpressPackingMonitoring.ViewModels
 
             try
             {
-                var playbackWin = new PlaybackWindow(folderPath, _db, Config.ShowDeletedVideos);
-                if (Application.Current?.MainWindow != null) playbackWin.Owner = Application.Current.MainWindow;
-                playbackWin.ShowDialog();
+                var playbackWindow = new PlaybackWindow(folderPath, _db, Config.ShowDeletedVideos);
+                _playbackWindow = playbackWindow;
+                playbackWindow.Closed += (_, _) =>
+                {
+                    if (ReferenceEquals(_playbackWindow, playbackWindow))
+                        _playbackWindow = null;
+                };
+                if (Application.Current?.MainWindow != null)
+                    playbackWindow.Owner = Application.Current.MainWindow;
+                playbackWindow.Show();
             }
             catch (Exception ex)
             {
+                _playbackWindow = null;
                 MessageBox.Show($"打开回放窗口失败：{ex.Message}", "回放错误", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
+        }
+
+        private static bool ActivateExistingWindow(System.Windows.Window window)
+        {
+            if (window == null)
+                return false;
+
+            if (window.WindowState == WindowState.Minimized)
+                window.WindowState = WindowState.Normal;
+            window.Activate();
+            return true;
         }
 
         /// <summary>
@@ -3799,6 +3833,8 @@ namespace ExpressPackingMonitoring.ViewModels
             if (_isDisposed) return;
             _shutdownRequested = true;
             _isDisposed = true;
+            try { _playbackWindow?.Close(); } catch { }
+            try { _statisticsWindow?.Close(); } catch { }
             _cts?.Cancel();
             _cameraBarcodeFeedbackCts?.Cancel();
             _previewAlertCts?.Cancel();

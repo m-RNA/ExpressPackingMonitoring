@@ -198,7 +198,7 @@ namespace ExpressPackingMonitoring.UI
                         FileInfo? info = (deleted || missing) ? null : new FileInfo(record.FilePath);
                         videos.Add(new VideoItem
                         {
-                            DisplayName = Path.GetFileNameWithoutExtension(record.FileName),
+                            DisplayName = GetOrderDisplayName(record.TrackingNumber, record.OrderId, record.FileName),
                             FullPath = record.FilePath,
                             OrderId = record.OrderId,
                             Mode = record.Mode,
@@ -262,7 +262,7 @@ namespace ExpressPackingMonitoring.UI
                 {
                     videos.Add(new VideoItem
                     {
-                        DisplayName = Path.GetFileNameWithoutExtension(file.Name),
+                        DisplayName = GetOrderDisplayName("", "", file.Name),
                         FullPath = file.FullName,
                         FileSize = FormatFileSize(file.Length),
                         File = file
@@ -271,6 +271,19 @@ namespace ExpressPackingMonitoring.UI
             }
 
             videos.Sort((a, b) => DateTime.Compare(b.File?.CreationTime ?? DateTime.MinValue, a.File?.CreationTime ?? DateTime.MinValue));
+        }
+
+        internal static string GetOrderDisplayName(string? trackingNumber, string? orderId, string? fileName)
+        {
+            if (!string.IsNullOrWhiteSpace(trackingNumber))
+                return trackingNumber.Trim();
+            if (!string.IsNullOrWhiteSpace(orderId))
+                return orderId.Trim();
+
+            string stem = Path.GetFileNameWithoutExtension(fileName ?? "").Trim();
+            int separatorIndex = stem.IndexOf('_');
+            string parsedOrderId = separatorIndex > 0 ? stem[..separatorIndex] : stem;
+            return string.IsNullOrWhiteSpace(parsedOrderId) ? "未识别面单" : parsedOrderId;
         }
 
         private IEnumerable<FileInfo> EnumerateVideoFiles(string folderPath)
