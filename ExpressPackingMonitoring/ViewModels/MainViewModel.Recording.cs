@@ -565,8 +565,19 @@ namespace ExpressPackingMonitoring.ViewModels
                 // 3. 开启新的生产者-消费者通道
                 lock (_videoLock)
                 {
-                    _videoWriteQueue = new BlockingCollection<Mat>(300); // 增大缓冲区
+                    int recordingFps = _actualCameraFps > 0 ? _actualCameraFps : Config.Fps;
+                    int queueCapacity = RecordingBufferPolicy.CalculateVideoQueueCapacity(
+                        Config.FrameWidth,
+                        Config.FrameHeight,
+                        recordingFps);
+                    _videoWriteQueue = new BlockingCollection<Mat>(queueCapacity);
                     _writeCts = new CancellationTokenSource();
+                    _lastRecordingQueueWarnAt = DateTime.MinValue;
+
+                    long bufferedBytes = (long)queueCapacity * Config.FrameWidth * Config.FrameHeight * 3;
+                    RuntimeLog.Info(
+                        "Recording",
+                        $"Video frame queue capacity={queueCapacity}, estimatedRawBuffer={bufferedBytes / 1024d / 1024d:F1}MB");
                 }
 
                 // 4. 启动录制任务
