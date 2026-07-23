@@ -664,20 +664,21 @@
                                        FontSize="12"
                                        TextTrimming="CharacterEllipsis"
                                        VerticalAlignment="Center"/>
-                            <StackPanel Grid.Row="1"
-                                        Margin="0,8,0,0"
-                                        Orientation="Horizontal"
-                                        HorizontalAlignment="Right">
-                                <Button x:Name="BtnSwitchWorkstation" Width="126" Height="32" Padding="9,0" Style="{StaticResource SecondaryButtonStyle}" ToolTip="切换工位" Cursor="Hand" Focusable="False">
+                            <Grid Grid.Row="1" Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Button x:Name="BtnSwitchWorkstation" Grid.Column="0" Height="32" Padding="9,0" Style="{StaticResource SecondaryButtonStyle}" ToolTip="切换工位" Cursor="Hand" Focusable="False">
                                     <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                                         <Path Data="{StaticResource FluentArrowSwapIcon}" Width="14" Height="14" Stretch="Uniform" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
                                         <TextBlock Text="切换工位" Margin="5,0,0,0" FontSize="12" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                                 <Button x:Name="BtnMobileConnection"
-                                        Width="126"
+                                        Grid.Column="2"
                                         Height="32"
-                                        Margin="8,0,0,0"
                                         Padding="9,0"
                                         Style="{StaticResource PrimaryButtonStyle}"
                                         ToolTip="{Binding WorkstationStatusToolTip}"
@@ -687,7 +688,7 @@
                                         <TextBlock Text="手机/电脑连接" Margin="5,0,0,0" FontSize="12" Foreground="White" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                            </StackPanel>
+                            </Grid>
                         </Grid>
                     </Border>
 
