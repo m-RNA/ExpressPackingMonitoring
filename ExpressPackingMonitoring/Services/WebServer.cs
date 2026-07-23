@@ -88,6 +88,7 @@ namespace ExpressPackingMonitoring.Services
         private readonly SemaphoreSlim _requestSlots = new(32, 32);
         private readonly SemaphoreSlim _transcodeSlot = new(1, 1);
         private readonly FfmpegWorkLimiter _ffmpegWorkLimiter = new();
+        private readonly ShortLivedSnapshotCache<byte[]> _storageOverviewCache = new(TimeSpan.FromSeconds(10));
         private Task _listenTask;
         private bool _disposed;
         private static readonly string _logPath = AppPaths.WebDebugLogPath;
@@ -1296,101 +1297,107 @@ namespace ExpressPackingMonitoring.Services
         {
             try
             {
-                var config = LoadAppConfig();
-                var locations = config.StorageLocations?
-                    .Where(x => !string.IsNullOrWhiteSpace(x.Path))
-                    .OrderBy(x => x.Priority)
-                    .ToList() ?? new List<StorageLocation>();
-
-                var configuredPaths = locations.Select(BuildStoragePathInfo).ToList();
-                var records = _db.GetActiveStorageVideoFiles()
-                    .Where(x => !string.IsNullOrWhiteSpace(x.FilePath))
-                    .ToList();
-
-                var existingRecords = records.Where(x =>
-                {
-                    try { return File.Exists(x.FilePath); }
-                    catch { return false; }
-                }).ToList();
-
-                long usedBytes = existingRecords.Sum(x => GetExistingFileSize(x.FilePath, x.FileSizeBytes));
-                long totalBytes = configuredPaths.Sum(x => x.TotalBytes);
-                if (totalBytes <= 0 && usedBytes > 0)
-                    totalBytes = usedBytes;
-                long freeBytes = Math.Max(0, totalBytes - usedBytes);
-
-                DateTime? oldest = existingRecords.Count > 0 ? existingRecords.Min(x => x.StartTime) : null;
-                DateTime? latest = existingRecords.Count > 0 ? existingRecords.Max(x => x.StartTime) : null;
-                int savedDays = CalculateSavedDays(oldest, latest);
-
-                var recentRecords = existingRecords
-                    .Where(x => x.StartTime.Date >= DateTime.Today.AddDays(-9))
-                    .ToList();
-                int historyDays = recentRecords.Select(x => x.StartTime.Date).Distinct().Count();
-                long historyBytes = recentRecords.Sum(x => GetExistingFileSize(x.FilePath, x.FileSizeBytes));
-
-                string estimateBasis = "";
-                double avgGBPerDay = 0;
-                double? estimatedRetentionDays = null;
-                if (historyDays > 0 && historyBytes > 0)
-                {
-                    avgGBPerDay = BytesToGB(historyBytes) / historyDays;
-                    if (avgGBPerDay > 0 && totalBytes > 0)
-                    {
-                        estimatedRetentionDays = BytesToGB(totalBytes) / avgGBPerDay;
-                        estimateBasis = $"基于最近 {historyDays} 天录像占用 {FormatGB(historyBytes)} 估算";
-                    }
-                }
-                else if (savedDays > 0 && usedBytes > 0)
-                {
-                    avgGBPerDay = BytesToGB(usedBytes) / savedDays;
-                    if (avgGBPerDay > 0 && totalBytes > 0)
-                    {
-                        estimatedRetentionDays = BytesToGB(totalBytes) / avgGBPerDay;
-                        historyDays = savedDays;
-                        historyBytes = usedBytes;
-                        estimateBasis = "基于当前已保存录像估算，结果仅供参考";
-                    }
-                }
-
-                var pathDtos = configuredPaths.Select(path =>
-                {
-                    long pathUsed = existingRecords
-                        .Where(x => IsPathUnderDirectory(x.FilePath, path.Path))
-                        .Sum(x => GetExistingFileSize(x.FilePath, x.FileSizeBytes));
-                    long pathFree = Math.Max(0, path.TotalBytes - pathUsed);
-                    return new
-                    {
-                        path = path.DisplayPath,
-                        totalGB = Math.Round(BytesToGB(path.TotalBytes), 1),
-                        usedGB = Math.Round(BytesToGB(pathUsed), 1),
-                        freeGB = Math.Round(BytesToGB(pathFree), 1),
-                        available = path.Available
-                    };
-                }).ToList();
-
-                SendJson(ctx, 200, new
-                {
-                    totalGB = Math.Round(BytesToGB(totalBytes), 1),
-                    usedGB = Math.Round(BytesToGB(usedBytes), 1),
-                    freeGB = Math.Round(BytesToGB(freeBytes), 1),
-                    oldestVideoTime = oldest?.ToString("yyyy-MM-dd HH:mm:ss"),
-                    latestVideoTime = latest?.ToString("yyyy-MM-dd HH:mm:ss"),
-                    savedDays,
-                    historyDays,
-                    historyUsedGB = Math.Round(BytesToGB(historyBytes), 1),
-                    avgGBPerDay = Math.Round(avgGBPerDay, 2),
-                    estimatedRetentionDays = estimatedRetentionDays.HasValue ? Math.Round(estimatedRetentionDays.Value, 0) : (double?)null,
-                    estimateBasis,
-                    pathCount = configuredPaths.Count,
-                    paths = pathDtos
-                });
+                byte[] responseBytes = _storageOverviewCache.GetOrCreate(BuildStorageOverviewResponse);
+                SendJsonBytes(ctx, 200, responseBytes);
             }
             catch (Exception ex)
             {
                 Log($"HandleStorageOverview 异常: {ex.Message}");
                 SendJson(ctx, 500, new { errorCode = "storage_unavailable", error = "存储信息暂不可用" });
             }
+        }
+
+        private byte[] BuildStorageOverviewResponse()
+        {
+            var config = LoadAppConfig();
+            var locations = config.StorageLocations?
+                .Where(x => !string.IsNullOrWhiteSpace(x.Path))
+                .OrderBy(x => x.Priority)
+                .ToList() ?? new List<StorageLocation>();
+
+            var configuredPaths = locations.Select(BuildStoragePathInfo).ToList();
+            var records = _db.GetActiveStorageVideoFiles()
+                .Where(x => !string.IsNullOrWhiteSpace(x.FilePath))
+                .ToList();
+
+            var existingRecords = records.Where(x =>
+            {
+                try { return File.Exists(x.FilePath); }
+                catch { return false; }
+            }).ToList();
+
+            long usedBytes = existingRecords.Sum(x => GetExistingFileSize(x.FilePath, x.FileSizeBytes));
+            long totalBytes = configuredPaths.Sum(x => x.TotalBytes);
+            if (totalBytes <= 0 && usedBytes > 0)
+                totalBytes = usedBytes;
+            long freeBytes = Math.Max(0, totalBytes - usedBytes);
+
+            DateTime? oldest = existingRecords.Count > 0 ? existingRecords.Min(x => x.StartTime) : null;
+            DateTime? latest = existingRecords.Count > 0 ? existingRecords.Max(x => x.StartTime) : null;
+            int savedDays = CalculateSavedDays(oldest, latest);
+
+            var recentRecords = existingRecords
+                .Where(x => x.StartTime.Date >= DateTime.Today.AddDays(-9))
+                .ToList();
+            int historyDays = recentRecords.Select(x => x.StartTime.Date).Distinct().Count();
+            long historyBytes = recentRecords.Sum(x => GetExistingFileSize(x.FilePath, x.FileSizeBytes));
+
+            string estimateBasis = "";
+            double avgGBPerDay = 0;
+            double? estimatedRetentionDays = null;
+            if (historyDays > 0 && historyBytes > 0)
+            {
+                avgGBPerDay = BytesToGB(historyBytes) / historyDays;
+                if (avgGBPerDay > 0 && totalBytes > 0)
+                {
+                    estimatedRetentionDays = BytesToGB(totalBytes) / avgGBPerDay;
+                    estimateBasis = $"基于最近 {historyDays} 天录像占用 {FormatGB(historyBytes)} 估算";
+                }
+            }
+            else if (savedDays > 0 && usedBytes > 0)
+            {
+                avgGBPerDay = BytesToGB(usedBytes) / savedDays;
+                if (avgGBPerDay > 0 && totalBytes > 0)
+                {
+                    estimatedRetentionDays = BytesToGB(totalBytes) / avgGBPerDay;
+                    historyDays = savedDays;
+                    historyBytes = usedBytes;
+                    estimateBasis = "基于当前已保存录像估算，结果仅供参考";
+                }
+            }
+
+            var pathDtos = configuredPaths.Select(path =>
+            {
+                long pathUsed = existingRecords
+                    .Where(x => IsPathUnderDirectory(x.FilePath, path.Path))
+                    .Sum(x => GetExistingFileSize(x.FilePath, x.FileSizeBytes));
+                long pathFree = Math.Max(0, path.TotalBytes - pathUsed);
+                return new
+                {
+                    path = path.DisplayPath,
+                    totalGB = Math.Round(BytesToGB(path.TotalBytes), 1),
+                    usedGB = Math.Round(BytesToGB(pathUsed), 1),
+                    freeGB = Math.Round(BytesToGB(pathFree), 1),
+                    available = path.Available
+                };
+            }).ToList();
+
+            return JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                totalGB = Math.Round(BytesToGB(totalBytes), 1),
+                usedGB = Math.Round(BytesToGB(usedBytes), 1),
+                freeGB = Math.Round(BytesToGB(freeBytes), 1),
+                oldestVideoTime = oldest?.ToString("yyyy-MM-dd HH:mm:ss"),
+                latestVideoTime = latest?.ToString("yyyy-MM-dd HH:mm:ss"),
+                savedDays,
+                historyDays,
+                historyUsedGB = Math.Round(BytesToGB(historyBytes), 1),
+                avgGBPerDay = Math.Round(avgGBPerDay, 2),
+                estimatedRetentionDays = estimatedRetentionDays.HasValue ? Math.Round(estimatedRetentionDays.Value, 0) : (double?)null,
+                estimateBasis,
+                pathCount = configuredPaths.Count,
+                paths = pathDtos
+            }, _jsonOptions);
         }
 
         private static AppConfig LoadAppConfig()
@@ -2334,9 +2341,14 @@ namespace ExpressPackingMonitoring.Services
         // ───── JSON 响应 ─────
         private static void SendJson(HttpListenerContext ctx, int statusCode, object data)
         {
+            byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(data, _jsonOptions);
+            SendJsonBytes(ctx, statusCode, bytes);
+        }
+
+        private static void SendJsonBytes(HttpListenerContext ctx, int statusCode, byte[] bytes)
+        {
             ctx.Response.StatusCode = statusCode;
             ctx.Response.ContentType = "application/json; charset=utf-8";
-            byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(data, _jsonOptions);
             ctx.Response.ContentLength64 = bytes.Length;
             ctx.Response.OutputStream.Write(bytes, 0, bytes.Length);
             ctx.Response.OutputStream.Close();
