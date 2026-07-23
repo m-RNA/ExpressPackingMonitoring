@@ -2091,24 +2091,6 @@
 
                             <Border Style="{StaticResource SectionCardStyle}">
                                 <StackPanel>
-                                    <Grid Style="{StaticResource SettingRowStyle}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="24"/>
-                                            <ColumnDefinition Width="260"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Margin="0,0,16,0">
-                                            <TextBlock Text="启用局域网查看" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="同一网络里的电脑或手机可以用浏览器查看录像，首次开启可能请求管理员权限"
-                                                       Style="{StaticResource FieldHintStyle}"/>
-                                        </StackPanel>
-                                        <CheckBox Grid.Column="2"
-                                                  IsChecked="{Binding Config.EnableWebServer}"
-                                                  VerticalAlignment="Center"
-                                                  HorizontalAlignment="Left"
-                                                  Style="{StaticResource ToggleSwitchStyle}"/>
-                                    </Grid>
-
                                     <Grid Style="{StaticResource SettingRowStyle}"
                                           ToolTip="端口是浏览器访问服务时使用的数字，例如 http://电脑IP:端口">
                                         <Grid.ColumnDefinitions>

@@ -359,6 +359,17 @@ public sealed class ConfigurationAndScannerTests
         Assert.Equal(32, config.WebAccessKey.Length);
     }
 
+    [Fact]
+    public void NormalizeAfterLoad_AlwaysEnablesLanService()
+    {
+        var config = new AppConfig { EnableWebServer = false };
+
+        bool changed = AppConfig.NormalizeAfterLoad(config);
+
+        Assert.True(changed);
+        Assert.True(config.EnableWebServer);
+    }
+
     [Theory]
     [InlineData(new double[] { 20, 25, 30, 20 }, 5, true)]
     [InlineData(new double[] { 20, 250, 20, 250 }, 5, false)]

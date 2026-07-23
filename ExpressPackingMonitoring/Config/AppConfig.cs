@@ -184,6 +184,12 @@ namespace ExpressPackingMonitoring.Config
         {
             bool changed = false;
 
+            if (!config.EnableWebServer)
+            {
+                config.EnableWebServer = true;
+                changed = true;
+            }
+
             string normalizedLanguage = AppLanguage.NormalizePreference(config.Language);
             if (config.Language != normalizedLanguage)
             {
