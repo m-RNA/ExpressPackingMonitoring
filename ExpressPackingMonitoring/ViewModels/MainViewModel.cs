@@ -3239,7 +3239,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 while (!token.IsCancellationRequested)
                 {
                     // 录制时跟随硬件实际帧率；空闲时只保留预览和条码识别所需的处理频率。
-                    int processingFps = CameraFrameProcessingPolicy.GetTargetFps(IsRecording, _actualCameraFps);
+                    int processingFps = CameraFrameProcessingPolicy.GetProcessingFps(IsRecording, _actualCameraFps);
                     double frameDurationMs = 1000.0 / processingFps;
                     DateTime startTime = DateTime.Now; Mat currentFrame = null;
                     lock (_frameLock) { if (_latestFrame != null && !_latestFrame.IsDisposed) currentFrame = _latestFrame.Clone(); }

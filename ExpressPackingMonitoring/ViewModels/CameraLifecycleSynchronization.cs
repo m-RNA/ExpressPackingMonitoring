@@ -4,10 +4,17 @@ namespace ExpressPackingMonitoring.ViewModels;
 
 internal static class CameraFrameProcessingPolicy
 {
-    internal const int IdleProcessingFps = 15;
+    internal const int IdleCaptureFps = 15;
+    internal const int IdleProcessingFps = 24;
     private const int FallbackCameraFps = 15;
 
-    public static int GetTargetFps(bool isRecording, int actualCameraFps)
+    public static int GetCaptureFps(bool isRecording, int actualCameraFps)
+    {
+        int cameraFps = actualCameraFps > 0 ? actualCameraFps : FallbackCameraFps;
+        return isRecording ? cameraFps : Math.Min(cameraFps, IdleCaptureFps);
+    }
+
+    public static int GetProcessingFps(bool isRecording, int actualCameraFps)
     {
         int cameraFps = actualCameraFps > 0 ? actualCameraFps : FallbackCameraFps;
         return isRecording ? cameraFps : Math.Min(cameraFps, IdleProcessingFps);
@@ -31,7 +38,7 @@ internal sealed class CameraFrameRateGate
             return true;
         }
 
-        int targetFps = CameraFrameProcessingPolicy.GetTargetFps(false, actualCameraFps);
+        int targetFps = CameraFrameProcessingPolicy.GetCaptureFps(false, actualCameraFps);
         long minimumInterval = Math.Max(1, timestampFrequency / targetFps);
 
         while (true)

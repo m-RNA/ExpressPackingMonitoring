@@ -6,16 +6,18 @@ namespace ExpressPackingMonitoring.Tests;
 public sealed class CameraLifecycleTests
 {
     [Theory]
-    [InlineData(false, 60, 15)]
-    [InlineData(false, 10, 10)]
-    [InlineData(true, 60, 60)]
-    [InlineData(true, 0, 15)]
-    public void CameraFrameProcessingPolicy_PreservesRecordingFpsAndCapsIdleFps(
+    [InlineData(false, 60, 15, 24)]
+    [InlineData(false, 10, 10, 10)]
+    [InlineData(true, 60, 60, 60)]
+    [InlineData(true, 0, 15, 15)]
+    public void CameraFrameProcessingPolicy_PreservesRecordingFpsAndSeparatesIdleCaptureFromProcessing(
         bool isRecording,
         int actualCameraFps,
-        int expectedFps)
+        int expectedCaptureFps,
+        int expectedProcessingFps)
     {
-        Assert.Equal(expectedFps, CameraFrameProcessingPolicy.GetTargetFps(isRecording, actualCameraFps));
+        Assert.Equal(expectedCaptureFps, CameraFrameProcessingPolicy.GetCaptureFps(isRecording, actualCameraFps));
+        Assert.Equal(expectedProcessingFps, CameraFrameProcessingPolicy.GetProcessingFps(isRecording, actualCameraFps));
     }
 
     [Fact]
