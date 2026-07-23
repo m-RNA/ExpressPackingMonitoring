@@ -86,10 +86,24 @@ public sealed class WebRequestLimitTests
 
         Assert.Contains("thumb.loading='lazy'", html);
         Assert.Contains("v.thumbnailUrl", html);
-        Assert.Contains("status-badge'+(external?' external':'')", html);
-        Assert.DoesNotContain("status-badge'+(v.exists?'':' missing')", html);
+        Assert.Contains("status.className='status-badge'", html);
         Assert.Contains("?'其他设备':'PC'", html);
+        Assert.Contains("missingBadge.className='missing-badge'", html);
+        Assert.Contains("missingBadge.textContent='文件丢失'", html);
+        Assert.Contains(".status-badge,.status-badge.external{background:var(--progress-bg);color:var(--muted)}", html);
         Assert.Contains(".mobile-connect-toggle,.install-card{display:none}", html);
-        Assert.DoesNotContain("status.textContent=v.exists?'文件存在':'文件丢失'", html);
+    }
+
+    [Fact]
+    public void MobileOverview_UsesCompactCardsAndDisablesCompatibilityOnFirstVisit()
+    {
+        string html = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Web", "index.html"));
+
+        Assert.Contains("@media (max-width:560px){.overview{grid-template-columns:repeat(2,minmax(0,1fr))", html);
+        Assert.Contains(".overview .summary-card:nth-child(3){grid-column:1/-1}", html);
+        Assert.Contains(".overview #oldestNote,.overview #retentionNote,.overview #storageNote{display:none}", html);
+        Assert.Contains("localStorage.getItem(compatStorageKey)===null", html);
+        Assert.Contains("window.matchMedia('(max-width:900px)').matches", html);
+        Assert.Contains("localStorage.setItem(compatStorageKey,'0')", html);
     }
 }
