@@ -2031,8 +2031,6 @@ namespace ExpressPackingMonitoring.ViewModels
                 if (ReferenceEquals(_statisticsWindow, statsWindow))
                     _statisticsWindow = null;
             };
-            if (Application.Current?.MainWindow != null)
-                statsWindow.Owner = Application.Current.MainWindow;
             statsWindow.Show();
         }
 
@@ -2062,8 +2060,6 @@ namespace ExpressPackingMonitoring.ViewModels
                     if (ReferenceEquals(_playbackWindow, playbackWindow))
                         _playbackWindow = null;
                 };
-                if (Application.Current?.MainWindow != null)
-                    playbackWindow.Owner = Application.Current.MainWindow;
                 playbackWindow.Show();
             }
             catch (Exception ex)
