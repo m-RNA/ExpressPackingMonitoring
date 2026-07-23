@@ -36,6 +36,7 @@ namespace ExpressPackingMonitoring.Services
         private readonly Func<VideoRecord, MkvConversionResult> _mkvConverter;
         private readonly Func<string, bool> _isCurrentRecordingFile;
         private readonly Action _requestCacheCleanup;
+        private readonly FfmpegWorkLimiter _ffmpegWorkLimiter;
         private readonly ConcurrentDictionary<string, ClipTaskState> _tasks = new();
         private readonly ConcurrentDictionary<string, object> _previewLocks = new(StringComparer.OrdinalIgnoreCase);
         private readonly object _taskRegistrationLock = new();
@@ -51,12 +52,30 @@ namespace ExpressPackingMonitoring.Services
             Func<VideoRecord, MkvConversionResult> mkvConverter = null,
             Func<string, bool> isCurrentRecordingFile = null,
             Action requestCacheCleanup = null)
+            : this(
+                db,
+                log,
+                mkvConverter,
+                isCurrentRecordingFile,
+                requestCacheCleanup,
+                new FfmpegWorkLimiter())
+        {
+        }
+
+        internal VideoClipService(
+            VideoDatabase db,
+            Action<string> log,
+            Func<VideoRecord, MkvConversionResult> mkvConverter,
+            Func<string, bool> isCurrentRecordingFile,
+            Action requestCacheCleanup,
+            FfmpegWorkLimiter ffmpegWorkLimiter)
         {
             _db = db ?? throw new ArgumentNullException(nameof(db));
             _log = log ?? (_ => { });
             _mkvConverter = mkvConverter;
             _isCurrentRecordingFile = isCurrentRecordingFile ?? (_ => false);
             _requestCacheCleanup = requestCacheCleanup ?? (() => { });
+            _ffmpegWorkLimiter = ffmpegWorkLimiter ?? throw new ArgumentNullException(nameof(ffmpegWorkLimiter));
             Directory.CreateDirectory(AppPaths.ClipPreviewDir);
             Directory.CreateDirectory(AppPaths.ClipsDir);
         }
@@ -281,7 +300,7 @@ namespace ExpressPackingMonitoring.Services
                 _tasks[taskId] = task;
             }
 
-            _ = RunClipTaskAsync(task, sourcePath, startSeconds, endSeconds);
+            _ = Task.Run(() => RunClipTaskAsync(task, sourcePath, startSeconds, endSeconds));
             return taskId;
         }
 
@@ -541,6 +560,7 @@ namespace ExpressPackingMonitoring.Services
             if (string.IsNullOrWhiteSpace(ffmpegPath) || !File.Exists(ffmpegPath))
                 throw new FileNotFoundException("服务器未找到 ffmpeg.exe");
 
+            using IDisposable ffmpegSlot = _ffmpegWorkLimiter.Enter(cancellationToken);
             _log($"VideoClip FFmpeg: \"{ffmpegPath}\" {args}");
             var psi = new ProcessStartInfo
             {

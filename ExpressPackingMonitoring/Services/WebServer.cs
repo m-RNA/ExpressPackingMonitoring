@@ -86,6 +86,8 @@ namespace ExpressPackingMonitoring.Services
         private readonly string _mobileBackupComputerName;
         private readonly CancellationTokenSource _cts = new();
         private readonly SemaphoreSlim _requestSlots = new(32, 32);
+        private readonly SemaphoreSlim _transcodeSlot = new(1, 1);
+        private readonly FfmpegWorkLimiter _ffmpegWorkLimiter = new();
         private Task _listenTask;
         private bool _disposed;
         private static readonly string _logPath = AppPaths.WebDebugLogPath;
@@ -151,7 +153,13 @@ namespace ExpressPackingMonitoring.Services
             _mobileBackupComputerName = string.IsNullOrWhiteSpace(mobileBackupComputerName)
                 ? Environment.MachineName
                 : mobileBackupComputerName.Trim();
-            _clipService = new VideoClipService(_db, WriteLog, _mkvConverter, IsCurrentRecordingFile, () => Task.Run(CleanWebCache));
+            _clipService = new VideoClipService(
+                _db,
+                WriteLog,
+                _mkvConverter,
+                IsCurrentRecordingFile,
+                () => Task.Run(CleanWebCache),
+                _ffmpegWorkLimiter);
             Port = port;
             _transCacheMaxBytes = (long)transCacheMaxMB * 1024 * 1024;
             _listener = CreateListener(port, listenerHost);
@@ -1759,28 +1767,58 @@ namespace ExpressPackingMonitoring.Services
                 return;
             }
 
-            // 首次播放 → 边转码边推流，同时写入缓存文件
-            Directory.CreateDirectory(_transCacheDir);
-            string tmpPath = cachePath + ".tmp";
-
-            // 流式转码：缩到 480p + 极速设置，确保转码速度 > 实时播放速度
-            string scaleFilter = "-vf scale=-2:480";
-            string hwArgs = $"-loglevel warning -hwaccel auto -i \"{filePath}\" {scaleFilter} -c:v h264_nvenc -preset p1 -cq 30 -c:a aac -b:a 96k -movflags frag_keyframe+empty_moov+default_base_moof -f mp4 pipe:1";
-            string swArgs = $"-loglevel warning -i \"{filePath}\" {scaleFilter} -c:v libx264 -preset ultrafast -tune zerolatency -crf 28 -c:a aac -b:a 96k -movflags frag_keyframe+empty_moov+default_base_moof -f mp4 pipe:1";
-
-            if (!StreamTranscodeToClient(ctx, ffmpegPath, hwArgs, tmpPath))
+            bool transcodeSlotEntered = false;
+            IDisposable ffmpegSlot = null;
+            try
             {
-                Log("ServeTranscodedStream: NVENC 流式转码失败，回退 CPU");
-                if (!StreamTranscodeToClient(ctx, ffmpegPath, swArgs, tmpPath))
-                {
-                    try { File.Delete(tmpPath); } catch { }
-                    return; // 响应已在内部处理
-                }
-            }
+                _transcodeSlot.Wait(_cts.Token);
+                transcodeSlotEntered = true;
 
-            // 转码成功，将临时文件提升为正式缓存
-            try { File.Move(tmpPath, cachePath, overwrite: true); } catch { }
-            Task.Run(CleanWebCache);
+                // 等待期间相同视频可能已经完成转码，复查缓存以避免重复启动 FFmpeg。
+                if (File.Exists(cachePath) && new FileInfo(cachePath).Length > 0)
+                {
+                    _transcodeSlot.Release();
+                    transcodeSlotEntered = false;
+                    Log($"ServeTranscodedStream: 等待后命中缓存 {cachePath}");
+                    ServeFileWithRange(ctx, cachePath, inline: true);
+                    return;
+                }
+
+                ffmpegSlot = _ffmpegWorkLimiter.Enter(_cts.Token);
+
+                // 首次播放 → 边转码边推流，同时写入缓存文件
+                Directory.CreateDirectory(_transCacheDir);
+                string tmpPath = cachePath + ".tmp";
+
+                // 流式转码：缩到 480p + 极速设置，确保转码速度 > 实时播放速度
+                string scaleFilter = "-vf scale=-2:480";
+                string hwArgs = $"-loglevel warning -hwaccel auto -i \"{filePath}\" {scaleFilter} -c:v h264_nvenc -preset p1 -cq 30 -c:a aac -b:a 96k -movflags frag_keyframe+empty_moov+default_base_moof -f mp4 pipe:1";
+                string swArgs = $"-loglevel warning -i \"{filePath}\" {scaleFilter} -c:v libx264 -preset ultrafast -tune zerolatency -crf 28 -c:a aac -b:a 96k -movflags frag_keyframe+empty_moov+default_base_moof -f mp4 pipe:1";
+
+                if (!StreamTranscodeToClient(ctx, ffmpegPath, hwArgs, tmpPath))
+                {
+                    Log("ServeTranscodedStream: NVENC 流式转码失败，回退 CPU");
+                    if (!StreamTranscodeToClient(ctx, ffmpegPath, swArgs, tmpPath))
+                    {
+                        try { File.Delete(tmpPath); } catch { }
+                        return; // 响应已在内部处理
+                    }
+                }
+
+                // 转码成功，将临时文件提升为正式缓存
+                try { File.Move(tmpPath, cachePath, overwrite: true); } catch { }
+                Task.Run(CleanWebCache);
+            }
+            catch (OperationCanceledException)
+            {
+                try { ctx.Response.Abort(); } catch { }
+            }
+            finally
+            {
+                ffmpegSlot?.Dispose();
+                if (transcodeSlotEntered)
+                    _transcodeSlot.Release();
+            }
         }
 
         /// <summary>
