@@ -5,6 +5,33 @@ namespace ExpressPackingMonitoring.Tests;
 
 public sealed class CameraLifecycleTests
 {
+    [Theory]
+    [InlineData(false, 60, 15)]
+    [InlineData(false, 10, 10)]
+    [InlineData(true, 60, 60)]
+    [InlineData(true, 0, 15)]
+    public void CameraFrameProcessingPolicy_PreservesRecordingFpsAndCapsIdleFps(
+        bool isRecording,
+        int actualCameraFps,
+        int expectedFps)
+    {
+        Assert.Equal(expectedFps, CameraFrameProcessingPolicy.GetTargetFps(isRecording, actualCameraFps));
+    }
+
+    [Fact]
+    public void CameraFrameRateGate_ThrottlesIdleFramesButAcceptsEveryRecordingFrame()
+    {
+        var gate = new CameraFrameRateGate();
+        const long frequency = 1_000;
+
+        Assert.True(gate.ShouldAccept(false, 60, 1_000, frequency));
+        Assert.False(gate.ShouldAccept(false, 60, 1_050, frequency));
+        Assert.True(gate.ShouldAccept(false, 60, 1_066, frequency));
+
+        Assert.True(gate.ShouldAccept(true, 60, 1_067, frequency));
+        Assert.True(gate.ShouldAccept(true, 60, 1_068, frequency));
+    }
+
     [Fact]
     public void PreviewSessionGate_StaleCallbackCannotReleaseAwakenedSession()
     {

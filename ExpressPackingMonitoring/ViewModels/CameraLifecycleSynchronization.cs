@@ -1,4 +1,50 @@
+using System.Diagnostics;
+
 namespace ExpressPackingMonitoring.ViewModels;
+
+internal static class CameraFrameProcessingPolicy
+{
+    internal const int IdleProcessingFps = 15;
+    private const int FallbackCameraFps = 15;
+
+    public static int GetTargetFps(bool isRecording, int actualCameraFps)
+    {
+        int cameraFps = actualCameraFps > 0 ? actualCameraFps : FallbackCameraFps;
+        return isRecording ? cameraFps : Math.Min(cameraFps, IdleProcessingFps);
+    }
+}
+
+internal sealed class CameraFrameRateGate
+{
+    private long _lastAcceptedTimestamp;
+
+    public void Reset() => Interlocked.Exchange(ref _lastAcceptedTimestamp, 0);
+
+    public bool ShouldAccept(bool isRecording, int actualCameraFps) =>
+        ShouldAccept(isRecording, actualCameraFps, Stopwatch.GetTimestamp(), Stopwatch.Frequency);
+
+    internal bool ShouldAccept(bool isRecording, int actualCameraFps, long nowTimestamp, long timestampFrequency)
+    {
+        if (isRecording)
+        {
+            Interlocked.Exchange(ref _lastAcceptedTimestamp, nowTimestamp);
+            return true;
+        }
+
+        int targetFps = CameraFrameProcessingPolicy.GetTargetFps(false, actualCameraFps);
+        long minimumInterval = Math.Max(1, timestampFrequency / targetFps);
+
+        while (true)
+        {
+            long previous = Volatile.Read(ref _lastAcceptedTimestamp);
+            if (previous != 0 && nowTimestamp - previous < minimumInterval)
+                return false;
+
+            if (Interlocked.CompareExchange(ref _lastAcceptedTimestamp, nowTimestamp, previous) == previous)
+                return true;
+        }
+    }
+}
 
 internal sealed class PreviewSessionGate
 {

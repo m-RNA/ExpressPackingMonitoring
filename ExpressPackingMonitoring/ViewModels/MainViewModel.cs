@@ -121,6 +121,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private System.Windows.Threading.DispatcherTimer _uiHeartbeatTimer;
         private readonly PreviewSessionGate _previewSessionGate = new();
         private readonly CameraFrameReadySignal _cameraFrameReady = new();
+        private readonly CameraFrameRateGate _cameraFrameRateGate = new();
         private CancellationTokenSource _cts;
 
         // 摄像头空闲休眠
@@ -2961,6 +2962,7 @@ namespace ExpressPackingMonitoring.ViewModels
             if (clearFrame)
             {
                 _cameraFrameReady.BeginSession();
+                _cameraFrameRateGate.Reset();
                 var dispatcher = Application.Current?.Dispatcher;
                 void ClearPreview()
                 {
@@ -3174,7 +3176,27 @@ namespace ExpressPackingMonitoring.ViewModels
             return true;
         }
         
-        private void VideoSource_NewFrame(object sender, NewFrameEventArgs eventArgs) { try { Mat newMat = BitmapToMat(eventArgs.Frame); lock (_frameLock) { _latestFrame?.Dispose(); _latestFrame = newMat; } _lastFrameTime = DateTime.Now; _cameraFrameReady.Signal(); } catch (Exception ex) { RuntimeLog.Error("Camera", "NewFrame conversion failed", ex); } }
+        private void VideoSource_NewFrame(object sender, NewFrameEventArgs eventArgs)
+        {
+            _lastFrameTime = DateTime.Now;
+            if (!_cameraFrameRateGate.ShouldAccept(Volatile.Read(ref _isRecording), _actualCameraFps))
+                return;
+
+            try
+            {
+                Mat newMat = BitmapToMat(eventArgs.Frame);
+                lock (_frameLock)
+                {
+                    _latestFrame?.Dispose();
+                    _latestFrame = newMat;
+                }
+                _cameraFrameReady.Signal();
+            }
+            catch (Exception ex)
+            {
+                RuntimeLog.Error("Camera", "NewFrame conversion failed", ex);
+            }
+        }
 
         private Mat BitmapToMat(Bitmap bitmap)
         {
@@ -3216,8 +3238,9 @@ namespace ExpressPackingMonitoring.ViewModels
             {
                 while (!token.IsCancellationRequested)
                 {
-                    // 使用硬件实际帧率控制循环节拍，与 FFmpeg 录制帧率保持一致
-                    double frameDurationMs = 1000.0 / (_actualCameraFps > 0 ? _actualCameraFps : 15);
+                    // 录制时跟随硬件实际帧率；空闲时只保留预览和条码识别所需的处理频率。
+                    int processingFps = CameraFrameProcessingPolicy.GetTargetFps(IsRecording, _actualCameraFps);
+                    double frameDurationMs = 1000.0 / processingFps;
                     DateTime startTime = DateTime.Now; Mat currentFrame = null;
                     lock (_frameLock) { if (_latestFrame != null && !_latestFrame.IsDisposed) currentFrame = _latestFrame.Clone(); }
 
@@ -3356,7 +3379,7 @@ namespace ExpressPackingMonitoring.ViewModels
                             catch { }
                         }
 
-                        if (frameTickCounter % 30 == 0) TryPerformMotionDetection(currentFrame);
+                        if (IsRecording && frameTickCounter % 30 == 0) TryPerformMotionDetection(currentFrame);
                         if (previewFrameDue)
                             PublishPreviewFrameIfDue(processedFrame);
 
