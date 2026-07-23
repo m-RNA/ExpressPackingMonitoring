@@ -7,7 +7,6 @@ using ExpressPackingMonitoring.Audio;
 using System;
 using System.Windows;
 using System.Collections.Generic;
-using Microsoft.Win32;
 using ExpressPackingMonitoring.ViewModels;
 using AForge.Video.DirectShow;
 using System.Linq;
@@ -164,7 +163,7 @@ namespace ExpressPackingMonitoring.UI
             UpdateStorageButtonStates();
 
             // 从注册表读取实际的开机自启动状态
-            Config.AutoStartOnBoot = IsAutoStartEnabled();
+            Config.AutoStartOnBoot = AutoStartService.IsEnabled();
 
             // 窗口加载后异步枚举设备，避免阻塞UI线程
             this.Loaded += SettingsWindow_Loaded;
@@ -849,7 +848,7 @@ namespace ExpressPackingMonitoring.UI
             if (!ValidateEncoderSelectionBeforeSave())
                 return false;
 
-            ApplyAutoStart(Config.AutoStartOnBoot);
+            AutoStartService.Apply(Config.AutoStartOnBoot);
             MainVM.PreviewZoomScale = null;
             var appliedConfig = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(Config)) ?? new AppConfig();
             bool applied = await MainVM.ApplySettingsAsync(appliedConfig);
@@ -1140,40 +1139,6 @@ namespace ExpressPackingMonitoring.UI
                 GpuEncoderComboBox.SelectedItem = gpus.FirstOrDefault(i => i.Value == gpu);
         }
 
-
-        private void ApplyAutoStart(bool enable)
-        {
-            const string regKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
-            const string appName = "ExpressPackingMonitoring";
-            try
-            {
-                using var key = Registry.CurrentUser.OpenSubKey(regKey, true);
-                if (key == null) return;
-                if (enable)
-                {
-                    string exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
-                    if (!string.IsNullOrEmpty(exePath))
-                        key.SetValue(appName, $"\"{exePath}\"");
-                }
-                else
-                {
-                    key.DeleteValue(appName, false);
-                }
-            }
-            catch { }
-        }
-
-        private bool IsAutoStartEnabled()
-        {
-            const string regKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
-            const string appName = "ExpressPackingMonitoring";
-            try
-            {
-                using var key = Registry.CurrentUser.OpenSubKey(regKey, false);
-                return key?.GetValue(appName) != null;
-            }
-            catch { return false; }
-        }
 
         private void OpenRepository_Click(object sender, RoutedEventArgs e)
         {

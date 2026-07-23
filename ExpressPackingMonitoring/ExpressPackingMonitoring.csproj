@@ -107,6 +107,7 @@
     <Compile Include="Services\UpdateCheckOptions.cs" />
     <Compile Include="Services\UpdateCheckService.cs" />
     <Compile Include="Services\AlertService.cs" />
+    <Compile Include="Services\AutoStartService.cs" />
     <Compile Include="Services\CameraBarcodeRecognitionService.cs" />
     <Compile Include="Services\ConnectedClientRegistry.cs" />
     <Compile Include="Services\MobileConnectionService.cs" />

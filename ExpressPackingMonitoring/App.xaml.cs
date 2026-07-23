@@ -83,6 +83,8 @@ namespace ExpressPackingMonitoring
             if (!PrepareWorkstationInstance(ref startupRole, out _instanceCoordinator))
                 return;
 
+            AutoStartService.Apply(config.AutoStartOnBoot);
+
             Window window = string.Equals(startupRole, WorkstationRoles.PrintStation, StringComparison.OrdinalIgnoreCase)
                 ? new PrintWorkstationWindow(config)
                 : new MainWindow();

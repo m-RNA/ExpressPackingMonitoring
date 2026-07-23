@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.Collections.Generic;
+using System.IO;
 using System.Security.Cryptography;
 using System.Text.Json.Serialization;
 using ExpressPackingMonitoring.Localization;
@@ -47,6 +48,8 @@ namespace ExpressPackingMonitoring.Config
         }
     }
 
+    internal readonly record struct StorageDriveCandidate(string RootPath, bool IsReady, DriveType DriveType);
+
     // 摄像头独立配置模型
     public class CameraSettings
     {
@@ -79,7 +82,7 @@ namespace ExpressPackingMonitoring.Config
         public bool FirstUseWizardCompleted { get; set; } = false;
 
         // 核心：多磁盘配置列表
-        public List<StorageLocation> StorageLocations { get; set; } = new() { new StorageLocation() };
+        public List<StorageLocation> StorageLocations { get; set; } = CreateDefaultStorageLocations();
 
         public string CameraMonikerString { get; set; } = "";
         public int CameraIndex { get; set; } = 0; // 保留作为回退
@@ -121,7 +124,7 @@ namespace ExpressPackingMonitoring.Config
         public string Theme { get; set; } = "Auto";
         public string Language { get; set; } = AppLanguage.Auto;
         public bool ShowDeletedVideos { get; set; } = true;
-        public bool AutoStartOnBoot { get; set; } = false;
+        public bool AutoStartOnBoot { get; set; } = true;
         public bool EnableAutoCheckUpdate { get; set; } = true;
         public bool EnableAudioRecording { get; set; } = true;
         public string AudioDeviceName { get; set; } = "";
@@ -290,7 +293,7 @@ namespace ExpressPackingMonitoring.Config
 
             if (config.StorageLocations.Count == 0)
             {
-                config.StorageLocations.Add(new StorageLocation());
+                config.StorageLocations.AddRange(CreateDefaultStorageLocations());
                 changed = true;
             }
 
@@ -359,6 +362,50 @@ namespace ExpressPackingMonitoring.Config
             }
 
             return changed;
+        }
+
+        private static List<StorageLocation> CreateDefaultStorageLocations()
+        {
+            try
+            {
+                return CreateDefaultStorageLocations(
+                    DriveInfo.GetDrives().Select(drive =>
+                        new StorageDriveCandidate(drive.Name, drive.IsReady, drive.DriveType)));
+            }
+            catch
+            {
+                return CreateDefaultStorageLocations(Array.Empty<StorageDriveCandidate>());
+            }
+        }
+
+        internal static List<StorageLocation> CreateDefaultStorageLocations(
+            IEnumerable<StorageDriveCandidate> drives)
+        {
+            var roots = drives
+                .Where(drive => drive.IsReady && drive.DriveType == DriveType.Fixed)
+                .Select(drive => Path.GetPathRoot(drive.RootPath) ?? drive.RootPath)
+                .Where(root => !string.IsNullOrWhiteSpace(root))
+                .Select(root => root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar)
+                .Where(root => !string.Equals(root, @"C:\", StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(root => root, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (roots.Count == 0)
+                roots.Add(@"C:\");
+
+            return roots
+                .Select((root, index) =>
+                {
+                    string path = Path.Combine(root, "快递打包视频");
+                    return new StorageLocation
+                    {
+                        Path = path,
+                        ReserveGB = StorageSpacePolicy.GetMinimumReserveGB(path),
+                        Priority = index
+                    };
+                })
+                .ToList();
         }
 
         internal bool IsCameraIdleNoSleepTime(DateTime now)
