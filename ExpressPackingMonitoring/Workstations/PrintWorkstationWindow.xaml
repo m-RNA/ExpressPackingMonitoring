@@ -103,6 +103,7 @@
                     </StackPanel>
 
                     <Button Grid.Column="3"
+                            Width="112"
                             Style="{StaticResource SecondaryButtonStyle}"
                             VerticalAlignment="Top"
                             Click="SwitchWorkstation_Click">
@@ -159,7 +160,8 @@
                                 </StackPanel>
                             </Button>
 
-                            <Button Style="{StaticResource PrimaryButtonStyle}"
+                            <Button Width="112"
+                                    Style="{StaticResource PrimaryButtonStyle}"
                                     Click="Reconnect_Click">
                                 <StackPanel Orientation="Horizontal">
                                     <Path Data="{StaticResource FluentLinkIcon}"
