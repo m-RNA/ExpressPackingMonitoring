@@ -342,11 +342,14 @@ public sealed class VideoDatabaseTests
                 null, null, "SOURCE-EXACT", 1, 50, true, VideoSearchMode.ExactOrderIdentifiers);
             PagedVideoResult partialResult = database.QueryVideosPaged(
                 null, null, "EXACT", 1, 50, true, VideoSearchMode.ExactOrderIdentifiers);
+            PagedVideoResult partialIdentifierResult = database.QueryVideosPaged(
+                null, null, "EXACT", 1, 50, true, VideoSearchMode.OrderIdentifierContains);
 
             Assert.Equal("ORDER-EXACT", Assert.Single(trackingResult.Records).OrderId);
             Assert.Equal("ORDER-EXACT", Assert.Single(orderResult.Records).OrderId);
             Assert.Equal("ORDER-EXACT", Assert.Single(sourceResult.Records).OrderId);
             Assert.Empty(partialResult.Records);
+            Assert.Equal("ORDER-EXACT", Assert.Single(partialIdentifierResult.Records).OrderId);
         }
         finally
         {

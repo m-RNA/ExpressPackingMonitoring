@@ -77,7 +77,8 @@ namespace ExpressPackingMonitoring.Data
     internal enum VideoSearchMode
     {
         BroadContains,
-        ExactOrderIdentifiers
+        ExactOrderIdentifiers,
+        OrderIdentifierContains
     }
 
     public class CursorVideoResult
@@ -908,6 +909,12 @@ namespace ExpressPackingMonitoring.Data
                         whereSql += @" AND (
                             OrderId = @keyword OR TrackingNumber = @keyword OR SourceOrderId = @keyword)";
                         countCmd.Parameters.AddWithValue("@keyword", normalizedKeyword);
+                    }
+                    else if (searchMode == VideoSearchMode.OrderIdentifierContains)
+                    {
+                        whereSql += @" AND (
+                            OrderId LIKE @keyword OR TrackingNumber LIKE @keyword OR SourceOrderId LIKE @keyword)";
+                        countCmd.Parameters.AddWithValue("@keyword", $"%{normalizedKeyword}%");
                     }
                     else
                     {

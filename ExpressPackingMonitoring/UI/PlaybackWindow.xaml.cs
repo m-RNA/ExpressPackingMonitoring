@@ -229,6 +229,17 @@ namespace ExpressPackingMonitoring.UI
                         PageSize,
                         includeDeleted: _showDeletedVideos,
                         searchMode: VideoSearchMode.ExactOrderIdentifiers);
+                    if (result.Total == 0 && !string.IsNullOrWhiteSpace(keyword))
+                    {
+                        result = _db.QueryVideosPaged(
+                            start,
+                            end,
+                            keyword,
+                            page,
+                            PageSize,
+                            includeDeleted: _showDeletedVideos,
+                            searchMode: VideoSearchMode.OrderIdentifierContains);
+                    }
                     foreach (var record in result.Records)
                     {
                         bool deleted = record.IsDeleted;
@@ -271,8 +282,8 @@ namespace ExpressPackingMonitoring.UI
             {
                 string normalized = keyword.Trim();
                 videos = videos.Where(v =>
-                    string.Equals(v.DisplayName, normalized, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(v.OrderId, normalized, StringComparison.OrdinalIgnoreCase)).ToList();
+                    v.DisplayName.Contains(normalized, StringComparison.OrdinalIgnoreCase) ||
+                    (v.OrderId?.Contains(normalized, StringComparison.OrdinalIgnoreCase) ?? false)).ToList();
             }
             int total = videos.Count;
             return (videos.Skip((page - 1) * PageSize).Take(PageSize).ToList(), total);
