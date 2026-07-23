@@ -48,4 +48,14 @@ public sealed class PlaybackWindowTests
     {
         Assert.Equal(expected, PlaybackWindow.GetOrderDisplayName("", "", fileName));
     }
+
+    [Theory]
+    [InlineData("external", "来源：APP备份")]
+    [InlineData("EXTERNAL", "来源：APP备份")]
+    [InlineData("pc", "来源：本机")]
+    [InlineData("", "来源：本机")]
+    public void GetSourceDisplay_HidesBackupDeviceIdentity(string sourceType, string expected)
+    {
+        Assert.Equal(expected, PlaybackWindow.GetSourceDisplay(sourceType));
+    }
 }

@@ -245,9 +245,7 @@ namespace ExpressPackingMonitoring.UI
                             StopReason = record.StopReason,
                             VideoCodec = record.VideoCodec,
                             VideoEncoder = record.VideoEncoder,
-                            SourceDisplay = string.Equals(record.SourceType, "external", StringComparison.OrdinalIgnoreCase)
-                                ? $"来源：{(string.IsNullOrWhiteSpace(record.SourceDeviceName) ? "其他设备" : record.SourceDeviceName)}"
-                                : "来源：本机",
+                            SourceDisplay = GetSourceDisplay(record.SourceType),
                             IsMissing = missing,
                             IsDeleted = deleted,
                             DeleteReason = record.DeleteReason,
@@ -323,6 +321,11 @@ namespace ExpressPackingMonitoring.UI
             string parsedOrderId = separatorIndex > 0 ? stem[..separatorIndex] : stem;
             return string.IsNullOrWhiteSpace(parsedOrderId) ? "未识别面单" : parsedOrderId;
         }
+
+        internal static string GetSourceDisplay(string? sourceType) =>
+            string.Equals(sourceType, "external", StringComparison.OrdinalIgnoreCase)
+                ? "来源：APP备份"
+                : "来源：本机";
 
         private IEnumerable<FileInfo> EnumerateVideoFiles(string folderPath)
         {
@@ -540,18 +543,9 @@ namespace ExpressPackingMonitoring.UI
         private void UpdatePlayState(bool isPlaying)
         {
             _isPlaying = isPlaying;
-            if (isPlaying)
-            {
-                BtnTogglePlay.Content = "暂停";
-                BtnTogglePlay.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFC107"));
-                BtnTogglePlay.Foreground = Brushes.Black;
-            }
-            else
-            {
-                BtnTogglePlay.Content = "播放";
-                BtnTogglePlay.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#28A745"));
-                BtnTogglePlay.Foreground = Brushes.White;
-            }
+            PlayStateIcon.Data = (Geometry)FindResource(isPlaying ? "FluentPauseIcon" : "FluentPlayIcon");
+            PlayStateText.Text = isPlaying ? "暂停" : "播放";
+            BtnTogglePlay.ToolTip = isPlaying ? "暂停" : "播放";
         }
 
         private void MediaPlayer_LengthChanged(object? sender, MediaPlayerLengthChangedEventArgs e)

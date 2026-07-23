@@ -178,9 +178,9 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <Button x:Name="BtnPreviousPage" Grid.Column="0" Content="上一页" Padding="12,6" Click="BtnPreviousPage_Click"/>
+                    <Button x:Name="BtnPreviousPage" Grid.Column="0" Content="上一页" Style="{StaticResource SecondarySmallButtonStyle}" Click="BtnPreviousPage_Click"/>
                     <TextBlock x:Name="PageStatusText" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}"/>
-                    <Button x:Name="BtnNextPage" Grid.Column="2" Content="下一页" Padding="12,6" Click="BtnNextPage_Click"/>
+                    <Button x:Name="BtnNextPage" Grid.Column="2" Content="下一页" Style="{StaticResource SecondarySmallButtonStyle}" Click="BtnNextPage_Click"/>
                 </Grid>
             </Grid>
         </Border>
@@ -208,15 +208,11 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <Button x:Name="BtnTogglePlay" Grid.Column="0" Width="48" Height="30" Click="BtnTogglePlay_Click" Background="{DynamicResource AccentGreen}" Foreground="White" FontWeight="Bold" ToolTip="播放/暂停" Margin="0,0,15,0" Cursor="Hand">
-                            <Button.Content>
-                                <Path Data="{StaticResource FluentPlayIcon}" Width="16" Height="16" Stretch="Uniform" Fill="White"/>
-                            </Button.Content>
-                            <Button.Resources>
-                                <Style TargetType="Border">
-                                    <Setter Property="CornerRadius" Value="4"/>
-                                </Style>
-                            </Button.Resources>
+                        <Button x:Name="BtnTogglePlay" Grid.Column="0" Height="32" Style="{StaticResource PrimaryButtonStyle}" Click="BtnTogglePlay_Click" ToolTip="播放" Margin="0,0,15,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Path x:Name="PlayStateIcon" Data="{StaticResource FluentPlayIcon}" Width="15" Height="15" Stretch="Uniform" Fill="White" Margin="0,0,6,0"/>
+                                <TextBlock x:Name="PlayStateText" Text="播放"/>
+                            </StackPanel>
                         </Button>
 
                         <Slider x:Name="TimelineSlider" Grid.Column="1" VerticalAlignment="Center" Minimum="0" 
@@ -226,7 +222,7 @@
 
                         <TextBlock x:Name="TimeLabel" Grid.Column="2" Text="00:00:00 / 00:00:00" Foreground="White" VerticalAlignment="Center" Margin="15,0,0,0" FontFamily="Consolas"/>
 
-                        <Button x:Name="BtnLocateFile" Grid.Column="3" Width="104" Height="30" Click="BtnLocateFile_Click" Background="{DynamicResource AccentBlue}" Foreground="White" FontWeight="Bold" Margin="15,0,0,0" Cursor="Hand">
+                        <Button x:Name="BtnLocateFile" Grid.Column="3" Height="32" Style="{StaticResource PrimaryButtonStyle}" Click="BtnLocateFile_Click" Margin="15,0,0,0">
                             <StackPanel Orientation="Horizontal">
                                 <Path Data="{StaticResource FluentFolderIcon}" Width="15" Height="15" Stretch="Uniform" Fill="White" Margin="0,0,6,0"/>
                                 <TextBlock Text="定位文件"/>
