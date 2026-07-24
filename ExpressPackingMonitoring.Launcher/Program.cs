@@ -25,7 +25,8 @@ internal static class Program
     private static readonly TimeSpan NetworkUpdateTimeout = TimeSpan.FromSeconds(75);
     private const uint InfoIcon = 0x00000040;
     private const uint ErrorIcon = 0x00000010;
-    private const uint DialogTimeoutMs = 10000;
+    private const uint DialogTimeoutMs = 60000;
+    private static bool _useChinese;
 
     private static readonly HttpClient HttpClient = new()
     {
@@ -35,10 +36,15 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        _useChinese = ResolveChineseLanguage();
         string baseDir = AppContext.BaseDirectory;
         string appPath = Path.Combine(baseDir, AppRelativePath);
         bool appAlreadyRunning = IsAppRunning(appPath);
         bool hasPendingUpdate = HasPendingUpdate();
+        WriteLog($"启动器启动：appRunning={appAlreadyRunning}, pending={hasPendingUpdate}");
+        if (appAlreadyRunning && hasPendingUpdate)
+            WriteLog("主程序正在运行，跳过 pending 安装，等待下次完全关闭主程序后再安装");
+
         UpdateNotification? notification = appAlreadyRunning ? null : RunExclusivePendingInstall(baseDir);
 
         if (appAlreadyRunning)
@@ -59,12 +65,24 @@ internal static class Program
 
         Thread? backgroundUpdateThread = null;
         if (notification == null && !hasPendingUpdate)
+        {
+            WriteLog("启动后台自动检查更新");
             backgroundUpdateThread = StartBackgroundUpdateDownload(baseDir);
+        }
+        else if (notification != null)
+        {
+            WriteLog("已有更新结果提示，跳过本次后台下载");
+        }
+        else
+        {
+            WriteLog("已有 pending 更新包，跳过本次后台下载，等待下次启动安装");
+        }
 
         Thread? notificationThread = null;
         if (notification != null)
         {
             notificationThread = ShowTimedMessageAsync(
+                notification.Title,
                 notification.Message,
                 notification.IsError ? ErrorIcon : InfoIcon);
         }
@@ -98,6 +116,7 @@ internal static class Program
             if (notification != null)
             {
                 Thread notificationThread = ShowTimedMessageAsync(
+                    notification.Title,
                     notification.Message,
                     notification.IsError ? ErrorIcon : InfoIcon);
                 notificationThread.Join();
@@ -173,7 +192,10 @@ internal static class Program
         string pendingDir = GetPendingUpdateDir();
         string manifestPath = Path.Combine(pendingDir, "update_manifest.json");
         if (!File.Exists(manifestPath))
+        {
+            WriteLog("未发现 pending 更新描述，跳过安装");
             return null;
+        }
 
         string patchZipPath = FindPendingPatchZip(pendingDir);
         if (string.IsNullOrWhiteSpace(patchZipPath))
@@ -189,6 +211,7 @@ internal static class Program
             UpdateDescriptor descriptor = ReadUpdateDescriptor(document.RootElement, "");
             ValidatePatchDescriptor(descriptor);
             string currentVersion = ReadInstalledAppVersion(baseDir);
+            WriteLog($"准备安装 pending Patch：current={currentVersion}, latest={descriptor.LatestVersion}, baseline={descriptor.PatchBaselineVersion}");
             if (string.IsNullOrWhiteSpace(currentVersion))
             {
                 WriteLog("无法读取当前版本，跳过 pending 更新安装");
@@ -207,19 +230,20 @@ internal static class Program
             {
                 WriteLog($"当前版本 {currentVersion} 低于 pending Patch 基线 {descriptor.PatchBaselineVersion}，清理 pending 更新");
                 TryDeleteDirectory(pendingDir);
-                return BuildManualUpdateNotification(descriptor, "当前版本过旧，请自行下载完整包更新。");
+                return BuildManualUpdateNotification(descriptor, ManualUpdateReason.VersionBelowBaseline);
             }
 
             ValidateDownloadedFileSize(patchZipPath, descriptor.PatchPackage.Size);
             string actualHash = ComputeSha256(patchZipPath);
             if (!string.Equals(actualHash, descriptor.PatchPackage.Sha256, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("pending Patch 包 SHA256 校验失败");
+            WriteLog("pending Patch 包校验通过，开始覆盖 app 文件");
 
             InstallPatchZip(baseDir, patchZipPath, descriptor);
             TryDeleteDirectory(pendingDir);
             ResetPatchDownloadFailureState();
             WriteLog($"pending Patch 更新完成：{descriptor.LatestVersion}");
-            return new UpdateNotification(BuildSuccessMessage(descriptor), false);
+            return new UpdateNotification(_useChinese ? "更新完成" : "Update complete", BuildSuccessMessage(descriptor), false);
         }
         catch (Exception ex)
         {
@@ -229,7 +253,7 @@ internal static class Program
             {
                 using JsonDocument document = JsonDocument.Parse(File.ReadAllText(manifestPath, Encoding.UTF8));
                 UpdateDescriptor descriptor = ReadUpdateDescriptor(document.RootElement, "");
-                return new UpdateNotification(BuildFailedMessage(descriptor), true);
+                return new UpdateNotification(_useChinese ? "更新失败" : "Update failed", BuildFailedMessage(descriptor), true);
             }
             catch
             {
@@ -249,7 +273,10 @@ internal static class Program
         try
         {
             if (!ReadAutoCheckEnabled())
+            {
+                WriteLog("自动检查更新已关闭，跳过后台检查");
                 return null;
+            }
 
             string currentVersion = ReadInstalledAppVersion(baseDir);
             if (string.IsNullOrWhiteSpace(currentVersion))
@@ -260,37 +287,59 @@ internal static class Program
 
             UpdateCheckUrlInfo checkUrl = GetUpdateCheckUrl(baseDir);
             if (string.IsNullOrWhiteSpace(checkUrl.Url))
+            {
+                WriteLog("自动检查更新地址为空，跳过后台检查");
                 return null;
+            }
 
-            WriteLog("自动检查更新地址来源：" + checkUrl.Source);
+            WriteLog($"自动检查更新开始：current={currentVersion}, source={checkUrl.Source}");
             using JsonDocument release = await GetJsonAsync(checkUrl.Url, cancellationToken);
             JsonElement releaseRoot = release.RootElement;
             string tagName = ReadString(releaseRoot, "tag_name");
             if (string.IsNullOrWhiteSpace(tagName))
+            {
+                WriteLog("自动检查更新结果缺少 tag_name，跳过本次检查");
                 return null;
+            }
 
             string latestVersion = NormalizeVersion(tagName);
+            WriteLog($"自动检查更新版本：current={currentVersion}, latest={latestVersion}");
             if (CompareVersions(latestVersion, currentVersion) <= 0)
+            {
+                WriteLog("当前已是最新版或高于远程版本，不下载 Patch");
                 return null;
+            }
 
             AssetInfo? manifestAsset = FindUpdateManifestAsset(releaseRoot, latestVersion);
             if (manifestAsset == null)
+            {
+                WriteLog($"Release 资产中未找到 update_v{latestVersion}.json 或 update.json，跳过自动更新");
                 return null;
+            }
 
+            WriteLog($"找到更新描述文件：{manifestAsset.Name}");
             using JsonDocument updateManifest = await GetJsonAsync(manifestAsset.Url, cancellationToken);
             UpdateDescriptor descriptor = ReadUpdateDescriptor(updateManifest.RootElement, latestVersion);
+            WriteLog($"更新描述读取完成：latest={descriptor.LatestVersion}, patchSupported={descriptor.PatchSupported}, baseline={descriptor.PatchBaselineVersion}");
 
             if (!descriptor.PatchSupported)
-                return BuildManualUpdateNotification(descriptor, "本版本需要完整更新，请自行下载完整包。");
+            {
+                WriteLog("更新描述标记不支持自动增量更新，提示用户下载完整包");
+                return BuildManualUpdateNotification(descriptor, ManualUpdateReason.PatchNotSupported);
+            }
 
             if (!string.IsNullOrWhiteSpace(descriptor.PatchBaselineVersion) &&
                 CompareVersions(currentVersion, descriptor.PatchBaselineVersion) < 0)
             {
-                return BuildManualUpdateNotification(descriptor, "当前版本过旧，请自行下载完整包更新。");
+                WriteLog($"当前版本 {currentVersion} 低于 Patch 基线 {descriptor.PatchBaselineVersion}，提示用户下载完整包");
+                return BuildManualUpdateNotification(descriptor, ManualUpdateReason.VersionBelowBaseline);
             }
 
             if (!IsPatchDescriptorUsable(descriptor))
-                return BuildManualUpdateNotification(descriptor, "本版本需要完整更新，请自行下载完整包。");
+            {
+                WriteLog("更新描述中的 Patch 信息不完整，提示用户下载完整包");
+                return BuildManualUpdateNotification(descriptor, ManualUpdateReason.PatchDescriptorUnavailable);
+            }
 
             await DownloadPendingPatchAsync(updateManifest.RootElement, descriptor, cancellationToken);
             WriteLog($"Patch 已下载到 pending，下次启动安装：{descriptor.LatestVersion}");
@@ -359,12 +408,14 @@ internal static class Program
             string actualHash = ComputeSha256(tmpPath);
             if (!string.Equals(actualHash, descriptor.PatchPackage.Sha256, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Patch 包 SHA256 校验失败");
+            WriteLog($"Patch 下载校验通过：version={descriptor.LatestVersion}, size={(new FileInfo(tmpPath)).Length}");
 
             SafeDeleteDirectory(pendingDir);
             Directory.CreateDirectory(pendingDir);
             File.Move(tmpPath, pendingPatchPath);
             File.WriteAllText(pendingManifestPath, manifestRoot.GetRawText(), Encoding.UTF8);
             ResetPatchDownloadFailureState();
+            WriteLog("Patch 已保存到 pending，等待下次启动安装");
         }
         finally
         {
@@ -575,7 +626,10 @@ internal static class Program
     {
         if (!File.Exists(appPath))
         {
-            ShowMessage($"未找到主程序：{AppRelativePath}\n\n请确认 app 文件夹与本启动程序放在同一目录。", ErrorIcon);
+            WriteLog("未找到主程序，无法启动：" + appPath);
+            ShowMessage(_useChinese ? "启动失败" : "Startup failed", _useChinese
+                ? $"未找到主程序：{AppRelativePath}\n\n请确认 app 文件夹与本启动程序放在同一目录。"
+                : $"Application not found: {AppRelativePath}\n\nMake sure the app folder is next to this launcher.", ErrorIcon);
             return 2;
         }
 
@@ -592,11 +646,16 @@ internal static class Program
                 startInfo.ArgumentList.Add(arg);
 
             Process.Start(startInfo);
+            WriteLog("已启动主程序");
             return 0;
         }
         catch (Exception ex)
         {
-            ShowMessage($"启动主程序失败：\n{ex.Message}", ErrorIcon);
+            WriteLog("启动主程序失败：" + ex);
+            ShowMessage(
+                _useChinese ? "启动失败" : "Startup failed",
+                _useChinese ? $"启动主程序失败：\n{ex.Message}" : $"Failed to start the application:\n{ex.Message}",
+                ErrorIcon);
             return 1;
         }
     }
@@ -637,6 +696,7 @@ internal static class Program
             IsRoleRunning(requestedRole) &&
             RequestActivate(requestedRole))
         {
+            WriteLog("已唤醒正在运行的主程序：" + requestedRole);
             return true;
         }
 
@@ -645,15 +705,20 @@ internal static class Program
             IsRoleRunning(configuredRole) &&
             RequestActivate(configuredRole))
         {
+            WriteLog("已唤醒正在运行的主程序：" + configuredRole);
             return true;
         }
 
         foreach (string role in new[] { CameraMonitorRole, PrintStationRole })
         {
             if (IsRoleRunning(role) && RequestActivate(role))
+            {
+                WriteLog("已唤醒正在运行的主程序：" + role);
                 return true;
+            }
         }
 
+        WriteLog("未能唤醒正在运行的主程序，尝试重新启动");
         return false;
     }
 
@@ -841,20 +906,35 @@ internal static class Program
             .ToArray();
     }
 
-    private static UpdateNotification BuildManualUpdateNotification(UpdateDescriptor descriptor, string reason)
+    private static UpdateNotification BuildManualUpdateNotification(UpdateDescriptor descriptor, ManualUpdateReason reason)
     {
-        string message = $"{reason}\n\n发现新版本：v{descriptor.LatestVersion}";
-        if (!string.IsNullOrWhiteSpace(descriptor.FullDownloadPage))
-            message += $"\n完整包下载页：{descriptor.FullDownloadPage}";
+        string reasonText = _useChinese ? reason switch
+        {
+            ManualUpdateReason.PatchNotSupported => "本次包含启动器或基础组件更新，需要下载完整包后解压覆盖安装。",
+            ManualUpdateReason.VersionBelowBaseline => "当前版本过旧，不能直接使用本次增量更新，需要下载完整包后解压覆盖安装。",
+            ManualUpdateReason.PatchDescriptorUnavailable => "本版本需要完整更新，需要下载完整包后解压覆盖安装。",
+            _ => "本版本需要完整更新，需要下载完整包后解压覆盖安装。"
+        } : reason switch
+        {
+            ManualUpdateReason.PatchNotSupported => "This release updates the launcher or core components. Download and extract the full package.",
+            ManualUpdateReason.VersionBelowBaseline => "The installed version is too old for this patch. Download and extract the full package.",
+            _ => "This release requires a full update. Download and extract the full package."
+        };
 
-        return new UpdateNotification(message, true);
+        string message = _useChinese
+            ? $"新版本：v{descriptor.LatestVersion}\n{reasonText}"
+            : $"New version: v{descriptor.LatestVersion}\n{reasonText}";
+        if (!string.IsNullOrWhiteSpace(descriptor.FullDownloadPage))
+            message += _useChinese ? $"\n完整包下载页：{descriptor.FullDownloadPage}" : $"\nFull package: {descriptor.FullDownloadPage}";
+
+        return new UpdateNotification(_useChinese ? "需要完整更新" : "Full update required", message, true);
     }
 
     private static string BuildSuccessMessage(UpdateDescriptor descriptor)
     {
         var lines = new List<string>
         {
-            $"更新完成，已升级到 v{descriptor.LatestVersion}。"
+            _useChinese ? $"已升级到 v{descriptor.LatestVersion}" : $"Upgraded to v{descriptor.LatestVersion}"
         };
 
         if (!string.IsNullOrWhiteSpace(descriptor.Title))
@@ -874,9 +954,11 @@ internal static class Program
 
     private static string BuildFailedMessage(UpdateDescriptor descriptor)
     {
-        string message = $"增量更新失败，已恢复旧版本。\n\n发现新版本：v{descriptor.LatestVersion}\n请自行下载完整包更新。";
+        string message = _useChinese
+            ? $"已恢复旧版本\n新版本：v{descriptor.LatestVersion}\n请下载完整包后解压覆盖安装"
+            : $"The previous version was restored\nNew version: v{descriptor.LatestVersion}\nDownload and extract the full package";
         if (!string.IsNullOrWhiteSpace(descriptor.FullDownloadPage))
-            message += $"\n完整包下载页：{descriptor.FullDownloadPage}";
+            message += _useChinese ? $"\n完整包下载页：{descriptor.FullDownloadPage}" : $"\nFull package: {descriptor.FullDownloadPage}";
 
         return message;
     }
@@ -1313,31 +1395,56 @@ internal static class Program
         }
     }
 
-    private static Thread ShowTimedMessageAsync(string message, uint icon)
+    private static Thread ShowTimedMessageAsync(string title, string message, uint icon)
     {
-        var thread = new Thread(() => ShowTimedMessage(message, icon));
+        var thread = new Thread(() => ShowTimedMessage(title, message, icon));
         thread.SetApartmentState(ApartmentState.STA);
         thread.IsBackground = false;
         thread.Start();
         return thread;
     }
 
-    private static void ShowTimedMessage(string message, uint icon)
+    private static void ShowTimedMessage(string title, string message, uint icon)
     {
         try
         {
-            MessageBoxTimeoutW(IntPtr.Zero, message, "打包监控", icon, 0, DialogTimeoutMs);
+            MessageBoxTimeoutW(IntPtr.Zero, message, title, icon, 0, DialogTimeoutMs);
         }
         catch
         {
-            ShowMessage(message, icon);
+            ShowMessage(title, message, icon);
         }
     }
 
-    private static void ShowMessage(string message, uint icon)
+    private static void ShowMessage(string title, string message, uint icon)
     {
-        MessageBoxW(IntPtr.Zero, message, "打包监控", icon);
+        MessageBoxW(IntPtr.Zero, message, title, icon);
     }
+
+    private static bool ResolveChineseLanguage()
+    {
+        try
+        {
+            string path = Path.Combine(GetUserDataDir(), "config.json");
+            if (File.Exists(path))
+            {
+                using JsonDocument document = JsonDocument.Parse(File.ReadAllText(path, Encoding.UTF8));
+                if (document.RootElement.TryGetProperty("Language", out JsonElement value))
+                {
+                    string? preference = value.GetString();
+                    if (preference == "zh-Hans") return true;
+                    if (preference == "en-US") return false;
+                }
+            }
+        }
+        catch { }
+
+        // Primary language ID 0x04 represents the Chinese language family.
+        return (GetUserDefaultUILanguage() & 0x03ff) == 0x04;
+    }
+
+    [DllImport("kernel32.dll")]
+    private static extern ushort GetUserDefaultUILanguage();
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int MessageBoxW(IntPtr hWnd, string lpText, string lpCaption, uint uType);
@@ -1366,7 +1473,7 @@ internal static class Program
         bool PatchSupported,
         PatchPackageInfo PatchPackage);
 
-    private sealed record UpdateNotification(string Message, bool IsError);
+    private sealed record UpdateNotification(string Title, string Message, bool IsError);
 
     private sealed record PatchManifest(
         string Type,
@@ -1377,6 +1484,13 @@ internal static class Program
     private sealed record PatchFile(string RelativePath, string Sha256, long Size);
 
     private sealed record FileBackup(string TargetPath, string BackupPath, bool Existed);
+
+    private enum ManualUpdateReason
+    {
+        PatchNotSupported,
+        VersionBelowBaseline,
+        PatchDescriptorUnavailable
+    }
 
     private sealed class PatchDownloadFailureState
     {
