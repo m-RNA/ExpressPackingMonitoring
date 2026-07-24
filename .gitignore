@@ -48,5 +48,4 @@ Videos/*
 package/*
 TODO.md
 node_modules/
-TestResults/Automation/
-TestResults/ReleaseBuild/
+TestResults/
