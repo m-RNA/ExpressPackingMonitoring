@@ -42,7 +42,16 @@ test('isolated Web server supports search, playback and clip editor entry', { sk
 
     const search = page.getByPlaceholder('输入订单号关键词搜索');
     await search.fill('AUTO_WEB_001');
+    const searchResponse = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname === '/api/videos'
+        && url.searchParams.get('keyword') === 'AUTO_WEB_001'
+        && response.ok();
+    });
     await search.press('Enter');
+    await searchResponse;
+    await page.waitForFunction(() => /^第 \d+ \/ \d+ 页$/.test(
+      document.querySelector('#resultsInfo')?.textContent?.trim() || ''));
     const article = page.locator('article').filter({ hasText: 'AUTO_WEB_001' });
     await assert.doesNotReject(() => article.waitFor());
     assert.match(await page.locator('#resultsInfo').innerText(), /^第 \d+ \/ \d+ 页$/);
@@ -79,7 +88,16 @@ test('Web UI follows browser language and persists an explicit override', { skip
 
     const search = page.getByPlaceholder('Search by order number');
     await search.fill('AUTO_WEB_001');
+    const searchResponse = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname === '/api/videos'
+        && url.searchParams.get('keyword') === 'AUTO_WEB_001'
+        && response.ok();
+    });
     await search.press('Enter');
+    await searchResponse;
+    await page.waitForFunction(() => /^Page \d+ of \d+$/.test(
+      document.querySelector('#resultsInfo')?.textContent?.trim() || ''));
     const article = page.locator('article').filter({ hasText: 'AUTO_WEB_001' });
     await assert.doesNotReject(() => article.waitFor());
     assert.match(await page.locator('#resultsInfo').innerText(), /^Page \d+ of \d+$/);
