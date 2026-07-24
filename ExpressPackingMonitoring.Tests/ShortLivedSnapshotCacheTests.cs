@@ -38,9 +38,18 @@ public sealed class ShortLivedSnapshotCacheTests
             return new object();
         }
 
-        Task<object> firstTask = Task.Run(() => cache.GetOrCreate(Factory), TestContext.Current.CancellationToken);
-        Assert.True(buildStarted.Wait(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken));
-        Task<object> secondTask = Task.Run(() => cache.GetOrCreate(Factory), TestContext.Current.CancellationToken);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Task<object> firstTask = Task.Factory.StartNew(
+            () => cache.GetOrCreate(Factory),
+            cancellationToken,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default);
+        Assert.True(buildStarted.Wait(TimeSpan.FromSeconds(10), cancellationToken));
+        Task<object> secondTask = Task.Factory.StartNew(
+            () => cache.GetOrCreate(Factory),
+            cancellationToken,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default);
 
         releaseBuild.Set();
         object[] results = await Task.WhenAll(firstTask, secondTask);
