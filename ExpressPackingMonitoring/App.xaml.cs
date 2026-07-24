@@ -110,8 +110,9 @@ namespace ExpressPackingMonitoring
                 ? new PrintWorkstationWindow(
                     config,
                     openPlaybackOnStartup: !useTemporaryRole,
-                    requestLanAccessOnStartup: !useTemporaryRole)
-                : new MainWindow();
+                    requestLanAccessOnStartup: !useTemporaryRole,
+                    enableCloseBehaviorPrompt: !useTemporaryRole)
+                : new MainWindow(enableCloseBehaviorPrompt: !useTemporaryRole);
             window.SourceInitialized += (_, _) =>
             {
                 if (PresentationSource.FromVisual(window) is HwndSource source)

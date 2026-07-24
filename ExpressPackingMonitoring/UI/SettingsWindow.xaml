@@ -2792,6 +2792,26 @@
                                                 Style="{StaticResource ToggleSwitchStyle}"/>
                                     </Grid>
 
+                                    <Grid Style="{StaticResource SettingRowStyle}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="24"/>
+                                            <ColumnDefinition Width="260"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Margin="0,0,16,0">
+                                            <TextBlock Text="关闭窗口时" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="可以每次询问、最小化到托盘或直接退出"
+                                                       Style="{StaticResource FieldHintStyle}"/>
+                                        </StackPanel>
+                                        <ComboBox Grid.Column="2"
+                                                  SelectedValue="{Binding Config.WindowCloseBehavior}"
+                                                  SelectedValuePath="Tag">
+                                            <ComboBoxItem Tag="Ask" Content="每次询问"/>
+                                            <ComboBoxItem Tag="MinimizeToTray" Content="最小化到托盘"/>
+                                            <ComboBoxItem Tag="Exit" Content="直接退出"/>
+                                        </ComboBox>
+                                    </Grid>
+
                                     <Grid Style="{StaticResource SettingRowLastStyle}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>

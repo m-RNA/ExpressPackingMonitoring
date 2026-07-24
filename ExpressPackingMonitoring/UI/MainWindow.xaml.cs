@@ -30,6 +30,8 @@ namespace ExpressPackingMonitoring.UI
         private bool _shutdownConfirmed;
         private bool _shutdownInProgress;
         private bool _resourceCleanupInProgress;
+        private bool _exitRequestedFromTray;
+        private readonly WindowCloseBehaviorController _closeBehaviorController;
         private readonly DispatcherTimer _scanAutoSubmitTimer;
         private readonly List<double> _scanInputIntervalsMs = new();
         private DateTime _lastScanInputCharAt = DateTime.MinValue;
@@ -107,9 +109,13 @@ namespace ExpressPackingMonitoring.UI
             }));
         }
 
-        public MainWindow()
+        public MainWindow(bool enableCloseBehaviorPrompt = true)
         {
             InitializeComponent();
+            _closeBehaviorController = new WindowCloseBehaviorController(
+                this,
+                RequestExitFromTray,
+                enableCloseBehaviorPrompt);
             if (CameraBarcodeRuntimeOptions.ShadowMode)
             {
                 RuntimeLog.Warn(
@@ -447,6 +453,13 @@ namespace ExpressPackingMonitoring.UI
             e.Cancel = true;
             if (_shutdownInProgress) return;
 
+            WindowCloseChoice closeChoice = _closeBehaviorController.HandleClose(
+                vm?.Config ?? WorkstationConfigStore.Load(),
+                bypassPreference: WorkstationNetwork.IsRestartPending || _exitRequestedFromTray);
+            _exitRequestedFromTray = false;
+            if (closeChoice != WindowCloseChoice.Exit)
+                return;
+
             // 1. 判断是否需要提示：只有正在录制时才提示
             if (vm != null && vm.IsRecording && !WorkstationNetwork.IsRestartPending)
             {
@@ -510,6 +523,12 @@ namespace ExpressPackingMonitoring.UI
             }), DispatcherPriority.Background);
         }
 
+        private void RequestExitFromTray()
+        {
+            _exitRequestedFromTray = true;
+            Close();
+        }
+
         private static bool IsRoutineShutdownProgressMessage(string message)
         {
             return !string.IsNullOrWhiteSpace(message)
@@ -540,6 +559,7 @@ namespace ExpressPackingMonitoring.UI
             }
             finally
             {
+                _closeBehaviorController.Dispose();
                 // 录像、Web 服务和数据库均已释放，此时才允许按新的录像方式启动。
                 WorkstationNetwork.TryStartPendingRestart();
 

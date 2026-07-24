@@ -48,6 +48,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
     <PackageReference Include="AForge.Video" Version="2.2.5" />
     <PackageReference Include="EdgeTTS.Framework" Version="1.0.5" />
     <PackageReference Include="NAudio" Version="2.2.1" />
@@ -116,6 +117,7 @@
     <Compile Include="Services\MobileBackupService.cs" />
     <Compile Include="Services\MobileOrderReceiverRegistry.cs" />
     <Compile Include="Services\NoCameraWorkstationHost.cs" />
+    <Compile Include="Services\TrayIconService.cs" />
     <Compile Include="Services\ShortLivedSnapshotCache.cs" />
     <Compile Include="Services\StorageLocationResolver.cs" />
     <Compile Include="Services\VideoClipService.cs" />
@@ -128,6 +130,7 @@
     <Compile Include="ViewModels\MainViewModel.Encoder.cs" />
     <Compile Include="ViewModels\MainViewModel.Recording.cs" />
     <Compile Include="UI\ConfirmDialog.xaml.cs" />
+    <Compile Include="UI\CloseBehaviorDialog.xaml.cs" />
     <Compile Include="UI\CameraBarcodeUpgradeDialog.xaml.cs" />
     <Compile Include="UI\DriveSelectionDialog.cs" />
     <Compile Include="UI\FirstUseSetupWizardWindow.xaml.cs" />

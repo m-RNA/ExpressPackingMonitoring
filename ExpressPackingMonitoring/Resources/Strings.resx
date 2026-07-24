@@ -515,6 +515,17 @@
   <data name="录像方式" xml:space="preserve"><value>Recording mode</value></data>
   <data name="RestartMode.Message" xml:space="preserve"><value>The recording mode has been saved and requires a restart&#xA;&#xA;Restart now?</value></data>
   <data name="立即重启" xml:space="preserve"><value>Restart now</value></data>
+  <data name="关闭窗口" xml:space="preserve"><value>Close window</value></data>
+  <data name="关闭窗口后，你希望程序怎么做？" xml:space="preserve"><value>What should the app do when you close the window?</value></data>
+  <data name="最小化到托盘后，录像、手机备份和网页服务会继续运行" xml:space="preserve"><value>Recording, phone backup, and web services continue running when minimized to the tray</value></data>
+  <data name="不再提示，记住我的选择" xml:space="preserve"><value>Don't ask again; remember my choice</value></data>
+  <data name="最小化到托盘" xml:space="preserve"><value>Minimize to tray</value></data>
+  <data name="直接退出" xml:space="preserve"><value>Exit app</value></data>
+  <data name="打开主界面" xml:space="preserve"><value>Open main window</value></data>
+  <data name="关闭窗口时" xml:space="preserve"><value>When closing the window</value></data>
+  <data name="可以每次询问、最小化到托盘或直接退出" xml:space="preserve"><value>Ask every time, minimize to the tray, or exit the app</value></data>
+  <data name="每次询问" xml:space="preserve"><value>Ask every time</value></data>
+  <data name="程序仍在后台运行，双击托盘图标可打开主界面" xml:space="preserve"><value>The app is still running. Double-click the tray icon to open the main window</value></data>
   <data name="正在启动手机录像备份服务" xml:space="preserve"><value>Starting phone recording backup service</value></data>
   <data name="正在打开录像数据库和本机回放服务" xml:space="preserve"><value>Opening the recording database and local playback service</value></data>
   <data name="连接手机" xml:space="preserve"><value>Connect phone</value></data>

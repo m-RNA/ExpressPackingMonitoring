@@ -1,0 +1,53 @@
+<Window x:Class="ExpressPackingMonitoring.UI.CloseBehaviorDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="关闭窗口"
+        SizeToContent="Height"
+        Width="430"
+        WindowStyle="ToolWindow"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource PanelBackground}"
+        Foreground="{DynamicResource TextPrimary}">
+    <Grid Margin="26">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="关闭窗口后，你希望程序怎么做？"
+                   FontSize="18"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextPrimary}"/>
+
+        <TextBlock Grid.Row="1"
+                   Margin="0,9,0,0"
+                   Text="最小化到托盘后，录像、手机备份和网页服务会继续运行"
+                   TextWrapping="Wrap"
+                   FontSize="13"
+                   LineHeight="20"
+                   Foreground="{DynamicResource TextSecondary}"/>
+
+        <CheckBox x:Name="RememberChoiceCheckBox"
+                  Grid.Row="2"
+                  Margin="0,20,0,0"
+                  Content="不再提示，记住我的选择"
+                  Foreground="{DynamicResource TextPrimary}"/>
+
+        <StackPanel Grid.Row="3"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,24,0,0">
+            <Button Content="最小化到托盘"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Margin="0,0,10,0"
+                    IsDefault="True"
+                    Click="Minimize_Click"/>
+            <Button Content="直接退出"
+                    Style="{StaticResource SecondaryButtonStyle}"
+                    Click="Exit_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

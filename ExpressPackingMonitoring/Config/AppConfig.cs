@@ -7,6 +7,16 @@ using ExpressPackingMonitoring.Localization;
 
 namespace ExpressPackingMonitoring.Config
 {
+    public static class WindowCloseBehaviors
+    {
+        public const string Ask = "Ask";
+        public const string MinimizeToTray = "MinimizeToTray";
+        public const string Exit = "Exit";
+
+        public static string Normalize(string? value) =>
+            value is MinimizeToTray or Exit ? value : Ask;
+    }
+
     public partial class ScanRecord : ObservableObject
     {
         [ObservableProperty] private string _orderId;
@@ -125,6 +135,7 @@ namespace ExpressPackingMonitoring.Config
         public double TimeoutWarningSeconds { get; set; } = 10.0;
         public string Theme { get; set; } = "Auto";
         public string Language { get; set; } = AppLanguage.Auto;
+        public string WindowCloseBehavior { get; set; } = WindowCloseBehaviors.Ask;
         public bool ShowAdvancedSettings { get; set; } = false;
         public bool ShowDeletedVideos { get; set; } = true;
         public bool AutoStartOnBoot { get; set; } = true;
@@ -297,6 +308,13 @@ namespace ExpressPackingMonitoring.Config
             if (config.StorageLocations.Count == 0)
             {
                 config.StorageLocations.AddRange(CreateDefaultStorageLocations());
+                changed = true;
+            }
+
+            string normalizedCloseBehavior = WindowCloseBehaviors.Normalize(config.WindowCloseBehavior);
+            if (config.WindowCloseBehavior != normalizedCloseBehavior)
+            {
+                config.WindowCloseBehavior = normalizedCloseBehavior;
                 changed = true;
             }
 

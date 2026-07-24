@@ -24,28 +24,57 @@ public partial class PrintWorkstationWindow : Window
     private readonly NoCameraWorkstationHost _host;
     private readonly CancellationTokenSource _lifetimeCts = new();
     private readonly string _activeWorkstationRole = WorkstationRoles.PrintStation;
+    private readonly WindowCloseBehaviorController _closeBehaviorController;
     private StatisticsWindow? _statisticsWindow;
     private PlaybackWindow? _playbackWindow;
     private bool _loaded;
+    private bool _exitRequestedFromTray;
 
     public PrintWorkstationWindow(
         AppConfig config,
         bool openPlaybackOnStartup = true,
-        bool requestLanAccessOnStartup = true)
+        bool requestLanAccessOnStartup = true,
+        bool enableCloseBehaviorPrompt = true)
     {
         InitializeComponent();
         _config = config;
         _openPlaybackOnStartup = openPlaybackOnStartup;
         _requestLanAccessOnStartup = requestLanAccessOnStartup;
         _host = new NoCameraWorkstationHost(config);
+        _closeBehaviorController = new WindowCloseBehaviorController(
+            this,
+            RequestExitFromTray,
+            enableCloseBehaviorPrompt);
         Loaded += Window_Loaded;
-        Closing += (_, _) => CloseChildWindows();
+        Closing += Window_Closing;
         Closed += (_, _) =>
         {
+            _closeBehaviorController.Dispose();
             _lifetimeCts.Cancel();
             _host.Dispose();
             _lifetimeCts.Dispose();
         };
+    }
+
+    private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        WindowCloseChoice closeChoice = _closeBehaviorController.HandleClose(
+            _config,
+            bypassPreference: WorkstationNetwork.IsRestartPending || _exitRequestedFromTray);
+        _exitRequestedFromTray = false;
+        if (closeChoice != WindowCloseChoice.Exit)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        CloseChildWindows();
+    }
+
+    private void RequestExitFromTray()
+    {
+        _exitRequestedFromTray = true;
+        Close();
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)

@@ -515,6 +515,17 @@
   <data name="录像方式" xml:space="preserve"><value>录像方式</value></data>
   <data name="RestartMode.Message" xml:space="preserve"><value>录像方式已保存，需要重启程序后生效&#xA;&#xA;现在重启吗？</value></data>
   <data name="立即重启" xml:space="preserve"><value>立即重启</value></data>
+  <data name="关闭窗口" xml:space="preserve"><value>关闭窗口</value></data>
+  <data name="关闭窗口后，你希望程序怎么做？" xml:space="preserve"><value>关闭窗口后，你希望程序怎么做？</value></data>
+  <data name="最小化到托盘后，录像、手机备份和网页服务会继续运行" xml:space="preserve"><value>最小化到托盘后，录像、手机备份和网页服务会继续运行</value></data>
+  <data name="不再提示，记住我的选择" xml:space="preserve"><value>不再提示，记住我的选择</value></data>
+  <data name="最小化到托盘" xml:space="preserve"><value>最小化到托盘</value></data>
+  <data name="直接退出" xml:space="preserve"><value>直接退出</value></data>
+  <data name="打开主界面" xml:space="preserve"><value>打开主界面</value></data>
+  <data name="关闭窗口时" xml:space="preserve"><value>关闭窗口时</value></data>
+  <data name="可以每次询问、最小化到托盘或直接退出" xml:space="preserve"><value>可以每次询问、最小化到托盘或直接退出</value></data>
+  <data name="每次询问" xml:space="preserve"><value>每次询问</value></data>
+  <data name="程序仍在后台运行，双击托盘图标可打开主界面" xml:space="preserve"><value>程序仍在后台运行，双击托盘图标可打开主界面</value></data>
   <data name="正在启动手机录像备份服务" xml:space="preserve"><value>正在启动手机录像备份服务</value></data>
   <data name="正在打开录像数据库和本机回放服务" xml:space="preserve"><value>正在打开录像数据库和本机回放服务</value></data>
   <data name="连接手机" xml:space="preserve"><value>连接手机</value></data>

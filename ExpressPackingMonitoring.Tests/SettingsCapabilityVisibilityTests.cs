@@ -61,6 +61,7 @@ public sealed class SettingsCapabilityVisibilityTests
 
     [Theory]
     [InlineData("录像方式")]
+    [InlineData("关闭窗口时")]
     [InlineData("界面语言")]
     [InlineData("外观主题")]
     [InlineData("网页访问端口")]

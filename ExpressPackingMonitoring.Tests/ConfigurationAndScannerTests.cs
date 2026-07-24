@@ -32,6 +32,36 @@ public sealed class ConfigurationAndScannerTests
     }
 
     [Fact]
+    public void AppConfig_AsksHowToCloseByDefault()
+    {
+        AppConfig config = JsonSerializer.Deserialize<AppConfig>("{}")!;
+
+        Assert.Equal(WindowCloseBehaviors.Ask, config.WindowCloseBehavior);
+    }
+
+    [Theory]
+    [InlineData(WindowCloseBehaviors.Ask)]
+    [InlineData(WindowCloseBehaviors.MinimizeToTray)]
+    [InlineData(WindowCloseBehaviors.Exit)]
+    public void AppConfig_PreservesSupportedWindowCloseBehavior(string behavior)
+    {
+        var config = new AppConfig { WindowCloseBehavior = behavior };
+
+        AppConfig.NormalizeAfterLoad(config);
+
+        Assert.Equal(behavior, config.WindowCloseBehavior);
+    }
+
+    [Fact]
+    public void AppConfig_InvalidWindowCloseBehaviorFallsBackToAsk()
+    {
+        var config = new AppConfig { WindowCloseBehavior = "Unsupported" };
+
+        Assert.True(AppConfig.NormalizeAfterLoad(config));
+        Assert.Equal(WindowCloseBehaviors.Ask, config.WindowCloseBehavior);
+    }
+
+    [Fact]
     public void AppConfig_LegacyJsonEnablesMaximumSpeechVolumeByDefault()
     {
         AppConfig config = JsonSerializer.Deserialize<AppConfig>("{}")!;
