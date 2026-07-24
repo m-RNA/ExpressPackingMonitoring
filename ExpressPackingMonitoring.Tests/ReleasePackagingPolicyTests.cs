@@ -45,6 +45,8 @@ public sealed class ReleasePackagingPolicyTests
         Assert.Contains("apply_app_patch.ps1", publishScript);
         Assert.Contains("增量更新说明.txt", publishScript);
         Assert.Contains("AppRootDirectory", installerScript);
+        Assert.Contains("Request-AppRootDirectory", installerScript);
+        Assert.Contains("完整包根目录、app 目录", installerScript);
         Assert.Contains("Get-FileSha256", installerScript);
         Assert.Contains("System.Security.Cryptography.SHA256", installerScript);
         Assert.Contains("[System.IO.File]::Replace", installerScript);

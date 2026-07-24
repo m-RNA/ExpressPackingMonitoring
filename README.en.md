@@ -56,8 +56,8 @@ Placing a label in view does not wake an idle camera. Click the application, pre
 ## Updating
 
 - Always start the app from the root `ExpressPackingMonitoring.exe`. The launcher downloads verified incremental packages in the background and installs them on the next launch.
-- For a manually downloaded patch, extract the whole archive and double-click `双击安装增量更新.cmd`. It reads the saved `app` directory from the user configuration, closes the running app normally, verifies every file, and rolls back if installation fails.
-- Use the full package if the installed version is below the patch baseline, the app directory has not been recorded yet, or the launcher itself must be updated. Keep `%LOCALAPPDATA%\ExpressPackingMonitoring\` to preserve configuration and database records.
+- For a manually downloaded patch, extract the whole archive and double-click `双击安装增量更新.cmd`. It first reads the saved `app` directory from the user configuration. If automatic detection fails, drag the full-package root, the `app` directory, or its `ExpressPackingMonitoring.exe` into the window. The script identifies the actual app directory, closes the running app normally, verifies every file, and rolls back if installation fails.
+- Use the full package if the installed version is below the patch baseline or the launcher itself must be updated. Keep `%LOCALAPPDATA%\ExpressPackingMonitoring\` to preserve configuration and database records.
 
 ## LAN Playback
 

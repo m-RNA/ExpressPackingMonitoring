@@ -2,6 +2,7 @@
 param(
     [string]$PatchRoot = $PSScriptRoot,
     [string]$ConfigPath = "",
+    [string]$AppRootPath = "",
     [switch]$SkipProcessCheck,
     [switch]$SkipVersionCheck
 )
@@ -28,6 +29,64 @@ function Get-NormalizedDirectory {
     }
 
     return [System.IO.Path]::GetFullPath($Path).TrimEnd([char[]]"\/")
+}
+
+function Resolve-AppRootCandidate {
+    param([string]$CandidatePath)
+
+    $cleanedPath = ([string]$CandidatePath).Trim()
+    if ($cleanedPath.Length -ge 2) {
+        $firstCharacter = $cleanedPath[0]
+        $lastCharacter = $cleanedPath[$cleanedPath.Length - 1]
+        if (($firstCharacter -eq '"' -and $lastCharacter -eq '"') -or
+            ($firstCharacter -eq "'" -and $lastCharacter -eq "'")) {
+            $cleanedPath = $cleanedPath.Substring(1, $cleanedPath.Length - 2).Trim()
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($cleanedPath)) {
+        throw "没有提供安装位置"
+    }
+
+    $resolvedInput = [System.IO.Path]::GetFullPath($cleanedPath)
+    $candidateDirectories = New-Object System.Collections.Generic.List[string]
+    if (Test-Path -LiteralPath $resolvedInput -PathType Leaf) {
+        $candidateDirectories.Add((Split-Path -Parent $resolvedInput))
+    }
+    elseif (Test-Path -LiteralPath $resolvedInput -PathType Container) {
+        $candidateDirectories.Add($resolvedInput)
+    }
+    else {
+        throw "路径不存在：$cleanedPath"
+    }
+
+    $inputDirectory = $candidateDirectories[0]
+    $candidateDirectories.Add((Join-Path $inputDirectory "app"))
+    foreach ($directory in $candidateDirectories) {
+        $normalizedDirectory = Get-NormalizedDirectory -Path $directory
+        $exePath = Join-Path $normalizedDirectory "ExpressPackingMonitoring.exe"
+        $dllPath = Join-Path $normalizedDirectory "ExpressPackingMonitoring.dll"
+        if ((Test-Path -LiteralPath $exePath -PathType Leaf) -and
+            (Test-Path -LiteralPath $dllPath -PathType Leaf)) {
+            return $normalizedDirectory
+        }
+    }
+
+    throw "无法识别安装目录，请拖入完整包根目录、app 目录或其中的 ExpressPackingMonitoring.exe"
+}
+
+function Request-AppRootDirectory {
+    while ($true) {
+        Write-Host ""
+        Write-Host "未能从 config.json 自动找到软件安装目录。" -ForegroundColor Yellow
+        Write-Host "请把安装文件夹或 ExpressPackingMonitoring.exe 拖到此窗口，然后按 Enter。"
+        $draggedPath = Read-Host "安装位置"
+        try {
+            return Resolve-AppRootCandidate -CandidatePath $draggedPath
+        }
+        catch {
+            Write-Host $_.Exception.Message -ForegroundColor Yellow
+        }
+    }
 }
 
 function Test-PathWithinDirectory {
@@ -151,23 +210,34 @@ try {
     }
 
     Write-Host "正在检查增量更新包..." -ForegroundColor Cyan
-    if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) {
-        throw "未找到 config.json。请先通过根目录启动器自动更新或安装一次支持手动增量更新的完整包"
+    $configuredAppRoot = ""
+    try {
+        if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) {
+            throw "config.json does not exist"
+        }
+        $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $ConfigPath | ConvertFrom-Json
+        $appRootProperty = if ($null -eq $config) { $null } else { $config.PSObject.Properties["AppRootDirectory"] }
+        if ($null -eq $appRootProperty -or [string]::IsNullOrWhiteSpace([string]$appRootProperty.Value)) {
+            throw "config.json does not contain AppRootDirectory"
+        }
+        $configuredAppRoot = Resolve-AppRootCandidate -CandidatePath ([string]$appRootProperty.Value)
+    }
+    catch {
+        Write-UpdateLog -LogPath $logPath -Message "Unable to read config for manual patch: $($_.Exception.Message)"
     }
 
-    $config = Get-Content -Raw -Encoding UTF8 -LiteralPath $ConfigPath | ConvertFrom-Json
-    $appRootProperty = $config.PSObject.Properties["AppRootDirectory"]
-    if ($null -eq $appRootProperty -or [string]::IsNullOrWhiteSpace([string]$appRootProperty.Value)) {
-        throw "当前 config.json 尚未记录 AppRootDirectory。请先通过根目录启动器自动更新或安装一次新版完整包"
+    if (-not [string]::IsNullOrWhiteSpace($configuredAppRoot)) {
+        $appRoot = $configuredAppRoot
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($AppRootPath)) {
+        $appRoot = Resolve-AppRootCandidate -CandidatePath $AppRootPath
+    }
+    else {
+        $appRoot = Request-AppRootDirectory
     }
 
-    $appRoot = Get-NormalizedDirectory -Path ([string]$appRootProperty.Value)
     $targetExePath = Join-Path $appRoot "ExpressPackingMonitoring.exe"
     $targetDllPath = Join-Path $appRoot "ExpressPackingMonitoring.dll"
-    if (-not (Test-Path -LiteralPath $targetExePath -PathType Leaf) -or
-        -not (Test-Path -LiteralPath $targetDllPath -PathType Leaf)) {
-        throw "配置中的应用目录无效，未找到主程序：$appRoot"
-    }
 
     $manifestPath = Join-Path $PatchRoot "patch_manifest.json"
     $patchFilesRoot = Join-Path $PatchRoot "files"

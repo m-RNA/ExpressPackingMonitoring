@@ -49,33 +49,77 @@ public sealed class ManualPatchInstallerTests
         Assert.Contains("正在恢复原文件", result.StandardOutput);
     }
 
+    [Theory]
+    [InlineData("missing", "package-root")]
+    [InlineData("invalid", "app-directory")]
+    [InlineData("legacy", "launcher-exe")]
+    [InlineData("stale", "app-exe")]
+    [InlineData("missing", "quoted-package-root")]
+    [InlineData("missing", "legacy-flat-root")]
+    public async Task Installer_AcceptsDraggedInstallLocationsWhenConfigCannotBeUsed(
+        string configState,
+        string candidateKind)
+    {
+        using var fixture = new ManualPatchFixture();
+        fixture.CreatePatch("new-content", useValidHash: true);
+        fixture.SetConfigState(configState);
+
+        ProcessResult result = await fixture.RunInstallerAsync(fixture.GetManualCandidate(candidateKind));
+
+        Assert.True(
+            result.ExitCode == 0,
+            $"exit={result.ExitCode}{Environment.NewLine}stdout={result.StandardOutput}{Environment.NewLine}stderr={result.StandardError}");
+        Assert.Equal("new-content", File.ReadAllText(fixture.TargetFilePath, Encoding.UTF8));
+    }
+
+    [Fact]
+    public async Task Installer_PromptsForDraggedLocationWhenAutomaticDetectionFails()
+    {
+        using var fixture = new ManualPatchFixture();
+        fixture.CreatePatch("new-content", useValidHash: true);
+        fixture.SetConfigState("missing");
+
+        ProcessResult result = await fixture.RunInstallerAsync(
+            standardInput: fixture.GetManualCandidate("quoted-package-root"));
+
+        Assert.True(
+            result.ExitCode == 0,
+            $"exit={result.ExitCode}{Environment.NewLine}stdout={result.StandardOutput}{Environment.NewLine}stderr={result.StandardError}");
+        Assert.Contains("请把安装文件夹或 ExpressPackingMonitoring.exe 拖到此窗口", result.StandardOutput);
+        Assert.Equal("new-content", File.ReadAllText(fixture.TargetFilePath, Encoding.UTF8));
+    }
+
     private sealed class ManualPatchFixture : IDisposable
     {
         private readonly string _root;
         private readonly string _patchRoot;
         private readonly string _configPath;
         private readonly string _scriptPath;
+        private readonly string _installedRoot;
+        private readonly string _appRoot;
 
-        public string TargetFilePath { get; }
+        public string TargetFilePath { get; private set; }
 
         public ManualPatchFixture()
         {
             _root = Path.Combine(Path.GetTempPath(), "epm-manual-patch-tests", Guid.NewGuid().ToString("N"));
             _patchRoot = Path.Combine(_root, "patch");
-            string appRoot = Path.Combine(_root, "installed", "app");
+            _installedRoot = Path.Combine(_root, "installed package");
+            _appRoot = Path.Combine(_installedRoot, "app");
             string userDataRoot = Path.Combine(_root, "user-data");
             _configPath = Path.Combine(userDataRoot, "config.json");
-            TargetFilePath = Path.Combine(appRoot, "Web", "index.html");
+            TargetFilePath = Path.Combine(_appRoot, "Web", "index.html");
             _scriptPath = Path.Combine(FindRepositoryRoot(), "Tools", "Apply-AppPatch.ps1");
 
             Directory.CreateDirectory(Path.GetDirectoryName(TargetFilePath)!);
             Directory.CreateDirectory(userDataRoot);
-            File.WriteAllText(Path.Combine(appRoot, "ExpressPackingMonitoring.exe"), "test", Encoding.UTF8);
-            File.WriteAllText(Path.Combine(appRoot, "ExpressPackingMonitoring.dll"), "test", Encoding.UTF8);
+            File.WriteAllText(Path.Combine(_installedRoot, "ExpressPackingMonitoring.exe"), "launcher", Encoding.UTF8);
+            File.WriteAllText(Path.Combine(_appRoot, "ExpressPackingMonitoring.exe"), "test", Encoding.UTF8);
+            File.WriteAllText(Path.Combine(_appRoot, "ExpressPackingMonitoring.dll"), "test", Encoding.UTF8);
             File.WriteAllText(TargetFilePath, "old-content", Encoding.UTF8);
             File.WriteAllText(
                 _configPath,
-                JsonSerializer.Serialize(new { AppRootDirectory = appRoot }),
+                JsonSerializer.Serialize(new { AppRootDirectory = _appRoot }),
                 Encoding.UTF8);
         }
 
@@ -128,6 +172,54 @@ public sealed class ManualPatchInstallerTests
             ]);
         }
 
+        public void SetConfigState(string state)
+        {
+            switch (state)
+            {
+                case "missing":
+                    File.Delete(_configPath);
+                    break;
+                case "invalid":
+                    File.WriteAllText(_configPath, "{invalid-json", Encoding.UTF8);
+                    break;
+                case "legacy":
+                    File.WriteAllText(_configPath, "{}", Encoding.UTF8);
+                    break;
+                case "stale":
+                    File.WriteAllText(
+                        _configPath,
+                        JsonSerializer.Serialize(new { AppRootDirectory = Path.Combine(_root, "moved-app") }),
+                        Encoding.UTF8);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(state), state, null);
+            }
+        }
+
+        public string GetManualCandidate(string kind)
+        {
+            return kind switch
+            {
+                "package-root" => _installedRoot,
+                "app-directory" => _appRoot,
+                "launcher-exe" => Path.Combine(_installedRoot, "ExpressPackingMonitoring.exe"),
+                "app-exe" => Path.Combine(_appRoot, "ExpressPackingMonitoring.exe"),
+                "quoted-package-root" => $"\"{_installedRoot}\"",
+                "legacy-flat-root" => PrepareLegacyFlatRoot(),
+                _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
+            };
+        }
+
+        private string PrepareLegacyFlatRoot()
+        {
+            string flatTargetPath = Path.Combine(_installedRoot, "Web", "index.html");
+            Directory.CreateDirectory(Path.GetDirectoryName(flatTargetPath)!);
+            File.WriteAllText(Path.Combine(_installedRoot, "ExpressPackingMonitoring.dll"), "test", Encoding.UTF8);
+            File.WriteAllText(flatTargetPath, "old-content", Encoding.UTF8);
+            TargetFilePath = flatTargetPath;
+            return _installedRoot;
+        }
+
         private void WriteManifest(object[] files)
         {
             var manifest = new
@@ -144,7 +236,9 @@ public sealed class ManualPatchInstallerTests
                 Encoding.UTF8);
         }
 
-        public async Task<ProcessResult> RunInstallerAsync()
+        public async Task<ProcessResult> RunInstallerAsync(
+            string appRootPath = "",
+            string? standardInput = null)
         {
             string powershellPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.System),
@@ -156,18 +250,20 @@ public sealed class ManualPatchInstallerTests
                 FileName = powershellPath,
                 UseShellExecute = false,
                 CreateNoWindow = true,
+                RedirectStandardInput = standardInput is not null,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
             };
             startInfo.Environment["EPM_TEST_PATCH_SCRIPT"] = _scriptPath;
             startInfo.Environment["EPM_TEST_PATCH_ROOT"] = _patchRoot;
             startInfo.Environment["EPM_TEST_CONFIG_PATH"] = _configPath;
+            startInfo.Environment["EPM_TEST_APP_ROOT_PATH"] = appRootPath;
             foreach (string argument in new[]
             {
                 "-NoProfile",
                 "-ExecutionPolicy", "Bypass",
                 "-Command",
-                "$scriptText=[System.IO.File]::ReadAllText($env:EPM_TEST_PATCH_SCRIPT,[System.Text.Encoding]::UTF8); & ([ScriptBlock]::Create($scriptText)) -PatchRoot $env:EPM_TEST_PATCH_ROOT -ConfigPath $env:EPM_TEST_CONFIG_PATH -SkipProcessCheck -SkipVersionCheck"
+                "$scriptText=[System.IO.File]::ReadAllText($env:EPM_TEST_PATCH_SCRIPT,[System.Text.Encoding]::UTF8); & ([ScriptBlock]::Create($scriptText)) -PatchRoot $env:EPM_TEST_PATCH_ROOT -ConfigPath $env:EPM_TEST_CONFIG_PATH -AppRootPath $env:EPM_TEST_APP_ROOT_PATH -SkipProcessCheck -SkipVersionCheck"
             })
             {
                 startInfo.ArgumentList.Add(argument);
@@ -175,6 +271,11 @@ public sealed class ManualPatchInstallerTests
 
             using Process process = Process.Start(startInfo)
                 ?? throw new InvalidOperationException("Unable to start Windows PowerShell");
+            if (standardInput is not null)
+            {
+                await process.StandardInput.WriteLineAsync(standardInput);
+                process.StandardInput.Close();
+            }
             Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
             Task<string> stderrTask = process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
             await process.WaitForExitAsync(TestContext.Current.CancellationToken)

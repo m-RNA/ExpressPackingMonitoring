@@ -7,7 +7,8 @@ cd /d "%~dp0"
 
 echo 快递打包监控增量更新
 echo.
-echo 脚本会从 config.json 读取原安装目录，并校验补丁后完成更新。
+echo 脚本会先从 config.json 读取原安装目录，并校验补丁后完成更新。
+echo 如果无法自动定位，请按提示把安装文件夹或主程序拖到窗口中。
 echo 如果软件正在运行，脚本会请求软件正常退出并等待录像保存。
 echo 请勿单独移动此 CMD、apply_app_patch.ps1、patch_manifest.json 或 files 文件夹。
 echo.

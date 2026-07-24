@@ -540,7 +540,8 @@ function New-AppPatchPackage {
         "4. 更新成功后，请从原来的根目录 ExpressPackingMonitoring.exe 启动软件。"
         ""
         "请勿单独移动 CMD、apply_app_patch.ps1、patch_manifest.json 或 files 文件夹。"
-        "如果提示 config.json 尚未记录 AppRootDirectory，请先通过根目录启动器自动更新，或安装一次新版完整包。"
+        "如果脚本无法自动定位软件，请把完整包根目录、app 目录或 ExpressPackingMonitoring.exe 拖到窗口中。"
+        "脚本会自动识别实际 app 目录并判断当前版本是否适用此增量包。"
     ) -join [Environment]::NewLine
     Set-Content -LiteralPath (Join-Path $patchWorkDir $manualInstallerNoticeName) -Value $manualInstallerNotice -Encoding UTF8
 
