@@ -31,6 +31,60 @@ function Get-NormalizedDirectory {
     return [System.IO.Path]::GetFullPath($Path).TrimEnd([char[]]"\/")
 }
 
+function Get-ShortcutTargetPath {
+    param([string]$ShortcutPath)
+
+    $wscriptShell = $null
+    $wscriptShortcut = $null
+    try {
+        $wscriptShell = New-Object -ComObject WScript.Shell
+        $wscriptShortcut = $wscriptShell.CreateShortcut($ShortcutPath)
+        $targetPath = ([string]$wscriptShortcut.TargetPath).Trim()
+    }
+    finally {
+        if ($null -ne $wscriptShortcut) {
+            try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($wscriptShortcut) } catch { }
+        }
+        if ($null -ne $wscriptShell) {
+            try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($wscriptShell) } catch { }
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($targetPath)) {
+        return $targetPath
+    }
+
+    # Inno Setup creates valid Shell Link files that some WScript.Shell versions
+    # can launch but return with an empty TargetPath. Ask the Windows Shell for
+    # the same link target before treating the shortcut as invalid.
+    $shellApplication = $null
+    $shellFolder = $null
+    $shellItem = $null
+    $shellLink = $null
+    try {
+        $shellApplication = New-Object -ComObject Shell.Application
+        $shellFolder = $shellApplication.Namespace((Split-Path -Parent $ShortcutPath))
+        if ($null -ne $shellFolder) {
+            $shellItem = $shellFolder.ParseName((Split-Path -Leaf $ShortcutPath))
+        }
+        if ($null -ne $shellItem) {
+            $shellLink = $shellItem.GetLink
+        }
+        if ($null -ne $shellLink) {
+            $targetPath = ([string]$shellLink.Path).Trim()
+        }
+    }
+    finally {
+        foreach ($comObject in @($shellLink, $shellItem, $shellFolder, $shellApplication)) {
+            if ($null -ne $comObject) {
+                try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($comObject) } catch { }
+            }
+        }
+    }
+
+    return $targetPath
+}
+
 function Resolve-AppRootCandidate {
     param([string]$CandidatePath)
 
@@ -48,6 +102,33 @@ function Resolve-AppRootCandidate {
     }
 
     $resolvedInput = [System.IO.Path]::GetFullPath($cleanedPath)
+    if ([string]::Equals([System.IO.Path]::GetExtension($resolvedInput), ".url", [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "不支持网络快捷方式 .url，请拖入安装文件夹、程序 EXE 或 .lnk 快捷方式"
+    }
+
+    $visitedShortcuts = New-Object "System.Collections.Generic.HashSet[string]" ([System.StringComparer]::OrdinalIgnoreCase)
+    while ([string]::Equals([System.IO.Path]::GetExtension($resolvedInput), ".lnk", [System.StringComparison]::OrdinalIgnoreCase)) {
+        if (-not (Test-Path -LiteralPath $resolvedInput -PathType Leaf)) {
+            throw "快捷方式不存在：$resolvedInput"
+        }
+        if (-not $visitedShortcuts.Add($resolvedInput)) {
+            throw "快捷方式存在循环引用：$resolvedInput"
+        }
+
+        $shortcutTarget = Get-ShortcutTargetPath -ShortcutPath $resolvedInput
+
+        if ([string]::IsNullOrWhiteSpace($shortcutTarget)) {
+            throw "快捷方式没有有效目标：$resolvedInput"
+        }
+        if (-not [System.IO.Path]::IsPathRooted($shortcutTarget)) {
+            $shortcutTarget = Join-Path (Split-Path -Parent $resolvedInput) $shortcutTarget
+        }
+        $resolvedInput = [System.IO.Path]::GetFullPath($shortcutTarget)
+        if ([string]::Equals([System.IO.Path]::GetExtension($resolvedInput), ".url", [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "快捷方式指向不支持的 .url 网络快捷方式"
+        }
+    }
+
     $candidateDirectories = New-Object System.Collections.Generic.List[string]
     if (Test-Path -LiteralPath $resolvedInput -PathType Leaf) {
         $candidateDirectories.Add((Split-Path -Parent $resolvedInput))

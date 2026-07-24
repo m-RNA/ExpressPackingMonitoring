@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using Xunit;
@@ -56,6 +57,8 @@ public sealed class ManualPatchInstallerTests
     [InlineData("stale", "app-exe")]
     [InlineData("missing", "quoted-package-root")]
     [InlineData("missing", "legacy-flat-root")]
+    [InlineData("missing", "shortcut-package-root")]
+    [InlineData("missing", "shortcut-app-exe")]
     public async Task Installer_AcceptsDraggedInstallLocationsWhenConfigCannotBeUsed(
         string configState,
         string candidateKind)
@@ -70,6 +73,22 @@ public sealed class ManualPatchInstallerTests
             result.ExitCode == 0,
             $"exit={result.ExitCode}{Environment.NewLine}stdout={result.StandardOutput}{Environment.NewLine}stderr={result.StandardError}");
         Assert.Equal("new-content", File.ReadAllText(fixture.TargetFilePath, Encoding.UTF8));
+    }
+
+    [Theory]
+    [InlineData("missing-target-shortcut", "路径不存在")]
+    [InlineData("internet-shortcut", "不支持网络快捷方式")]
+    public async Task Installer_RejectsInvalidShortcutInputs(string candidateKind, string expectedMessage)
+    {
+        using var fixture = new ManualPatchFixture();
+        fixture.CreatePatch("new-content", useValidHash: true);
+        fixture.SetConfigState("missing");
+
+        ProcessResult result = await fixture.RunInstallerAsync(fixture.GetManualCandidate(candidateKind));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(expectedMessage, result.StandardOutput + result.StandardError);
+        Assert.Equal("old-content", File.ReadAllText(fixture.TargetFilePath, Encoding.UTF8));
     }
 
     [Fact]
@@ -206,6 +225,14 @@ public sealed class ManualPatchInstallerTests
                 "app-exe" => Path.Combine(_appRoot, "ExpressPackingMonitoring.exe"),
                 "quoted-package-root" => $"\"{_installedRoot}\"",
                 "legacy-flat-root" => PrepareLegacyFlatRoot(),
+                "shortcut-package-root" => CreateShortcut("package-root.lnk", _installedRoot),
+                "shortcut-app-exe" => CreateShortcut(
+                    "app-exe.lnk",
+                    Path.Combine(_appRoot, "ExpressPackingMonitoring.exe")),
+                "missing-target-shortcut" => CreateShortcut(
+                    "missing-target.lnk",
+                    Path.Combine(_root, "missing", "ExpressPackingMonitoring.exe")),
+                "internet-shortcut" => CreateInternetShortcut(),
                 _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
             };
         }
@@ -218,6 +245,53 @@ public sealed class ManualPatchInstallerTests
             File.WriteAllText(flatTargetPath, "old-content", Encoding.UTF8);
             TargetFilePath = flatTargetPath;
             return _installedRoot;
+        }
+
+        private string CreateShortcut(string fileName, string targetPath)
+        {
+            string shortcutPath = Path.Combine(_root, fileName);
+            Type shellType = Type.GetTypeFromProgID("WScript.Shell")
+                ?? throw new InvalidOperationException("WScript.Shell is unavailable");
+            object shell = Activator.CreateInstance(shellType)
+                ?? throw new InvalidOperationException("Unable to create WScript.Shell");
+            object? shortcut = null;
+            try
+            {
+                shortcut = shellType.InvokeMember(
+                    "CreateShortcut",
+                    System.Reflection.BindingFlags.InvokeMethod,
+                    null,
+                    shell,
+                    [shortcutPath]);
+                Type shortcutType = shortcut!.GetType();
+                shortcutType.InvokeMember(
+                    "TargetPath",
+                    System.Reflection.BindingFlags.SetProperty,
+                    null,
+                    shortcut,
+                    [targetPath]);
+                shortcutType.InvokeMember(
+                    "Save",
+                    System.Reflection.BindingFlags.InvokeMethod,
+                    null,
+                    shortcut,
+                    null);
+            }
+            finally
+            {
+                if (shortcut is not null && Marshal.IsComObject(shortcut))
+                    Marshal.FinalReleaseComObject(shortcut);
+                if (Marshal.IsComObject(shell))
+                    Marshal.FinalReleaseComObject(shell);
+            }
+            return shortcutPath;
+        }
+
+        private string CreateInternetShortcut()
+        {
+            string path = Path.Combine(_root, "website.url");
+            File.WriteAllText(path, "[InternetShortcut]\r\nURL=https://example.com/\r\n", Encoding.UTF8);
+            return path;
         }
 
         private void WriteManifest(object[] files)
