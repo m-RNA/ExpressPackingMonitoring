@@ -41,13 +41,18 @@
                                           VerticalScrollBarVisibility="Auto"
                                           Foreground="{DynamicResource TextSecondary}"/>
             </Border>
+            <TextBlock Margin="0,12,0,0"
+                       Text="推荐继续使用根目录启动器自动更新。手动下载增量包时，请完整解压后双击包内的“双击安装增量更新.cmd”"
+                       FontSize="12"
+                       Foreground="{DynamicResource TextSecondary}"
+                       TextWrapping="Wrap"/>
         </StackPanel>
 
         <StackPanel Grid.Row="1"
                     Orientation="Horizontal"
                     HorizontalAlignment="Right"
                     Margin="0,22,0,0">
-            <Button Content="前往下载"
+            <Button Content="打开更新页面"
                     Style="{StaticResource PrimaryButtonStyle}"
                     Margin="0,0,10,0"
                     Click="Download_Click"/>

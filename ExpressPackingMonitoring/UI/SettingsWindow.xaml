@@ -2738,7 +2738,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
                                             <TextBlock Text="自动检查更新" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="打开软件后后台检查，有新版本时提示下载"
+                                            <TextBlock Text="根目录启动器后台下载增量包，下次启动时自动安装"
                                                     Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <CheckBox Grid.Column="2"

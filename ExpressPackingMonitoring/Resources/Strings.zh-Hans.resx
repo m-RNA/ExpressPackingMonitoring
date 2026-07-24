@@ -114,6 +114,8 @@
   <data name="打开 GitHub 仓库，查看源码、发布记录和问题反馈" xml:space="preserve"><value>打开 GitHub 仓库，查看源码、发布记录和问题反馈</value></data>
   <data name="打开仓库" xml:space="preserve"><value>打开仓库</value></data>
   <data name="打开软件后后台检查，有新版本时提示下载" xml:space="preserve"><value>打开软件后后台检查，有新版本时提示下载</value></data>
+  <data name="根目录启动器后台下载增量包，下次启动时自动安装" xml:space="preserve"><value>根目录启动器后台下载增量包，下次启动时自动安装</value></data>
+  <data name="推荐继续使用根目录启动器自动更新。手动下载增量包时，请完整解压后双击包内的“双击安装增量更新.cmd”" xml:space="preserve"><value>推荐继续使用根目录启动器自动更新。手动下载增量包时，请完整解压后双击包内的“双击安装增量更新.cmd”</value></data>
   <data name="打印后退款报警" xml:space="preserve"><value>打印后退款报警</value></data>
   <data name="单个录像超过这个时间就自动停止" xml:space="preserve"><value>单个录像超过这个时间就自动停止</value></data>
   <data name="单号判断规则" xml:space="preserve"><value>单号判断规则</value></data>
@@ -338,6 +340,7 @@
   <data name="平均:" xml:space="preserve"><value>平均:</value></data>
   <data name="平均单件用时" xml:space="preserve"><value>平均单件用时</value></data>
   <data name="前往下载" xml:space="preserve"><value>前往下载</value></data>
+  <data name="打开更新页面" xml:space="preserve"><value>打开更新页面</value></data>
   <data name="切换工位" xml:space="preserve"><value>切换工位</value></data>
   <data name="请选择这台电脑的用途" xml:space="preserve"><value>请选择这台电脑的用途</value></data>
   <data name="请用扫码枪扫描一个快递面单条码。检测到自动回车时可后台扫码；没有自动回车时会切到窗口内识别。" xml:space="preserve"><value>请用扫码枪扫描一个快递面单条码。检测到自动回车时可后台扫码；没有自动回车时会切到窗口内识别。</value></data>

@@ -32,7 +32,7 @@ A packing video and shipment-risk interception tool for e-commerce sellers and p
 - Searches recordings by order or tracking number and plays them in a browser
 - Provides browser-based trim-and-download with a selectable time range
 - Supports multiple storage locations, automatic drive switching, and reserve-space-based cleanup
-- Checks for updates through the launcher, verifies incremental packages, and installs pending updates on the next launch
+- Checks for updates through the launcher, verifies incremental packages, and installs pending updates on the next launch; manually downloaded patches include a double-click CMD installer
 
 ## Requirements
 
@@ -52,6 +52,12 @@ The portable release normally includes the required .NET runtime and `ffmpeg.exe
 6. Enter the tracking number in the recording list whenever you need to retrieve the video.
 
 Placing a label in view does not wake an idle camera. Click the application, press a key, or use the scanner first, then place the label inside the recognition guide.
+
+## Updating
+
+- Always start the app from the root `ExpressPackingMonitoring.exe`. The launcher downloads verified incremental packages in the background and installs them on the next launch.
+- For a manually downloaded patch, extract the whole archive and double-click `双击安装增量更新.cmd`. It reads the saved `app` directory from the user configuration, closes the running app normally, verifies every file, and rolls back if installation fails.
+- Use the full package if the installed version is below the patch baseline, the app directory has not been recorded yet, or the launcher itself must be updated. Keep `%LOCALAPPDATA%\ExpressPackingMonitoring\` to preserve configuration and database records.
 
 ## LAN Playback
 

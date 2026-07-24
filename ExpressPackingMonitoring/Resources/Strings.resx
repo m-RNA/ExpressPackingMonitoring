@@ -114,6 +114,8 @@
   <data name="打开 GitHub 仓库，查看源码、发布记录和问题反馈" xml:space="preserve"><value>Open the GitHub repository to view source code, release records and problem feedback</value></data>
   <data name="打开仓库" xml:space="preserve"><value>Open repository</value></data>
   <data name="打开软件后后台检查，有新版本时提示下载" xml:space="preserve"><value>After opening the software, it will check in the background and prompt you to download when there is a new version.</value></data>
+  <data name="根目录启动器后台下载增量包，下次启动时自动安装" xml:space="preserve"><value>The root launcher downloads incremental updates in the background and installs them on the next launch</value></data>
+  <data name="推荐继续使用根目录启动器自动更新。手动下载增量包时，请完整解压后双击包内的“双击安装增量更新.cmd”" xml:space="preserve"><value>We recommend using the root launcher for automatic updates. For a manual patch, extract the entire archive and double-click the included CMD installer</value></data>
   <data name="打印后退款报警" xml:space="preserve"><value>Refund alarm after printing</value></data>
   <data name="单个录像超过这个时间就自动停止" xml:space="preserve"><value>If a single recording exceeds this time, it will automatically stop</value></data>
   <data name="单号判断规则" xml:space="preserve"><value>Order number validation</value></data>
@@ -338,6 +340,7 @@
   <data name="平均:" xml:space="preserve"><value>Average:</value></data>
   <data name="平均单件用时" xml:space="preserve"><value>Average time per item</value></data>
   <data name="前往下载" xml:space="preserve"><value>Download</value></data>
+  <data name="打开更新页面" xml:space="preserve"><value>Open update page</value></data>
   <data name="切换工位" xml:space="preserve"><value>Switch workstation</value></data>
   <data name="请选择这台电脑的用途" xml:space="preserve"><value>Please select what you want to use this computer for</value></data>
   <data name="请用扫码枪扫描一个快递面单条码。检测到自动回车时可后台扫码；没有自动回车时会切到窗口内识别。" xml:space="preserve"><value>Please use a code scanner to scan the barcode of an express delivery receipt. When an automatic carriage return is detected, the code can be scanned in the background; when there is no automatic carriage return, the code will be switched to the window for identification.</value></data>
