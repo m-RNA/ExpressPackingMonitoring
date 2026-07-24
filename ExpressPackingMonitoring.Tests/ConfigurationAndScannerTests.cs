@@ -12,6 +12,20 @@ namespace ExpressPackingMonitoring.Tests;
 public sealed class ConfigurationAndScannerTests
 {
     [Fact]
+    public void EnsureAppRootDirectory_PersistsNormalizedRuntimeDirectory()
+    {
+        var config = new AppConfig { AppRootDirectory = @"C:\旧目录\app" };
+
+        bool changed = WorkstationConfigStore.EnsureAppRootDirectory(
+            config,
+            @"D:\快递打包监控\app\");
+
+        Assert.True(changed);
+        Assert.Equal(@"D:\快递打包监控\app", config.AppRootDirectory);
+        Assert.False(WorkstationConfigStore.EnsureAppRootDirectory(config, @"D:\快递打包监控\app"));
+    }
+
+    [Fact]
     public void AppConfig_MaximizesSpeechVolumeByDefault()
     {
         Assert.True(new AppConfig().MaximizeVolumeForSpeech);

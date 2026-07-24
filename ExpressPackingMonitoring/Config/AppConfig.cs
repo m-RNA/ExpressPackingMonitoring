@@ -78,6 +78,8 @@ namespace ExpressPackingMonitoring.Config
 
         // 工位用途："CameraMonitor"=摄像头监控工位，"PrintStation"=快递单打印工位，空值表示首次启动需要选择。
         public string WorkstationRole { get; set; } = "";
+        // 主程序实际运行目录。发布包中指向 app 目录，供手动增量更新包定位安装目标。
+        public string AppRootDirectory { get; set; } = "";
         public string PrintStationMonitorAddress { get; set; } = "";
         public bool FirstUseWizardCompleted { get; set; } = false;
 

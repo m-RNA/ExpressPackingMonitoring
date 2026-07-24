@@ -50,7 +50,9 @@ public static class WorkstationConfigStore
             try
             {
                 var config = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path, Encoding.UTF8)) ?? new AppConfig();
-                if (AppConfig.NormalizeAfterLoad(config))
+                bool changed = AppConfig.NormalizeAfterLoad(config);
+                changed = EnsureAppRootDirectory(config, AppContext.BaseDirectory) || changed;
+                if (changed)
                 {
                     try { Save(config); }
                     catch (Exception ex) { RuntimeLog.Warn("Config", $"Normalized config save failed: {ex.Message}"); }
@@ -72,6 +74,9 @@ public static class WorkstationConfigStore
 
         var defaultConfig = new AppConfig();
         AppConfig.NormalizeAfterLoad(defaultConfig);
+        EnsureAppRootDirectory(defaultConfig, AppContext.BaseDirectory);
+        try { Save(defaultConfig); }
+        catch (Exception ex) { RuntimeLog.Warn("Config", $"Initial config save failed: {ex.Message}"); }
         return defaultConfig;
     }
 
@@ -160,6 +165,7 @@ public static class WorkstationConfigStore
 
     private static void SaveCore(AppConfig config)
     {
+        EnsureAppRootDirectory(config, AppContext.BaseDirectory);
         string configPath = AppPaths.ConfigPath;
         string directory = Path.GetDirectoryName(configPath) ?? AppContext.BaseDirectory;
         string tempPath = $"{configPath}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
@@ -186,6 +192,29 @@ public static class WorkstationConfigStore
         {
             try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
         }
+    }
+
+    internal static bool EnsureAppRootDirectory(AppConfig config, string baseDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        string normalized = NormalizeAppRootDirectory(baseDirectory);
+        if (string.Equals(config.AppRootDirectory, normalized, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        config.AppRootDirectory = normalized;
+        return true;
+    }
+
+    internal static string NormalizeAppRootDirectory(string baseDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(baseDirectory))
+            throw new ArgumentException("应用根目录不能为空", nameof(baseDirectory));
+
+        string fullPath = Path.GetFullPath(baseDirectory);
+        string root = Path.GetPathRoot(fullPath) ?? "";
+        return fullPath.Length > root.Length
+            ? fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            : fullPath;
     }
 
     private static void ExecuteWithSaveLock(Action action)
