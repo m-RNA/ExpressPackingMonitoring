@@ -47,11 +47,55 @@ public sealed class ReleasePackagingPolicyTests
         Assert.Contains("AppRootDirectory", installerScript);
         Assert.Contains("Request-AppRootDirectory", installerScript);
         Assert.Contains("完整包根目录、app 目录", installerScript);
+        Assert.Contains("WScript.Shell", installerScript);
+        Assert.Contains("Shell.Application", installerScript);
         Assert.Contains("Get-FileSha256", installerScript);
         Assert.Contains("System.Security.Cryptography.SHA256", installerScript);
         Assert.Contains("[System.IO.File]::Replace", installerScript);
         Assert.Contains("powershell.exe", installerCmd);
         Assert.DoesNotContain("taskkill", installerCmd, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void WindowsInstaller_UsesFixedPerUserIdentityAndSafeReleaseInputs()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        string innoScript = File.ReadAllText(
+            Path.Combine(repositoryRoot, "Installer", "ExpressPackingMonitoring.iss"),
+            Encoding.UTF8);
+        string buildScript = File.ReadAllText(
+            Path.Combine(repositoryRoot, "Tools", "Build-Installer.ps1"),
+            Encoding.UTF8);
+        string publishScript = File.ReadAllText(
+            Path.Combine(repositoryRoot, "Tools", "Publish-CleanPackage.ps1"),
+            Encoding.UTF8);
+
+        Assert.Contains("99E9FCE3-C8FE-4D7A-9FA4-BC9CB9186B05", innoScript);
+        Assert.Contains(@"DefaultDirName={localappdata}\Programs\ExpressPackingMonitoring", innoScript);
+        Assert.Contains("DisableDirPage=yes", innoScript);
+        Assert.Contains("PrivilegesRequired=lowest", innoScript);
+        Assert.Contains("ArchitecturesAllowed=x64compatible", innoScript);
+        Assert.Contains("CloseApplications=yes", innoScript);
+        Assert.DoesNotContain("CloseApplications=force", innoScript);
+        Assert.Contains(@"Filename: ""{app}\{#MyAppExeName}""; WorkingDir: ""{app}""", innoScript);
+        Assert.Contains("--uninstall-plan-recordings", innoScript);
+        Assert.Contains("--uninstall-delete-recordings", innoScript);
+        Assert.Contains("MB_DEFBUTTON2", innoScript);
+        Assert.DoesNotContain("WizardSilent", innoScript);
+
+        Assert.Contains("INNO_SETUP_ISCC", buildScript);
+        Assert.Contains("winget install --id JRSoftware.InnoSetup", buildScript);
+        Assert.Contains("WINDOWS_SIGN_CERT_THUMBPRINT", buildScript);
+        Assert.Contains("Get-AuthenticodeSignature", buildScript);
+        Assert.Contains("config.json", buildScript);
+        Assert.Contains("videos.db", buildScript);
+
+        Assert.Contains("ExpressPackingMonitoring_Setup_$releaseTag.exe", publishScript);
+        Assert.Contains("Build-Installer.ps1", publishScript);
+        Assert.Contains("SmartScreen", publishScript);
+        Assert.Contains("GitHub 默认上传", publishScript);
+        Assert.Contains("Gitee 手工上传", publishScript);
+        Assert.Contains("Setup 和完整 ZIP 使用 Full download page", publishScript);
     }
 
     private static string FindRepositoryRoot()

@@ -106,6 +106,7 @@
     <Compile Include="Localization\AppLanguage.cs" />
     <Compile Include="Services\UpdateCheckOptions.cs" />
     <Compile Include="Services\UpdateCheckService.cs" />
+    <Compile Include="Services\UninstallCleanupService.cs" />
     <Compile Include="Services\AlertService.cs" />
     <Compile Include="Services\AutoStartService.cs" />
     <Compile Include="Services\CameraBarcodeRecognitionService.cs" />

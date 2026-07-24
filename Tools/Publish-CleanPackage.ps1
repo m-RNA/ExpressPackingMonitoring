@@ -19,6 +19,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $appProject = Join-Path $repoRoot "ExpressPackingMonitoring\ExpressPackingMonitoring.csproj"
 $launcherProject = Join-Path $repoRoot "ExpressPackingMonitoring.Launcher\ExpressPackingMonitoring.Launcher.csproj"
 $releaseValidationScript = Join-Path $repoRoot "Tools\Test-Release.ps1"
+$installerBuildScript = Join-Path $repoRoot "Tools\Build-Installer.ps1"
 $ttsCacheBuilderProject = Join-Path $repoRoot "Tools\ExpressPackingMonitoring.TtsCacheBuilder\ExpressPackingMonitoring.TtsCacheBuilder.csproj"
 $manualPatchCmdSource = Join-Path $repoRoot "Tools\Install-AppPatch.cmd"
 $manualPatchScriptSource = Join-Path $repoRoot "Tools\Apply-AppPatch.ps1"
@@ -639,6 +640,8 @@ $launcherManifestName = "launcher_manifest_$releaseTag.json"
 $launcherManifestPath = Join-Path $packageRoot $launcherManifestName
 $releaseInfoName = "release_info_$releaseTag.txt"
 $releaseInfoPath = Join-Path $packageRoot $releaseInfoName
+$setupFileName = "ExpressPackingMonitoring_Setup_$releaseTag.exe"
+$setupPath = Join-Path $packageRoot $setupFileName
 $releaseUrlBase = Get-ReleaseUrlBase
 $releasePageTemplate = Get-ConfiguredValue -Key "RELEASE_PAGE_URL_TEMPLATE" -DefaultValue "$releaseUrlBase/tag/{tag}"
 $appPatchUrlTemplate = Get-ConfiguredValue -Key "APP_PATCH_URL_TEMPLATE" -DefaultValue "$releaseUrlBase/download/{tag}/{file}"
@@ -657,6 +660,16 @@ if (Test-Path $legacyAppFullZipPath) {
 if (Test-Path $appPatchZipPath) {
     Remove-Item -LiteralPath $appPatchZipPath -Force
 }
+if (-not (Test-Path -LiteralPath $installerBuildScript -PathType Leaf)) {
+    throw "Installer build script not found: $installerBuildScript"
+}
+& $installerBuildScript -SourceDir $outputFullPath -Version $normalizedVersion -OutputDir $packageRoot
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $setupPath -PathType Leaf)) {
+    throw "Installer build failed: $setupPath"
+}
+$setupHash = (Get-FileHash -LiteralPath $setupPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$setupSize = (Get-Item -LiteralPath $setupPath).Length
+$setupSignatureStatus = (Get-AuthenticodeSignature -LiteralPath $setupPath).Status.ToString()
 
 $patchSupported = $false
 $patchReason = ""
@@ -778,16 +791,15 @@ if ($patchSupported) {
     $updateManifest["notes"] = @(
         (ConvertFrom-Utf8Base64 "6K+35aGr5YaZ5pu05paw5YaF5a65")
         "启动器会自动安装增量更新；手动下载时请完整解压，并双击《$manualInstallerCmdName》"
+        "首次安装建议从完整下载页获取《$setupFileName》；完整 ZIP 仅用于免安装和故障恢复"
     )
 }
 else {
     $updateManifest["patch_package"] = $null
-    $updateManifest["notes"] = if ($launcherChanged) {
-        @((ConvertFrom-Utf8Base64 "5pys54mI5pys5YyF5ZCr5ZCv5Yqo5Zmo5pu05paw77yM6K+35omL5Yqo5LiL6L295a6M5pW05YyF44CC"))
-    }
-    else {
-        @((ConvertFrom-Utf8Base64 "5pys54mI5pys5LiN5pSv5oyB6Ieq5Yqo5aKe6YeP5pu05paw77yM6K+35omL5Yqo5LiL6L295a6M5pW05YyF44CC"))
-    }
+    $updateManifest["notes"] = @(
+        "本版本不支持自动增量更新，请下载《$setupFileName》完成升级"
+        "完整 ZIP 仅用于免安装和故障恢复"
+    )
 }
 $updateManifest["full_download_page"] = $fullDownloadPage
 
@@ -805,11 +817,25 @@ $releaseInfoLines += (ConvertFrom-Utf8Base64 "54mI5pys77ya") + $releaseTag
 $releaseInfoLines += (ConvertFrom-Utf8Base64 "UmVsZWFzZSDpobXpnaLvvJo=") + $releasePage
 $releaseInfoLines += "Full download page: " + $fullDownloadPage
 $releaseInfoLines += ""
-$releaseInfoLines += ConvertFrom-Utf8Base64 "6buY6K6k5LiK5Lyg77ya"
-$releaseInfoLines += (ConvertFrom-Utf8Base64 "MS4g5a6M5pW05YyFIHppcO+8mg==") + (Split-Path -Leaf $zipFullPath)
-$releaseInfoLines += (ConvertFrom-Utf8Base64 "QXBwUGF0Y2gg5YyF77ya") + $patchReleaseInfo
-$releaseInfoLines += (ConvertFrom-Utf8Base64 "My4g5pu05paw5o+P6L+w5paH5Lu277ya") + $updateJsonName
+$releaseInfoLines += "GitHub 默认上传："
+$releaseInfoLines += "1. Windows 安装向导（推荐）：" + $setupFileName
+$releaseInfoLines += (ConvertFrom-Utf8Base64 "Mi4g5a6M5pW05YyFIHppcO+8mg==") + (Split-Path -Leaf $zipFullPath)
+$releaseInfoLines += "3. " + (ConvertFrom-Utf8Base64 "QXBwUGF0Y2gg5YyF77ya") + $patchReleaseInfo
+$releaseInfoLines += (ConvertFrom-Utf8Base64 "NC4g5pu05paw5o+P6L+w5paH5Lu277ya") + $updateJsonName
+$releaseInfoLines += ""
+$releaseInfoLines += "Gitee 手工上传："
+$releaseInfoLines += "1. " + (ConvertFrom-Utf8Base64 "QXBwUGF0Y2gg5YyF77ya") + $patchReleaseInfo
+$releaseInfoLines += (ConvertFrom-Utf8Base64 "Mi4g5pu05paw5o+P6L+w5paH5Lu277ya") + $updateJsonName
+$releaseInfoLines += "Setup 和完整 ZIP 使用 Full download page，不上传到 Gitee"
 $releaseInfoLines += "Local verification only (do not upload by default): " + $launcherManifestName
+$releaseInfoLines += ""
+$releaseInfoLines += "Setup SHA256:"
+$releaseInfoLines += $setupHash
+$releaseInfoLines += "Setup size: $setupSize bytes"
+$releaseInfoLines += "Setup Authenticode status: $setupSignatureStatus"
+if (-not [string]::Equals($setupSignatureStatus, "Valid", [System.StringComparison]::OrdinalIgnoreCase)) {
+    $releaseInfoLines += "WARNING: Setup is unsigned; Windows SmartScreen may show an unknown publisher warning."
+}
 $releaseInfoLines += ""
 $releaseInfoLines += $releaseInfoCheckLine
 $releaseInfoLines += ""
@@ -848,6 +874,7 @@ foreach ($runtimeFile in $requiredAppRuntimeFiles) {
 }
 
 Write-Host "Clean package created: $outputFullPath"
+Write-Host "Installer created: $setupPath"
 Write-Host "Zip package created: $zipFullPath"
 if ($patchSupported) {
     Write-Host "AppPatch package created: $appPatchZipPath"

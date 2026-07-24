@@ -40,7 +40,7 @@ A packing video and shipment-risk interception tool for e-commerce sellers and p
 - USB camera
 - Barcode scanner configured as a keyboard input device (optional, but recommended as a fallback)
 
-The portable release normally includes the required .NET runtime and `ffmpeg.exe`. Running from source or developing the project requires the .NET 8 SDK and `ffmpeg.exe` (the Full build is recommended).
+`ExpressPackingMonitoring_Setup_vX.Y.Z.exe` is the recommended download. It installs per-user without administrator rights, always adds a Start menu shortcut, and selects the desktop shortcut by default. The full ZIP remains available as a portable and recovery option. Both distributions normally include the required .NET runtime and `ffmpeg.exe`. Running from source requires the .NET 8 SDK and `ffmpeg.exe` (the Full build is recommended).
 
 ## Quick Start
 
@@ -55,9 +55,16 @@ Placing a label in view does not wake an idle camera. Click the application, pre
 
 ## Updating
 
-- Always start the app from the root `ExpressPackingMonitoring.exe`. The launcher downloads verified incremental packages in the background and installs them on the next launch.
-- For a manually downloaded patch, extract the whole archive and double-click `双击安装增量更新.cmd`. It first reads the saved `app` directory from the user configuration. If automatic detection fails, drag the full-package root, the `app` directory, or its `ExpressPackingMonitoring.exe` into the window. The script identifies the actual app directory, closes the running app normally, verifies every file, and rolls back if installation fails.
-- Use the full package if the installed version is below the patch baseline or the launcher itself must be updated. Keep `%LOCALAPPDATA%\ExpressPackingMonitoring\` to preserve configuration and database records.
+- Start the app from an installer-created shortcut or the root `ExpressPackingMonitoring.exe`. The launcher downloads verified incremental packages in the background and installs them on the next launch.
+- For a manually downloaded patch, extract the whole archive and double-click `双击安装增量更新.cmd`. It first reads the saved `app` directory from the user configuration. If detection fails, drag in the full-package root, the `app` directory, an application executable, or a `.lnk` shortcut targeting one of them. Broken, cyclic, internet, and unrelated shortcuts are rejected with a specific reason.
+- If the installed version is below the patch baseline or the launcher must change, run the newer Setup for an in-place upgrade. The full ZIP is the recovery alternative. Existing portable folders are never migrated or removed automatically. Keep `%LOCALAPPDATA%\ExpressPackingMonitoring\` to preserve configuration and database records.
+
+## Uninstalling and Data
+
+- Uninstall keeps configuration, database, logs, cache, and recordings by default.
+- Local application data and database-registered recording files are separate, default-No choices.
+- Recording deletion shows the exact count and total size before a second confirmation. It deletes only unchanged files still registered in the database and never scans or clears recording directories.
+- If the database is missing, corrupt, busy, or any recording cleanup fails, recordings and local data are retained. Details remain in the uninstall log under the system temporary directory.
 
 ## LAN Playback
 
