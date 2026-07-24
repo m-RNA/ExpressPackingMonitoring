@@ -511,4 +511,6 @@
   <data name="连接网址已复制" xml:space="preserve"><value>连接网址已复制</value></data>
   <data name="上一页" xml:space="preserve"><value>上一页</value></data>
   <data name="下一页" xml:space="preserve"><value>下一页</value></data>
+  <data name="显示高级设置" xml:space="preserve"><value>显示高级设置</value></data>
+  <data name="显示编码、阈值、时序等专业参数" xml:space="preserve"><value>显示编码、阈值、时序等专业参数</value></data>
 </root>

@@ -125,6 +125,7 @@ namespace ExpressPackingMonitoring.Config
         public double TimeoutWarningSeconds { get; set; } = 10.0;
         public string Theme { get; set; } = "Auto";
         public string Language { get; set; } = AppLanguage.Auto;
+        public bool ShowAdvancedSettings { get; set; } = false;
         public bool ShowDeletedVideos { get; set; } = true;
         public bool AutoStartOnBoot { get; set; } = true;
         public bool EnableAutoCheckUpdate { get; set; } = true;

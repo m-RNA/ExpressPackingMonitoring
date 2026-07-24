@@ -501,6 +501,31 @@
             <Setter Property="Margin" Value="{StaticResource SettingChildRowMargin}"/>
         </Style>
 
+        <Style x:Key="AdvancedSettingRowStyle"
+               TargetType="Grid"
+               BasedOn="{StaticResource SettingRowStyle}">
+            <Setter Property="Visibility"
+                    Value="{Binding IsChecked, ElementName=ShowAdvancedSettingsCheckBox, Converter={StaticResource BoolToVisibility}}"/>
+        </Style>
+
+        <Style x:Key="AdvancedSettingRowLastStyle"
+               TargetType="Grid"
+               BasedOn="{StaticResource AdvancedSettingRowStyle}">
+            <Setter Property="Margin" Value="{StaticResource SettingRowLastMargin}"/>
+        </Style>
+
+        <Style x:Key="AdvancedSettingRowBeforeDividerStyle"
+               TargetType="Grid"
+               BasedOn="{StaticResource AdvancedSettingRowStyle}">
+            <Setter Property="Margin" Value="{StaticResource SettingRowLastMargin}"/>
+        </Style>
+
+        <Style x:Key="AdvancedSettingChildRowStyle"
+               TargetType="Grid"
+               BasedOn="{StaticResource AdvancedSettingRowStyle}">
+            <Setter Property="Margin" Value="{StaticResource SettingChildRowMargin}"/>
+        </Style>
+
         <Style x:Key="SectionDividerStyle" TargetType="Border">
             <Setter Property="Height" Value="1"/>
             <Setter Property="Background" Value="{DynamicResource BorderLight}"/>
@@ -934,7 +959,7 @@
 
                             <Border Style="{StaticResource SectionCardStyle}">
                                 <StackPanel>
-                                    <Grid Style="{StaticResource SettingRowStyle}"
+                                    <Grid Style="{StaticResource AdvancedSettingRowStyle}"
                                           ToolTip="H.265/HEVC 体积更小，但部分电脑或浏览器可能无法直接播放；H.264 兼容性更好">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -953,7 +978,7 @@
                                                   Cursor="Hand"/>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowStyle}"
+                                    <Grid Style="{StaticResource AdvancedSettingRowStyle}"
                                           ToolTip="优先使用显卡进行视频编码，可降低 CPU 占用；如果录像异常，可改为自动或 CPU">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -989,7 +1014,7 @@
                                                   Cursor="Hand"/>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowStyle}">
+                                    <Grid Style="{StaticResource AdvancedSettingRowStyle}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="24"/>
@@ -1005,7 +1030,7 @@
                                                   Cursor="Hand"/>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowLastStyle}"
+                                    <Grid Style="{StaticResource AdvancedSettingRowLastStyle}"
                                           ToolTip="底层仍保存为 CQP。CQP 数值越小越清晰、文件越大；这里用更直观的方向显示">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -1100,7 +1125,7 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowStyle}">
+                                    <Grid Style="{StaticResource AdvancedSettingRowStyle}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="24"/>
@@ -1128,7 +1153,7 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowBeforeDividerStyle}">
+                                    <Grid Style="{StaticResource AdvancedSettingRowBeforeDividerStyle}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="24"/>
@@ -1156,9 +1181,10 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <Border Style="{StaticResource SectionDividerStyle}"/>
+                                    <Border Style="{StaticResource SectionDividerStyle}"
+                                            Visibility="{Binding IsChecked, ElementName=ShowAdvancedSettingsCheckBox, Converter={StaticResource BoolToVisibility}}"/>
 
-                                    <Grid Style="{StaticResource SettingRowStyle}">
+                                    <Grid Style="{StaticResource AdvancedSettingRowStyle}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="24"/>
@@ -1177,7 +1203,7 @@
                                                   Style="{StaticResource ToggleSwitchStyle}"/>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowLastStyle}"
+                                    <Grid Style="{StaticResource AdvancedSettingRowLastStyle}"
                                           IsEnabled="{Binding IsChecked, ElementName=ZoomAnimationCheckBox, TargetNullValue=False}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -1237,7 +1263,7 @@
                                                   Style="{StaticResource ToggleSwitchStyle}"/>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowStyle}"
+                                    <Grid Style="{StaticResource AdvancedSettingRowStyle}"
                                           IsEnabled="{Binding IsChecked, ElementName=AutoStopCheckBox, TargetNullValue=False}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -1266,7 +1292,7 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowBeforeDividerStyle}">
+                                    <Grid Style="{StaticResource AdvancedSettingRowBeforeDividerStyle}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="24"/>
@@ -1315,7 +1341,7 @@
                                                   Style="{StaticResource ToggleSwitchStyle}"/>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowBeforeDividerStyle}"
+                                    <Grid Style="{StaticResource AdvancedSettingRowBeforeDividerStyle}"
                                           IsEnabled="{Binding IsChecked, ElementName=MaxDurationCheckBox, TargetNullValue=False}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -1346,7 +1372,7 @@
 
                                     <Border Style="{StaticResource SectionDividerStyle}"/>
 
-                                    <Grid Style="{StaticResource SettingRowBeforeDividerStyle}">
+                                    <Grid Style="{StaticResource AdvancedSettingRowBeforeDividerStyle}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="24"/>
@@ -1374,7 +1400,8 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <Border Style="{StaticResource SectionDividerStyle}"/>
+                                    <Border Style="{StaticResource SectionDividerStyle}"
+                                            Visibility="{Binding IsChecked, ElementName=ShowAdvancedSettingsCheckBox, Converter={StaticResource BoolToVisibility}}"/>
 
                                     <Grid Style="{StaticResource SettingRowStyle}">
                                         <Grid.ColumnDefinitions>
@@ -1395,7 +1422,7 @@
                                                   Style="{StaticResource ToggleSwitchStyle}"/>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowStyle}"
+                                    <Grid Style="{StaticResource AdvancedSettingRowStyle}"
                                           IsEnabled="{Binding IsChecked, ElementName=CameraIdleCheckBox, TargetNullValue=False}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -1424,7 +1451,7 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowLastStyle}"
+                                    <Grid Style="{StaticResource AdvancedSettingRowLastStyle}"
                                           IsEnabled="{Binding IsChecked, ElementName=CameraIdleCheckBox, TargetNullValue=False}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -1661,9 +1688,10 @@
                                 </StackPanel>
                             </Border>
 
-                            <Border Style="{StaticResource SectionCardStyle}">
+                            <Border Style="{StaticResource SectionCardStyle}"
+                                    Visibility="{Binding IsChecked, ElementName=ShowAdvancedSettingsCheckBox, Converter={StaticResource BoolToVisibility}}">
                                 <StackPanel>
-                                    <Grid Style="{StaticResource SettingRowStyle}">
+                                    <Grid Style="{StaticResource AdvancedSettingRowStyle}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="24"/>
@@ -1691,7 +1719,7 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowLastStyle}">
+                                    <Grid Style="{StaticResource AdvancedSettingRowLastStyle}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="24"/>
@@ -1760,7 +1788,7 @@
                                                   Style="{StaticResource ToggleSwitchStyle}"/>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowStyle}"
+                                    <Grid Style="{StaticResource AdvancedSettingRowStyle}"
                                           ToolTip="系统语音不需要网络；联网语音声音更自然；离线语音使用本地模型，需要额外运行依赖"
                                           IsEnabled="{Binding IsChecked, ElementName=SoundPromptCheckBox, TargetNullValue=False}">
                                         <Grid.ColumnDefinitions>
@@ -1787,7 +1815,7 @@
 
                                     <Grid Margin="0">
                                         <Grid.Style>
-                                            <Style TargetType="Grid" BasedOn="{StaticResource SettingRowStyle}">
+                                            <Style TargetType="Grid" BasedOn="{StaticResource AdvancedSettingRowStyle}">
                                                 <Setter Property="IsEnabled" Value="False"/>
                                                 <Setter Property="Margin" Value="0"/>
                                                 <Style.Triggers>
@@ -1837,7 +1865,7 @@
                                 </StackPanel>
                             </Border>
 
-                            <Border>
+                            <Border Visibility="{Binding IsChecked, ElementName=ShowAdvancedSettingsCheckBox, Converter={StaticResource BoolToVisibility}}">
                                 <Border.Style>
                                     <Style TargetType="Border" BasedOn="{StaticResource SectionCardStyle}">
                                         <Setter Property="IsEnabled" Value="False"/>
@@ -1983,7 +2011,7 @@
                                 </StackPanel>
                             </Border>
 
-                            <Border>
+                            <Border Visibility="{Binding IsChecked, ElementName=ShowAdvancedSettingsCheckBox, Converter={StaticResource BoolToVisibility}}">
                                 <Border.Style>
                                     <Style TargetType="Border" BasedOn="{StaticResource SectionCardStyle}">
                                         <Setter Property="IsEnabled" Value="False"/>
@@ -2091,7 +2119,7 @@
 
                             <Border Style="{StaticResource SectionCardStyle}">
                                 <StackPanel>
-                                    <Grid Style="{StaticResource SettingRowStyle}"
+                                    <Grid Style="{StaticResource AdvancedSettingRowStyle}"
                                           ToolTip="端口是浏览器访问服务时使用的数字，例如 http://电脑IP:端口">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -2147,7 +2175,7 @@
                                                  Text="{Binding Config.WebAccessKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowLastStyle}"
+                                    <Grid Style="{StaticResource AdvancedSettingRowLastStyle}"
                                           ToolTip="缓存包含在线播放转码、剪辑预览图和剪辑下载文件，超出上限后会自动清理最旧文件">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -2277,8 +2305,7 @@
                                                   HorizontalAlignment="Left"
                                                   Style="{StaticResource ToggleSwitchStyle}"/>
                                     </Grid>
-                                    <Grid Style="{StaticResource SettingChildRowStyle}"
-                                          Visibility="{Binding Config.EnableOrderInfoAnnounce, Converter={StaticResource BoolToVisibility}}">
+                                    <Grid Style="{StaticResource AdvancedSettingChildRowStyle}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="24"/>
@@ -2342,7 +2369,7 @@
                                                   Style="{StaticResource ToggleSwitchStyle}"/>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowStyle}"
+                                    <Grid Style="{StaticResource AdvancedSettingRowStyle}"
                                           IsEnabled="{Binding IsChecked, ElementName=SameBarcodeStopCheckBox, TargetNullValue=False}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -2371,7 +2398,7 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowLastStyle}"
+                                    <Grid Style="{StaticResource AdvancedSettingRowLastStyle}"
                                           IsEnabled="{Binding IsChecked, ElementName=SameBarcodeStopCheckBox, TargetNullValue=False}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -2403,11 +2430,12 @@
                             </Border>
 
                             <!-- 基础扫码设置 -->
-                            <Border Style="{StaticResource SectionCardStyle}">
+                            <Border Style="{StaticResource SectionCardStyle}"
+                                    Visibility="{Binding IsChecked, ElementName=ShowAdvancedSettingsCheckBox, Converter={StaticResource BoolToVisibility}}">
                                 <StackPanel>
 
-                                    <Grid Style="{StaticResource SettingRowStyle}"
-                                        ToolTip="正则表达式用于过滤非法扫码内容。不了解正则时请不要修改">
+                                    <Grid Style="{StaticResource AdvancedSettingRowStyle}"
+                                          ToolTip="正则表达式用于过滤非法扫码内容。不了解正则时请不要修改">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="24"/>
@@ -2423,8 +2451,8 @@
                                                 Text="{Binding Config.OrderIdRegex}"/>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowLastStyle}"
-                                        ToolTip="扫码枪可能连续发送多次内容，这里用于避免重复触发录制切换">
+                                    <Grid Style="{StaticResource AdvancedSettingRowLastStyle}"
+                                          ToolTip="扫码枪可能连续发送多次内容，这里用于避免重复触发录制切换">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="24"/>
@@ -2505,8 +2533,8 @@
                                                 <Binding ElementName="ScannerAutoSubmitCheckBox" Path="IsChecked"/>
                                             </MultiBinding>
                                         </StackPanel.IsEnabled>
-                                        <Grid Style="{StaticResource SettingRowStyle}"
-                                            ToolTip="扫码内容至少达到这个长度才会提交。全局键盘监听和无回车窗口内识别都会用到">
+                                        <Grid Style="{StaticResource AdvancedSettingRowStyle}"
+                                              ToolTip="扫码内容至少达到这个长度才会提交。全局键盘监听和无回车窗口内识别都会用到">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="24"/>
@@ -2535,8 +2563,8 @@
                                             </StackPanel>
                                         </Grid>
 
-                                        <Grid Style="{StaticResource SettingRowStyle}"
-                                            ToolTip="无回车窗口内识别时，最后一次输入后超过这个时间没有新字符，才判断一次扫码是否完成">
+                                        <Grid Style="{StaticResource AdvancedSettingRowStyle}"
+                                              ToolTip="无回车窗口内识别时，最后一次输入后超过这个时间没有新字符，才判断一次扫码是否完成">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="24"/>
@@ -2565,8 +2593,8 @@
                                             </StackPanel>
                                         </Grid>
 
-                                        <Grid Style="{StaticResource SettingRowStyle}"
-                                            ToolTip="连续字符平均间隔低于该值时，认为更像扫码枪高速输入">
+                                        <Grid Style="{StaticResource AdvancedSettingRowStyle}"
+                                              ToolTip="连续字符平均间隔低于该值时，认为更像扫码枪高速输入">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="24"/>
@@ -2595,8 +2623,8 @@
                                             </StackPanel>
                                         </Grid>
 
-                                        <Grid Style="{StaticResource SettingRowLastStyle}"
-                                            ToolTip="多数连续字符间隔低于该值时，也可认为是扫码枪输入">
+                                        <Grid Style="{StaticResource AdvancedSettingRowLastStyle}"
+                                              ToolTip="多数连续字符间隔低于该值时，也可认为是扫码枪输入">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="24"/>
@@ -2636,6 +2664,27 @@
                 <Border Background="Transparent" Padding="0,4,0,0">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
+                            <Border Style="{StaticResource SectionCardStyle}">
+                                <Grid Style="{StaticResource SettingRowLastStyle}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="24"/>
+                                        <ColumnDefinition Width="260"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,16,0">
+                                        <TextBlock Text="显示高级设置" Style="{StaticResource FieldLabelStyle}"/>
+                                        <TextBlock Text="显示编码、阈值、时序等专业参数"
+                                                   Style="{StaticResource FieldHintStyle}"/>
+                                    </StackPanel>
+                                    <CheckBox x:Name="ShowAdvancedSettingsCheckBox"
+                                              Grid.Column="2"
+                                              IsChecked="{Binding Config.ShowAdvancedSettings, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="Left"
+                                              Style="{StaticResource ToggleSwitchStyle}"/>
+                                </Grid>
+                            </Border>
+
                             <!-- 水印设置 -->
                             <Border Style="{StaticResource SectionCardStyle}">
                                 <StackPanel>
@@ -2676,7 +2725,7 @@
                                                   Style="{StaticResource ToggleSwitchStyle}"/>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowLastStyle}"
+                                    <Grid Style="{StaticResource AdvancedSettingRowLastStyle}"
                                           ToolTip="负数表示让音频提前，正数表示让音频延后；通常保持 0">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>

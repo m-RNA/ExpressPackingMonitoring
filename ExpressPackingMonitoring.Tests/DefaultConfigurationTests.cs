@@ -25,6 +25,37 @@ public sealed class DefaultConfigurationTests
     }
 
     [Fact]
+    public void AppConfig_HidesAdvancedSettingsForLegacyConfiguration()
+    {
+        AppConfig config = JsonSerializer.Deserialize<AppConfig>(
+            "{\"VideoCqp\":19,\"ScannerAutoSubmitQuietMs\":345}")!;
+
+        AppConfig.NormalizeAfterLoad(config);
+
+        Assert.False(config.ShowAdvancedSettings);
+        Assert.Equal(19, config.VideoCqp);
+        Assert.Equal(345, config.ScannerAutoSubmitQuietMs);
+    }
+
+    [Fact]
+    public void AppConfig_PreservesAdvancedSettingsVisibilityAndValuesDuringRoundTrip()
+    {
+        var original = new AppConfig
+        {
+            ShowAdvancedSettings = true,
+            VideoCqp = 22,
+            ScannerAutoSubmitQuietMs = 310
+        };
+
+        AppConfig restored = JsonSerializer.Deserialize<AppConfig>(
+            JsonSerializer.Serialize(original))!;
+
+        Assert.True(restored.ShowAdvancedSettings);
+        Assert.Equal(22, restored.VideoCqp);
+        Assert.Equal(310, restored.ScannerAutoSubmitQuietMs);
+    }
+
+    [Fact]
     public void CreateDefaultStorageLocations_UsesEveryReadyNonSystemFixedDrive()
     {
         var drives = new[]
