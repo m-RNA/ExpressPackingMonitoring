@@ -20,6 +20,12 @@ namespace ExpressPackingMonitoring.Themes
         private static AppTheme _currentTheme = AppTheme.Auto;
         private static bool _isListening = false;
 
+        public static void ApplyConfiguredTheme(string theme) =>
+            ApplyTheme(ResolveConfiguredTheme(theme));
+
+        internal static AppTheme ResolveConfiguredTheme(string theme) =>
+            Enum.TryParse(theme, out AppTheme parsed) ? parsed : AppTheme.Auto;
+
         public static void ApplyTheme(AppTheme theme)
         {
             _currentTheme = theme;

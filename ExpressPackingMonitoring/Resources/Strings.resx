@@ -34,8 +34,6 @@
   <data name="麦克风" xml:space="preserve"><value>Microphone</value></data>
   <data name="语音提醒" xml:space="preserve"><value>Voice alerts</value></data>
   <data name="播报音量最大" xml:space="preserve"><value>Maximum announcement volume</value></data>
-  <data name="摄像头监控工位" xml:space="preserve"><value>Camera monitoring station</value></data>
-  <data name="快递单打印工位" xml:space="preserve"><value>Shipping-label station</value></data>
   <data name="录像列表" xml:space="preserve"><value>Recordings</value></data>
   <data name="开始日期" xml:space="preserve"><value>Start date</value></data>
   <data name="结束日期" xml:space="preserve"><value>End date</value></data>
@@ -162,7 +160,6 @@
   <data name="更严格" xml:space="preserve"><value>stricter</value></data>
   <data name="更早" xml:space="preserve"><value>earlier</value></data>
   <data name="更长" xml:space="preserve"><value>longer</value></data>
-  <data name="工位用途" xml:space="preserve"><value>Workstation role</value></data>
   <data name="过渡时长" xml:space="preserve"><value>Transition duration</value></data>
   <data name="合并 MKV" xml:space="preserve"><value>Merge MKV files</value></data>
   <data name="画面不动超过这个时间后停止录像" xml:space="preserve"><value>Stop recording after the screen remains motionless for more than this time</value></data>
@@ -303,7 +300,6 @@
   <data name="按这台电脑连接的硬件选择。普通查看视频的电脑，可直接用浏览器访问监控地址。" xml:space="preserve"><value>Select the hardware this computer is connected to. For ordinary computers that view videos, you can directly access the monitoring address using a browser.</value></data>
   <data name="按周" xml:space="preserve"><value>Weekly</value></data>
   <data name="按最基础的步骤确认打包模式、摄像头、麦克风和扫码枪。" xml:space="preserve"><value>Follow the most basic steps to confirm the packaging mode, camera, microphone and code scanner.</value></data>
-  <data name="把快递助手里的买家留言、卖家备注发送到监控工位，打包时自动播报。" xml:space="preserve"><value>Send the buyer's message and seller's remarks in the express assistant to the monitoring station, and automatically broadcast them when packaging.</value></data>
   <data name="本月" xml:space="preserve"><value>This month</value></data>
   <data name="本周" xml:space="preserve"><value>This week</value></data>
   <data name="播放/暂停" xml:space="preserve"><value>play/pause</value></data>
@@ -341,17 +337,14 @@
   <data name="平均单件用时" xml:space="preserve"><value>Average time per item</value></data>
   <data name="前往下载" xml:space="preserve"><value>Download</value></data>
   <data name="打开更新页面" xml:space="preserve"><value>Open update page</value></data>
-  <data name="切换工位" xml:space="preserve"><value>Switch workstation</value></data>
   <data name="请选择这台电脑的用途" xml:space="preserve"><value>Please select what you want to use this computer for</value></data>
   <data name="请用扫码枪扫描一个快递面单条码。检测到自动回车时可后台扫码；没有自动回车时会切到窗口内识别。" xml:space="preserve"><value>Please use a code scanner to scan the barcode of an express delivery receipt. When an automatic carriage return is detected, the code can be scanned in the background; when there is no automatic carriage return, the code will be switched to the window for identification.</value></data>
   <data name="全部" xml:space="preserve"><value>All</value></data>
-  <data name="如果这台电脑第一次使用，请先自动查找摄像头监控工位。" xml:space="preserve"><value>If this computer is used for the first time, please automatically search for the camera monitoring station first.</value></data>
   <data name="扫码动态" xml:space="preserve"><value>Scan activity</value></data>
   <data name="本机录制动态" xml:space="preserve"><value>Local recording activity</value></data>
   <data name="扫描单号开始录制，再次扫描同一单号停止录制。" xml:space="preserve"><value>Scan the tracking number to start recording, scan the same tracking number again to stop recording.</value></data>
   <data name="扫描新单号后，自动结束上一单并开始下一单。" xml:space="preserve"><value>After scanning the new order number, the previous order will be automatically ended and the next order will be started.</value></data>
   <data name="稍后再说" xml:space="preserve"><value>Later</value></data>
-  <data name="摄像头监控工位地址" xml:space="preserve"><value>Camera monitoring workstation address</value></data>
   <data name="摄像头已休眠" xml:space="preserve"><value>The camera has gone to sleep</value></data>
   <data name="时间范围: " xml:space="preserve"><value>Time range:</value></data>
   <data name="时长" xml:space="preserve"><value>duration</value></data>
@@ -360,8 +353,6 @@
   <data name="数据" xml:space="preserve"><value>Statistics</value></data>
   <data name="数量" xml:space="preserve"><value>quantity</value></data>
   <data name="说话时音量条有跳动，就说明麦克风基础配置正常。" xml:space="preserve"><value>If the volume bar jumps when speaking, it means that the basic configuration of the microphone is normal.</value></data>
-  <data name="提示：没有安装本程序的普通电脑，也可以直接用浏览器打开摄像头监控工位显示的地址查看视频。" xml:space="preserve"><value>Tip: For ordinary computers that do not have this program installed, you can also directly use a browser to open the address displayed at the camera monitoring station to view the video.</value></data>
-  <data name="填写或自动查找到监控端地址后，订单备注会发送到对应工位。" xml:space="preserve"><value>After filling in or automatically finding the monitoring terminal address, the order notes will be sent to the corresponding workstation.</value></data>
   <data name="条码冷却中…" xml:space="preserve"><value>Scan cooldown…</value></data>
   <data name="跳过" xml:space="preserve"><value>jump over</value></data>
   <data name="同码停录模式" xml:space="preserve"><value>Same-code stop mode</value></data>
@@ -370,12 +361,10 @@
   <data name="推荐连续打包模式，扫码下一单时自动保存上一单。" xml:space="preserve"><value>The continuous packaging mode is recommended, and the previous order will be automatically saved when you scan the QR code to place an order.</value></data>
   <data name="下面是日常打包流程。" xml:space="preserve"><value>The following is the daily packaging process.</value></data>
   <data name="选择打包模式" xml:space="preserve"><value>Select packaging mode</value></data>
-  <data name="选择工位" xml:space="preserve"><value>Choose workstation</value></data>
   <data name="选择麦克风" xml:space="preserve"><value>Select microphone</value></data>
   <data name="选择摄像头" xml:space="preserve"><value>Select camera</value></data>
   <data name="占用存储空间" xml:space="preserve"><value>Taking up storage space</value></data>
   <data name="占用空间" xml:space="preserve"><value>Taking up space</value></data>
-  <data name="这台电脑接打印机或使用快递助手，把订单发送到摄像头监控工位。" xml:space="preserve"><value>This computer is connected to a printer or a courier assistant is used to send the order to the camera monitoring station.</value></data>
   <data name="这台电脑接摄像头，负责实时监控、扫码录像、语音播报和接收订单。" xml:space="preserve"><value>This computer is connected to the camera and is responsible for real-time monitoring, scanning code recording, voice broadcasting and receiving orders.</value></data>
   <data name="正在检查上次连接..." xml:space="preserve"><value>Checking last connection...</value></data>
   <data name="正在准备麦克风..." xml:space="preserve"><value>Preparing microphone...</value></data>
@@ -389,23 +378,23 @@
   <data name="发货" xml:space="preserve"><value>Shipping</value></data>
   <data name="退货" xml:space="preserve"><value>Return</value></data>
   <data name="已保存" xml:space="preserve"><value>Saved</value></data>
-  <data name="快递单打印工位：未连接" xml:space="preserve"><value>Shipping-label station: Disconnected</value></data>
-  <data name="快递单打印工位：等待服务启动" xml:space="preserve"><value>Shipping-label station: Waiting for service</value></data>
-  <data name="快递单打印工位：Web 启动失败" xml:space="preserve"><value>Shipping-label station: Web service failed</value></data>
-  <data name="快递单打印工位：等待连接" xml:space="preserve"><value>Shipping-label station: Waiting for connection</value></data>
-  <data name="Main.PrintTestOrder" xml:space="preserve"><value>Shipping-label station: {0} Test order received</value></data>
-  <data name="Main.PrintNoRefund" xml:space="preserve"><value>Shipping-label station: {0} Responded; no refund orders found</value></data>
-  <data name="Main.PrintOrders" xml:space="preserve"><value>Shipping-label station: {0} Received {1} orders</value></data>
+  <data name="手机备份服务：未连接" xml:space="preserve"><value>Phone backup service: Disconnected</value></data>
+  <data name="手机备份服务：等待启动" xml:space="preserve"><value>Phone backup service: Starting</value></data>
+  <data name="手机备份服务：Web 启动失败" xml:space="preserve"><value>Phone backup service: Web service failed</value></data>
+  <data name="手机备份服务：等待连接" xml:space="preserve"><value>Phone backup service: Waiting for connection</value></data>
+  <data name="Main.PrintTestOrder" xml:space="preserve"><value>Phone recording backup: {0} Test order received</value></data>
+  <data name="Main.PrintNoRefund" xml:space="preserve"><value>Phone recording backup: {0} Responded; no refund orders found</value></data>
+  <data name="Main.PrintOrders" xml:space="preserve"><value>Phone recording backup: {0} Received {1} orders</value></data>
   <data name="Main.ConnectionServiceDisabled" xml:space="preserve"><value>Connection service is off</value></data>
   <data name="Main.ConnectionServiceStarting" xml:space="preserve"><value>Preparing connections</value></data>
   <data name="Main.ConnectionServiceUnavailable" xml:space="preserve"><value>Connections unavailable</value></data>
   <data name="Main.NoConnectedDevices" xml:space="preserve"><value>No devices connected</value></data>
   <data name="Main.ConnectedDevices" xml:space="preserve"><value>{0} devices connected</value></data>
-  <data name="Main.ConnectionEmptyTip" xml:space="preserve"><value>Connected web pages, the userscript, and print-station apps appear here</value></data>
+  <data name="Main.ConnectionEmptyTip" xml:space="preserve"><value>Connected web pages, the userscript, and phone backup devices appear here</value></data>
   <data name="Main.ClientWebDesktop" xml:space="preserve"><value>Desktop web</value></data>
   <data name="Main.ClientWebMobile" xml:space="preserve"><value>Mobile web</value></data>
   <data name="Main.ClientUserscript" xml:space="preserve"><value>Express Assistant userscript</value></data>
-  <data name="Main.ClientPrintStation" xml:space="preserve"><value>Print-station app</value></data>
+  <data name="Main.ClientPrintStation" xml:space="preserve"><value>Phone recording backup</value></data>
   <data name="Main.ClientMobileApp" xml:space="preserve"><value>Mobile app</value></data>
   <data name="Main.ClientOther" xml:space="preserve"><value>Other device</value></data>
   <data name="Main.Title" xml:space="preserve"><value>Packing Monitor {0}</value></data>
@@ -513,4 +502,34 @@
   <data name="下一页" xml:space="preserve"><value>Next</value></data>
   <data name="显示高级设置" xml:space="preserve"><value>Show advanced settings</value></data>
   <data name="显示编码、阈值、时序等专业参数" xml:space="preserve"><value>Show professional options for encoding, thresholds, and timing</value></data>
+  <data name="选择录像方式" xml:space="preserve"><value>Choose recording mode</value></data>
+  <data name="请选择录像方式" xml:space="preserve"><value>Choose how to record</value></data>
+  <data name="请选择是否使用这台电脑的摄像头录像，两种方式都支持手机录像备份和网页回放" xml:space="preserve"><value>Choose whether to record with this computer's camera. Both options support phone recording backup and web playback</value></data>
+  <data name="使用电脑摄像头录像" xml:space="preserve"><value>Record with this computer's camera</value></data>
+  <data name="使用这台电脑的摄像头扫码并录像，同时支持手机录像备份和局域网回放" xml:space="preserve"><value>Scan and record with this computer's camera, with phone recording backup and LAN playback</value></data>
+  <data name="我没有电脑摄像头" xml:space="preserve"><value>I don't have a computer camera</value></data>
+  <data name="不使用电脑摄像头，只接收并备份手机录像，支持本机和局域网回放" xml:space="preserve"><value>Do not use a computer camera; receive and back up phone recordings for local and LAN playback</value></data>
+  <data name="手机录像备份" xml:space="preserve"><value>Phone recording backup</value></data>
+  <data name="这台电脑不使用摄像头，只接收并备份手机录像，支持本机和局域网回放" xml:space="preserve"><value>This computer does not use a camera. It receives and backs up phone recordings for local and LAN playback</value></data>
+  <data name="更改录像方式" xml:space="preserve"><value>Change recording mode</value></data>
+  <data name="录像方式" xml:space="preserve"><value>Recording mode</value></data>
+  <data name="RestartMode.Message" xml:space="preserve"><value>The recording mode has been saved and requires a restart&#xA;&#xA;Restart now?</value></data>
+  <data name="立即重启" xml:space="preserve"><value>Restart now</value></data>
+  <data name="正在启动手机录像备份服务" xml:space="preserve"><value>Starting phone recording backup service</value></data>
+  <data name="正在打开录像数据库和本机回放服务" xml:space="preserve"><value>Opening the recording database and local playback service</value></data>
+  <data name="连接手机" xml:space="preserve"><value>Connect phone</value></data>
+  <data name="查看录像" xml:space="preserve"><value>View recordings</value></data>
+  <data name="局域网回放" xml:space="preserve"><value>LAN playback</value></data>
+  <data name="服务启动后显示局域网地址" xml:space="preserve"><value>The LAN address appears after the service starts</value></data>
+  <data name="复制局域网地址" xml:space="preserve"><value>Copy LAN address</value></data>
+  <data name="修复局域网" xml:space="preserve"><value>Repair LAN access</value></data>
+  <data name="订单工具" xml:space="preserve"><value>Order tools</value></data>
+  <data name="订单备注直接发送到本机，并写入录像数据库供手机录像关联" xml:space="preserve"><value>Order notes are sent to this computer and stored in the recording database for phone recording matching</value></data>
+  <data name="测试接收" xml:space="preserve"><value>Test receiving</value></data>
+  <data name="选择是否使用这台电脑的摄像头录像" xml:space="preserve"><value>Choose whether to record with this computer's camera</value></data>
+  <data name="网页回放" xml:space="preserve"><value>Web playback</value></data>
+  <data name="数据统计" xml:space="preserve"><value>Statistics</value></data>
+  <data name="录像回放" xml:space="preserve"><value>Recording playback</value></data>
+  <data name="记录局域网服务和手机备份的详细信息" xml:space="preserve"><value>Record detailed LAN service and phone backup information</value></data>
+  <data name="暂不可用" xml:space="preserve"><value>Temporarily unavailable</value></data>
 </root>

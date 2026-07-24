@@ -670,10 +670,10 @@
                                     <ColumnDefinition Width="8"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <Button x:Name="BtnSwitchWorkstation" Grid.Column="0" Height="32" Padding="9,0" Style="{StaticResource SecondaryButtonStyle}" ToolTip="切换工位" Cursor="Hand" Focusable="False">
+                                <Button x:Name="BtnSwitchWorkstation" Grid.Column="0" Height="32" Padding="9,0" Style="{StaticResource SecondaryButtonStyle}" ToolTip="更改录像方式" Cursor="Hand" Focusable="False">
                                     <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                                         <Path Data="{StaticResource FluentArrowSwapIcon}" Width="14" Height="14" Stretch="Uniform" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-                                        <TextBlock Text="切换工位" Margin="5,0,0,0" FontSize="12" VerticalAlignment="Center"/>
+                                        <TextBlock Text="录像方式" Margin="5,0,0,0" FontSize="12" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                                 <Button x:Name="BtnMobileConnection"

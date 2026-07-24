@@ -10,6 +10,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Runtime.InteropServices;
@@ -194,6 +195,12 @@ namespace ExpressPackingMonitoring.Services
 
         public void Start(bool allowAccessSetup = false)
         {
+            if (IsTcpPortInUse(Port))
+            {
+                throw new InvalidOperationException(
+                    $"Web 服务端口 {Port} 已被其他程序或尚未退出的旧版本占用，请关闭占用程序后重试。");
+            }
+
             bool accessConfigured = false;
             try
             {
@@ -207,11 +214,11 @@ namespace ExpressPackingMonitoring.Services
                 if (!allowAccessSetup)
                 {
                     throw new InvalidOperationException(
-                        "Web 服务缺少监听权限。请打开设置，在“局域网查看”中直接保存，以完成管理员授权。",
+                        "Web 服务缺少监听权限，需要管理员授权后才能启动。",
                         ex);
                 }
 
-                // 只有用户明确保存局域网设置时，才请求管理员权限并重试
+                // 只有调用方明确允许时，才请求管理员权限并重试
                 ConfigureLanAccess(Port, includeUrlAcl: true);
                 accessConfigured = true;
                 try { _listener.Close(); } catch { }
@@ -239,6 +246,37 @@ namespace ExpressPackingMonitoring.Services
                 }
             }
             _listenTask = Task.Run(() => ListenLoop(_cts.Token));
+        }
+
+        internal static bool IsListenerConflict(Exception exception)
+        {
+            for (Exception current = exception; current != null; current = current.InnerException)
+            {
+                if (current is HttpListenerException listenerException &&
+                    listenerException.ErrorCode == 183)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        internal static bool IsTcpPortInUse(int port)
+        {
+            if (port <= 0 || port > 65535)
+                return false;
+
+            try
+            {
+                return IPGlobalProperties.GetIPGlobalProperties()
+                    .GetActiveTcpListeners()
+                    .Any(endpoint => endpoint.Port == port);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         /// <summary>

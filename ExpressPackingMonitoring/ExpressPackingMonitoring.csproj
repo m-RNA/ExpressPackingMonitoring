@@ -115,7 +115,9 @@
     <Compile Include="Services\MobileConnectionService.cs" />
     <Compile Include="Services\MobileBackupService.cs" />
     <Compile Include="Services\MobileOrderReceiverRegistry.cs" />
+    <Compile Include="Services\NoCameraWorkstationHost.cs" />
     <Compile Include="Services\ShortLivedSnapshotCache.cs" />
+    <Compile Include="Services\StorageLocationResolver.cs" />
     <Compile Include="Services\VideoClipService.cs" />
     <Compile Include="Services\WebServer.cs" />
     <Compile Include="Themes\ThemeManager.cs" />
@@ -134,6 +136,7 @@
     <Compile Include="UI\MobileConnectionWindow.xaml.cs" />
     <Compile Include="UI\PlaybackWindow.xaml.cs" />
     <Compile Include="UI\SettingsWindow.xaml.cs" />
+    <Compile Include="UI\SettingsContext.cs" />
     <Compile Include="UI\StatisticsWindow.xaml.cs" />
     <Compile Include="UI\UpdateAvailableDialog.xaml.cs" />
     <Compile Include="Workstations\PrintToolInstallGuide.cs" />

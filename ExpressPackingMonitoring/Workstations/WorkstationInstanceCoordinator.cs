@@ -208,7 +208,7 @@ public sealed class DuplicateInstanceDialog : Window
 
         var bodyText = new TextBlock
         {
-            Text = "重复打开同种工位，可能抢占摄像头、麦克风、Web 端口或数据库",
+            Text = "重复打开同一种录像方式，可能抢占摄像头、麦克风、Web 端口或数据库",
             TextWrapping = TextWrapping.Wrap,
             LineHeight = 20,
             FontSize = 13,

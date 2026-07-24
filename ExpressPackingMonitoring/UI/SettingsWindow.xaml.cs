@@ -96,7 +96,9 @@ namespace ExpressPackingMonitoring.UI
 
     public partial class SettingsWindow : Window
     {
-        public MainViewModel MainVM { get; set; }
+        public SettingsContext Context { get; }
+        public SettingsCapabilities Capabilities => Context.Capabilities;
+        public string ConnectionAddress => Context.ConnectionAddressProvider?.Invoke() ?? "尚未准备";
         public AppConfig Config { get; set; }
         public double CurrentDiskUsagePercent { get; set; }
         public string CurrentDiskUsageText { get; set; }
@@ -131,26 +133,34 @@ namespace ExpressPackingMonitoring.UI
         private bool _isSyncingScannerModes;
 
         public SettingsWindow(MainViewModel mainVM, AppConfig clonedConfig, double diskUsagePercent, string diskUsageText, bool isRecording = false)
+            : this(SettingsContext.ForCameraWorkstation(mainVM), clonedConfig, diskUsagePercent, diskUsageText, isRecording)
         {
-            InitializeComponent();
-            MainVM = mainVM;
+        }
+
+        public SettingsWindow(SettingsContext context, AppConfig clonedConfig, double diskUsagePercent, string diskUsageText, bool isRecording = false)
+        {
+            Context = context ?? throw new ArgumentNullException(nameof(context));
             _originalTheme = clonedConfig.Theme;
             _originalLanguage = clonedConfig.Language;
             _isRecording = isRecording;
             Config = clonedConfig;
             AppConfig.NormalizeAfterLoad(Config);
+            InitializeComponent();
 
             CurrentDiskUsagePercent = diskUsagePercent;
             CurrentDiskUsageText = diskUsageText;
 
             this.DataContext = this;
-            SyncVoiceEngineComboBoxFromConfig();
+            if (Capabilities.SupportsSpeechSettings)
+                SyncVoiceEngineComboBoxFromConfig();
 
-            // GPU编码器使用缓存，可立即加载
-            LoadGpuEncoders();
-            LoadVideoCodecs();
-
-            if (Config.ZoomScale < 1.2 || Config.ZoomScale > 4.0) Config.ZoomScale = 1.5;
+            if (Capabilities.SupportsCameraFeatures)
+            {
+                // GPU编码器使用缓存，可立即加载
+                LoadGpuEncoders();
+                LoadVideoCodecs();
+                if (Config.ZoomScale < 1.2 || Config.ZoomScale > 4.0) Config.ZoomScale = 1.5;
+            }
 
             EnsurePrimaryStorageLocationExists();
             // 如果没有数据项，构造1个默认项，UI DataGrid 绑定后自动显示
@@ -237,28 +247,31 @@ namespace ExpressPackingMonitoring.UI
 
         private async void SettingsWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            _isLoadingDevices = true;
-            try
+            if (Capabilities.SupportsCameraFeatures)
             {
-                await LoadAllDevicesAsync();
-            }
-            finally
-            {
-                _isLoadingDevices = false;
-            }
+                _isLoadingDevices = true;
+                try
+                {
+                    await LoadAllDevicesAsync();
+                }
+                finally
+                {
+                    _isLoadingDevices = false;
+                }
 
-            // 加载断句关键词到文本框
-            if (Config.TtsBreakWords != null && Config.TtsBreakWords.Count > 0)
-                TtsBreakWordsTextBox.Text = string.Join("\n", Config.TtsBreakWords);
+                // 加载断句关键词到文本框
+                if (Config.TtsBreakWords != null && Config.TtsBreakWords.Count > 0)
+                    TtsBreakWordsTextBox.Text = string.Join("\n", Config.TtsBreakWords);
 
-            if (_isRecording)
-            {
-                CameraComboBox.IsEnabled = false;
-                ResComboBox.IsEnabled = false;
-                FpsComboBox.IsEnabled = false;
-                CameraComboBox.ToolTip = "录制中不可修改，停止录制后再更改";
-                ResComboBox.ToolTip = "录制中不可修改，停止录制后再更改";
-                FpsComboBox.ToolTip = "录制中不可修改，停止录制后再更改";
+                if (_isRecording)
+                {
+                    CameraComboBox.IsEnabled = false;
+                    ResComboBox.IsEnabled = false;
+                    FpsComboBox.IsEnabled = false;
+                    CameraComboBox.ToolTip = "录制中不可修改，停止录制后再更改";
+                    ResComboBox.ToolTip = "录制中不可修改，停止录制后再更改";
+                    FpsComboBox.ToolTip = "录制中不可修改，停止录制后再更改";
+                }
             }
         }
 
@@ -765,13 +778,16 @@ namespace ExpressPackingMonitoring.UI
         private async Task<bool> SaveAndApplyAsync()
         {
             Keyboard.ClearFocus();
-            SyncSelectedMicToConfig();
+            if (Capabilities.SupportsCameraFeatures)
+                SyncSelectedMicToConfig();
 
-            if (!ValidateCameraIdleNoSleepPeriods())
+            if (Capabilities.SupportsCameraFeatures && !ValidateCameraIdleNoSleepPeriods())
                 return false;
 
             // 0. 验证音频
-            if (Config.EnableAudioRecording && string.IsNullOrEmpty(Config.AudioDeviceName))
+            if (Capabilities.SupportsCameraFeatures &&
+                Config.EnableAudioRecording &&
+                string.IsNullOrEmpty(Config.AudioDeviceName))
             {
                 var mbr = MessageBox.Show("已开启录制声音，但未选择麦克风。录制可能会失败或没有声音。\n\n是否继续保存？", "音频提醒", MessageBoxButton.YesNo, MessageBoxImage.Question);
                 if (mbr == MessageBoxResult.No) return false;
@@ -783,7 +799,7 @@ namespace ExpressPackingMonitoring.UI
             RefreshStoragePriorities();
 
             // 2. 手动同步部分控件（防止可焦点未切换时绑定未更新）
-            if (CameraComboBox.SelectedItem is CameraInfo cam)
+            if (Capabilities.SupportsCameraFeatures && CameraComboBox.SelectedItem is CameraInfo cam)
             {
                 Config.CameraMonikerString = cam.Moniker;
                 Config.CameraIndex = cam.Index;
@@ -814,44 +830,48 @@ namespace ExpressPackingMonitoring.UI
                 }
             }
 
-            if (GpuEncoderComboBox.SelectedItem is GpuEncoderOption gpuOpt)
+            if (Capabilities.SupportsCameraFeatures && GpuEncoderComboBox.SelectedItem is GpuEncoderOption gpuOpt)
             {
                 Config.GpuEncoder = gpuOpt.Value;
             }
 
-            if (VideoCodecComboBox.SelectedItem is GpuEncoderOption codecOpt)
+            if (Capabilities.SupportsCameraFeatures && VideoCodecComboBox.SelectedItem is GpuEncoderOption codecOpt)
             {
                 Config.VideoCodec = codecOpt.Value;
             }
 
             // 保存断句关键词
-            Config.TtsBreakWords = TtsBreakWordsTextBox.Text
-                .Split(new[] { '\r', '\n', '，', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(w => w.Trim())
-                .Where(w => w.Length > 0)
-                .Distinct()
-                .ToList();
+            if (Capabilities.SupportsSpeechSettings)
+            {
+                Config.TtsBreakWords = TtsBreakWordsTextBox.Text
+                    .Split(new[] { '\r', '\n', '，', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(w => w.Trim())
+                    .Where(w => w.Length > 0)
+                    .Distinct()
+                    .ToList();
+            }
 
             // 3. 校验并保存
-            if (AppLanguage.Resolve(Config.Language) == AppLanguage.Chinese)
+            if (Capabilities.SupportsSpeechSettings &&
+                AppLanguage.Resolve(Config.Language) == AppLanguage.Chinese)
             {
                 Config.EdgeTtsVoiceZhHans = Config.EdgeTtsVoice;
                 Config.EdgeTtsWarningVoiceZhHans = Config.EdgeTtsWarningVoice;
             }
-            else
+            else if (Capabilities.SupportsSpeechSettings)
             {
                 Config.EdgeTtsVoiceEnUs = Config.EdgeTtsVoice;
                 Config.EdgeTtsWarningVoiceEnUs = Config.EdgeTtsWarningVoice;
             }
             AppConfig.NormalizeAfterLoad(Config);
 
-            if (!ValidateEncoderSelectionBeforeSave())
+            if (Capabilities.SupportsCameraFeatures && !ValidateEncoderSelectionBeforeSave())
                 return false;
 
             AutoStartService.Apply(Config.AutoStartOnBoot);
-            MainVM.PreviewZoomScale = null;
+            Context.SetPreviewZoomScale?.Invoke(null);
             var appliedConfig = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(Config)) ?? new AppConfig();
-            bool applied = await MainVM.ApplySettingsAsync(appliedConfig);
+            bool applied = await Context.ApplyAsync(appliedConfig);
             if (applied)
             {
                 _originalTheme = Config.Theme;
@@ -921,6 +941,11 @@ namespace ExpressPackingMonitoring.UI
 
         private async void RunSetupWizard_Click(object sender, RoutedEventArgs e)
         {
+            if (!Capabilities.SupportsCameraMaintenance ||
+                Context.SuspendCameraForSetupWizard == null ||
+                Context.ResumeCameraAfterSetupWizard == null)
+                return;
+
             Keyboard.ClearFocus();
             SyncSelectedMicToConfig();
 
@@ -929,7 +954,7 @@ namespace ExpressPackingMonitoring.UI
             {
                 if (!_isRecording)
                 {
-                    pausedCamera = MainVM.SuspendCameraForSetupWizard();
+                    pausedCamera = Context.SuspendCameraForSetupWizard();
                     if (!pausedCamera)
                         return;
                 }
@@ -954,15 +979,18 @@ namespace ExpressPackingMonitoring.UI
             finally
             {
                 if (pausedCamera)
-                    MainVM.ResumeCameraAfterSetupWizard();
+                    Context.ResumeCameraAfterSetupWizard();
             }
         }
 
         private void ZoomScaleSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
-            if (MainVM != null)
-                MainVM.PreviewZoomScale = e.NewValue;
+            if (ShouldPreviewZoomScale(IsLoaded, Context))
+                Context.SetPreviewZoomScale?.Invoke(e.NewValue);
         }
+
+        internal static bool ShouldPreviewZoomScale(bool isLoaded, SettingsContext context) =>
+            isLoaded && context?.Capabilities.SupportsCameraFeatures == true;
 
         private void SyncVoiceEngineComboBoxFromConfig()
         {
@@ -998,7 +1026,7 @@ namespace ExpressPackingMonitoring.UI
         private void InstallTool_Click(object sender, RoutedEventArgs e)
         {
             int port = Config?.WebServerPort > 0 ? Config.WebServerPort : 5280;
-            string address = WorkstationNetwork.NormalizeAddress(MainVM?.MonitorAccessAddress ?? "", port);
+            string address = WorkstationNetwork.NormalizeAddress(Context.ConnectionAddressProvider?.Invoke() ?? "", port);
             if (string.IsNullOrWhiteSpace(address))
             {
                 address = WorkstationNetwork.NormalizeAddress($"127.0.0.1:{port}", port);
@@ -1009,7 +1037,7 @@ namespace ExpressPackingMonitoring.UI
 
             Process.Start(new ProcessStartInfo(new Uri(guidePath).AbsoluteUri) { UseShellExecute = true });
             MessageBox.Show(this,
-                $"已打开订单备注插件安装向导，并复制监控工位地址：{address}",
+                $"已打开订单备注插件安装向导，并复制本机服务地址：{address}",
                 "安装订单备注插件",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -1017,12 +1045,12 @@ namespace ExpressPackingMonitoring.UI
 
         private void ShowMobileConnection_Click(object sender, RoutedEventArgs e)
         {
-            MainVM?.ShowMobileConnection(this);
+            Context.ShowMobileConnection?.Invoke(this);
         }
 
         private void CopyMobileConnectionUrl_Click(object sender, RoutedEventArgs e)
         {
-            MainVM?.CopyMobileConnectionUrl();
+            Context.CopyMobileConnectionUrl?.Invoke();
         }
 
         private void SelectMicByConfig(List<MicInfo> mics)
@@ -1067,7 +1095,7 @@ namespace ExpressPackingMonitoring.UI
             _isClosing = true;
             var migrationCts = Interlocked.Exchange(ref _migrationCts, null);
             try { migrationCts?.Cancel(); } catch (ObjectDisposedException) { }
-            MainVM.PreviewZoomScale = null;
+            Context.SetPreviewZoomScale?.Invoke(null);
             _previewSpeechService?.Stop();
             _previewSpeechService?.Dispose();
             _previewSpeechService = null;
@@ -1230,7 +1258,10 @@ namespace ExpressPackingMonitoring.UI
                 catch (Exception ex)
                 {
                     RuntimeLog.Error("Update", "Open download page failed", ex);
-                    MainVM.ShowToast("打开下载页面失败");
+                    if (Context.ShowToast != null)
+                        Context.ShowToast("打开下载页面失败");
+                    else
+                        MessageBox.Show(this, "打开下载页面失败", "检查更新", MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
             }
         }
@@ -1325,6 +1356,9 @@ namespace ExpressPackingMonitoring.UI
 
         private async void BtnMigrateMkv_Click(object sender, RoutedEventArgs e)
         {
+            if (!Capabilities.SupportsCameraMaintenance || Context.BatchConvertMkvToMp4Async == null)
+                return;
+
             var runningMigration = _migrationCts;
             if (runningMigration != null)
             {
@@ -1352,7 +1386,7 @@ namespace ExpressPackingMonitoring.UI
 
             try
             {
-                var (success, fail, skip) = await MainVM.BatchConvertMkvToMp4Async(progress, migrationCts.Token);
+                var (success, fail, skip) = await Context.BatchConvertMkvToMp4Async(progress, migrationCts.Token);
                 if (!_isClosing)
                     MigrationStatusText.Text = $"合并完成：成功 {success}，失败 {fail}，跳过 {skip}";
             }

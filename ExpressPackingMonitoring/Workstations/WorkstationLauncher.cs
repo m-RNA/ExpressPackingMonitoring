@@ -1,5 +1,6 @@
 using ExpressPackingMonitoring.Config;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -9,6 +10,8 @@ using System.Text;
 using System.Text.Json;
 using System.Windows;
 using ExpressPackingMonitoring.Logging;
+using ExpressPackingMonitoring.Localization;
+using ExpressPackingMonitoring.UI;
 using ExpressPackingMonitoring.ViewModels;
 
 namespace ExpressPackingMonitoring;
@@ -23,7 +26,7 @@ public static class WorkstationRoles
         string.Equals(role, PrintStation, StringComparison.OrdinalIgnoreCase);
 
     public static string GetDisplayName(string? role) =>
-        string.Equals(role, PrintStation, StringComparison.OrdinalIgnoreCase) ? "快递单打印工位" : "摄像头监控工位";
+        string.Equals(role, PrintStation, StringComparison.OrdinalIgnoreCase) ? "我没有电脑摄像头" : "使用电脑摄像头录像";
 
     public static string GetOtherRole(string role) =>
         string.Equals(role, PrintStation, StringComparison.OrdinalIgnoreCase) ? CameraMonitor : PrintStation;
@@ -228,7 +231,7 @@ public static class WorkstationConfigStore
                 try { ownsMutex = mutex.WaitOne(TimeSpan.FromSeconds(10)); }
                 catch (AbandonedMutexException) { ownsMutex = true; }
                 if (!ownsMutex)
-                    throw new TimeoutException("等待其他工位保存配置超时");
+                    throw new TimeoutException("等待其他程序保存配置超时");
                 action();
             }
             finally
@@ -242,7 +245,11 @@ public static class WorkstationConfigStore
 
 public static class WorkstationNetwork
 {
+    private sealed record PendingRestart(string ExecutablePath, string WorkingDirectory, string Reason);
+
     private static readonly HttpClient Client = new() { Timeout = TimeSpan.FromMilliseconds(800) };
+    private static readonly object RestartLock = new();
+    private static PendingRestart? _pendingRestart;
 
     public static string NormalizeAddress(string input, int defaultPort = 5280)
     {
@@ -288,7 +295,7 @@ public static class WorkstationNetwork
             {
                 clientId,
                 clientType = "print-station",
-                displayName = "打印工位程序",
+                displayName = "手机录像备份",
                 connected
             };
             using var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
@@ -312,7 +319,7 @@ public static class WorkstationNetwork
     {
         address = NormalizeAddress(address);
         if (string.IsNullOrWhiteSpace(address))
-            return new TestOrderSendResult { ErrorMessage = "监控工位地址为空" };
+            return new TestOrderSendResult { ErrorMessage = "本机服务地址为空" };
 
         var order = new[]
         {
@@ -418,7 +425,7 @@ public static class WorkstationNetwork
         TryOpenUrl(url, out _);
     }
 
-    public static bool TryRestartApplication(string reason = "unspecified")
+    public static bool TryRestartApplication(string reason = "unspecified", Window? owner = null)
     {
         try
         {
@@ -428,20 +435,24 @@ public static class WorkstationNetwork
             if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
                 return false;
 
-            var process = Process.Start(new ProcessStartInfo
-            {
-                FileName = exePath,
-                WorkingDirectory = AppContext.BaseDirectory,
-                UseShellExecute = true
-            });
-            if (process == null)
+            if (!TryScheduleRestart(exePath, AppContext.BaseDirectory, reason))
                 return false;
 
-            int newProcessId = process.Id;
-            process.Dispose();
             RuntimeLog.RecordShutdownRequest("ApplicationRestart", reason);
-            RuntimeLog.Info("Restart", $"Started replacement process currentPid={Environment.ProcessId}, newPid={newProcessId}, reason={reason}");
-            try { Application.Current.Shutdown(); } catch { }
+            RuntimeLog.Info("Restart",
+                $"Replacement process scheduled after resource cleanup currentPid={Environment.ProcessId}, reason={reason}");
+            try
+            {
+                if (owner != null)
+                    owner.Close();
+                else
+                    Application.Current.Shutdown();
+            }
+            catch
+            {
+                CancelPendingRestart();
+                throw;
+            }
             return true;
         }
         catch (Exception ex)
@@ -451,16 +462,147 @@ public static class WorkstationNetwork
         }
     }
 
+    internal static bool TryScheduleRestart(
+        string executablePath,
+        string workingDirectory,
+        string reason)
+    {
+        if (string.IsNullOrWhiteSpace(executablePath) || !File.Exists(executablePath))
+            return false;
+
+        lock (RestartLock)
+        {
+            _pendingRestart = new PendingRestart(
+                executablePath,
+                workingDirectory,
+                reason);
+        }
+        return true;
+    }
+
+    internal static bool IsRestartPending
+    {
+        get
+        {
+            lock (RestartLock)
+                return _pendingRestart != null;
+        }
+    }
+
+    internal static void CancelPendingRestart()
+    {
+        lock (RestartLock)
+            _pendingRestart = null;
+    }
+
+    internal static bool TryStartPendingRestart(Func<ProcessStartInfo, int?>? startProcess = null)
+    {
+        PendingRestart? pending;
+        lock (RestartLock)
+        {
+            pending = _pendingRestart;
+            _pendingRestart = null;
+        }
+
+        if (pending == null)
+            return false;
+
+        try
+        {
+            int? newProcessId;
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = pending.ExecutablePath,
+                WorkingDirectory = pending.WorkingDirectory,
+                UseShellExecute = true
+            };
+            startInfo.ArgumentList.Add("--wait-for-process-exit");
+            startInfo.ArgumentList.Add(Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+            if (startProcess != null)
+            {
+                newProcessId = startProcess(startInfo);
+            }
+            else
+            {
+                using Process? process = Process.Start(startInfo);
+                newProcessId = process?.Id;
+            }
+
+            if (newProcessId == null)
+                return false;
+
+            RuntimeLog.Info("Restart",
+                $"Started replacement process after cleanup oldPid={Environment.ProcessId}, newPid={newProcessId}, reason={pending.Reason}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            RuntimeLog.Error("Restart", $"Failed to start replacement process reason={pending.Reason}", ex);
+            return false;
+        }
+    }
+
+    internal static bool WaitForRestartParentExit(
+        IReadOnlyList<string> arguments,
+        int timeoutMilliseconds,
+        out string error)
+    {
+        error = "";
+        int optionIndex = -1;
+        for (int i = 0; i < arguments.Count; i++)
+        {
+            if (string.Equals(arguments[i], "--wait-for-process-exit", StringComparison.OrdinalIgnoreCase))
+            {
+                optionIndex = i;
+                break;
+            }
+        }
+
+        if (optionIndex < 0)
+            return true;
+        if (optionIndex + 1 >= arguments.Count ||
+            !int.TryParse(arguments[optionIndex + 1], NumberStyles.None, CultureInfo.InvariantCulture, out int processId) ||
+            processId <= 0 ||
+            processId == Environment.ProcessId)
+        {
+            error = "自动重启参数无效，请手动关闭程序后重新打开";
+            return false;
+        }
+
+        try
+        {
+            using Process parent = Process.GetProcessById(processId);
+            if (parent.WaitForExit(timeoutMilliseconds))
+                return true;
+
+            error = $"旧程序进程（PID {processId}）未能正常退出，请先在任务管理器中关闭旧程序再重新打开";
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = $"等待旧程序退出失败：{ex.Message}";
+            return false;
+        }
+    }
+
     public static void AskRestart(Window? owner = null)
     {
-        var result = MessageBox.Show(owner,
-            "工位用途已保存，需要重启程序后生效。\n\n是否立即重启？",
-            "切换工位",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-        if (result == MessageBoxResult.Yes && !TryRestartApplication("workstation-role-change"))
+        var dialog = new ConfirmDialog(
+            AppLanguage.Get("RestartMode.Message"),
+            AppLanguage.Get("更改录像方式"),
+            confirmText: AppLanguage.Get("立即重启"),
+            cancelText: AppLanguage.Get("稍后再说"),
+            isDangerous: false)
         {
-            MessageBox.Show(owner, "自动重启失败，请手动关闭后重新打开程序。", "切换工位", MessageBoxButton.OK, MessageBoxImage.Information);
+            Owner = owner ?? Application.Current?.MainWindow
+        };
+        if (dialog.ShowDialog() == true && !TryRestartApplication("workstation-role-change", owner))
+        {
+            MessageBox.Show(owner, "自动重启失败，请手动关闭后重新打开程序。", "更改录像方式", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 

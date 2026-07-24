@@ -850,8 +850,8 @@
                                             <ColumnDefinition Width="260"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Margin="0,0,16,0">
-                                            <TextBlock Text="工位用途" Style="{StaticResource FieldLabelStyle}"/>
-                                            <TextBlock Text="选择这台电脑负责录像还是打印"
+                                            <TextBlock Text="录像方式" Style="{StaticResource FieldLabelStyle}"/>
+                                            <TextBlock Text="选择是否使用这台电脑的摄像头录像"
                                                        Style="{StaticResource FieldHintStyle}"/>
                                         </StackPanel>
                                         <ComboBox Grid.Column="2"
@@ -861,13 +861,13 @@
                                             <ComboBoxItem Tag="CameraMonitor">
                                                 <StackPanel Orientation="Horizontal">
                                                     <Path Data="{StaticResource FluentVideoIcon}" Width="16" Height="16" Stretch="Uniform" Fill="{DynamicResource AccentBlue}" Margin="0,0,8,0"/>
-                                                    <TextBlock Text="摄像头监控工位"/>
+                                                    <TextBlock Text="使用电脑摄像头录像"/>
                                                 </StackPanel>
                                             </ComboBoxItem>
                                             <ComboBoxItem Tag="PrintStation">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <Path Data="{StaticResource FluentPrinterIcon}" Width="16" Height="16" Stretch="Uniform" Fill="{DynamicResource AccentOrange}" Margin="0,0,8,0"/>
-                                                    <TextBlock Text="快递单打印工位"/>
+                                                    <Path Data="{StaticResource FluentStorageIcon}" Width="16" Height="16" Stretch="Uniform" Fill="{DynamicResource AccentOrange}" Margin="0,0,8,0"/>
+                                                    <TextBlock Text="我没有电脑摄像头"/>
                                                 </StackPanel>
                                             </ComboBoxItem>
                                         </ComboBox>
@@ -917,7 +917,8 @@
                                         </ComboBox>
                                     </Grid>
 
-                                    <Grid Style="{StaticResource SettingRowStyle}">
+                                    <Grid Style="{StaticResource SettingRowStyle}"
+                                          Visibility="{Binding Capabilities.SupportsCameraFeatures, Converter={StaticResource BoolToVisibility}}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="24"/>
@@ -937,7 +938,8 @@
                                     </Grid>
 
                                     <Grid Style="{StaticResource SettingRowLastStyle}"
-                                          IsEnabled="{Binding IsChecked, ElementName=AudioRecordCheckBox, TargetNullValue=False}">
+                                          IsEnabled="{Binding IsChecked, ElementName=AudioRecordCheckBox, TargetNullValue=False}"
+                                          Visibility="{Binding Capabilities.SupportsCameraFeatures, Converter={StaticResource BoolToVisibility}}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="24"/>
@@ -957,7 +959,8 @@
                                 </StackPanel>
                             </Border>
 
-                            <Border Style="{StaticResource SectionCardStyle}">
+                            <Border Style="{StaticResource SectionCardStyle}"
+                                    Visibility="{Binding Capabilities.SupportsCameraFeatures, Converter={StaticResource BoolToVisibility}}">
                                 <StackPanel>
                                     <Grid Style="{StaticResource AdvancedSettingRowStyle}"
                                           ToolTip="H.265/HEVC 体积更小，但部分电脑或浏览器可能无法直接播放；H.264 兼容性更好">
@@ -1066,7 +1069,8 @@
                 </Border>
             </TabItem>
 
-            <TabItem Header="面单放大">
+            <TabItem Header="面单放大"
+                     Visibility="{Binding Capabilities.SupportsCameraFeatures, Converter={StaticResource BoolToVisibility}}">
                 <Border Background="Transparent" Padding="0,4,0,0">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
@@ -1238,7 +1242,8 @@
                 </Border>
             </TabItem>
 
-            <TabItem Header="录制控制">
+            <TabItem Header="录制控制"
+                     Visibility="{Binding Capabilities.SupportsCameraFeatures, Converter={StaticResource BoolToVisibility}}">
                 <Border Background="Transparent" Padding="0,4,0,0">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
@@ -1744,7 +1749,8 @@
                 </Border>
             </TabItem>
 
-            <TabItem Header="AI 语音">
+            <TabItem Header="AI 语音"
+                     Visibility="{Binding Capabilities.SupportsSpeechSettings, Converter={StaticResource BoolToVisibility}}">
                 <Border Background="Transparent" Padding="0,4,0,0">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
@@ -2098,7 +2104,7 @@
                                                    Style="{StaticResource FieldHintStyle}"
                                                    TextWrapping="Wrap">
                                             <Run Text="当前地址："/>
-                                            <Run Text="{Binding MainVM.MonitorAccessAddress, Mode=OneWay, TargetNullValue=尚未准备}"/>
+                                            <Run Text="{Binding ConnectionAddress, Mode=OneWay, TargetNullValue=尚未准备}"/>
                                         </TextBlock>
                                         <TextBlock Text="手机或其他电脑连接同一个局域网后，可扫码或复制网址打开录像网页"
                                                    Style="{StaticResource FieldHintStyle}"/>
@@ -2207,7 +2213,8 @@
                                 </StackPanel>
                             </Border>
 
-                            <Border Style="{StaticResource SectionCardStyle}">
+                            <Border Style="{StaticResource SectionCardStyle}"
+                                    Visibility="{Binding Capabilities.SupportsOrderVoiceSettings, Converter={StaticResource BoolToVisibility}}">
                                 <StackPanel>
                                     <Grid Style="{StaticResource SettingRowStyle}">
                                         <Grid.ColumnDefinitions>
@@ -2305,28 +2312,33 @@
                                                   HorizontalAlignment="Left"
                                                   Style="{StaticResource ToggleSwitchStyle}"/>
                                     </Grid>
-                                    <Grid Style="{StaticResource AdvancedSettingChildRowStyle}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="24"/>
-                                            <ColumnDefinition Width="260"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Margin="0,0,16,0">
-                                            <TextBlock Text="调试日志" Style="{StaticResource FieldLabelStyle}"/>
-                                        </StackPanel>
-                                        <CheckBox Grid.Column="2"
-                                                  IsChecked="{Binding Config.EnableOrderInfoLog}"
-                                                  VerticalAlignment="Center"
-                                                  HorizontalAlignment="Left"
-                                                  Style="{StaticResource ToggleSwitchStyle}"/>
-                                    </Grid>
                                 </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource SectionCardStyle}">
+                                <Grid Style="{StaticResource AdvancedSettingRowLastStyle}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="24"/>
+                                        <ColumnDefinition Width="260"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,16,0">
+                                        <TextBlock Text="调试日志" Style="{StaticResource FieldLabelStyle}"/>
+                                        <TextBlock Text="记录局域网服务和手机备份的详细信息"
+                                                   Style="{StaticResource FieldHintStyle}"/>
+                                    </StackPanel>
+                                    <CheckBox Grid.Column="2"
+                                              IsChecked="{Binding Config.EnableOrderInfoLog}"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="Left"
+                                              Style="{StaticResource ToggleSwitchStyle}"/>
+                                </Grid>
                             </Border>
                         </StackPanel>
                     </ScrollViewer>
                 </Border>
             </TabItem>
-            <TabItem Header="扫码设置">
+            <TabItem Header="扫码设置"
+                     Visibility="{Binding Capabilities.SupportsScannerSettings, Converter={StaticResource BoolToVisibility}}">
                 <Border Background="Transparent" Padding="0,4,0,0">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
@@ -2686,7 +2698,8 @@
                             </Border>
 
                             <!-- 水印设置 -->
-                            <Border Style="{StaticResource SectionCardStyle}">
+                            <Border Style="{StaticResource SectionCardStyle}"
+                                    Visibility="{Binding Capabilities.SupportsCameraFeatures, Converter={StaticResource BoolToVisibility}}">
                                 <StackPanel>
                                     <Grid Style="{StaticResource SettingRowStyle}">
                                         <Grid.ColumnDefinitions>
@@ -2800,7 +2813,8 @@
                             </Border>
 
                             <!-- 维护工具 -->
-                            <Border Style="{StaticResource SectionCardStyle}">
+                            <Border Style="{StaticResource SectionCardStyle}"
+                                    Visibility="{Binding Capabilities.SupportsCameraMaintenance, Converter={StaticResource BoolToVisibility}}">
                                 <StackPanel>
                                     <Grid Style="{StaticResource SettingRowStyle}">
                                         <Grid.ColumnDefinitions>
@@ -2861,7 +2875,7 @@
                                         </StackPanel>
                                         <Button Grid.Column="2"
                                                 Content="重新检测"
-                                                Command="{Binding MainVM.ResetEncoderDetectCommand}"
+                                                Command="{Binding Context.ResetEncoderDetectCommand}"
                                                 Style="{StaticResource SecondaryButtonStyle}"
                                                 HorizontalAlignment="Left"/>
                                     </Grid>
@@ -2997,14 +3011,14 @@
                     <Setter Property="Visibility" Value="Collapsed"/>
                     <Setter Property="Opacity" Value="0"/>
                     <Style.Triggers>
-                        <DataTrigger Binding="{Binding MainVM.IsToastVisible}" Value="True">
+                        <DataTrigger Binding="{Binding Context.ToastSource.IsToastVisible}" Value="True">
                             <Setter Property="Visibility" Value="Visible"/>
                             <Setter Property="Opacity" Value="1"/>
                         </DataTrigger>
                     </Style.Triggers>
                 </Style>
             </Border.Style>
-            <TextBlock Text="{Binding MainVM.ToastMessage}"
+            <TextBlock Text="{Binding Context.ToastSource.ToastMessage}"
                        Foreground="White"
                        FontSize="16"
                        FontWeight="SemiBold"

@@ -27,11 +27,13 @@
                     Orientation="Horizontal"
                     HorizontalAlignment="Right"
                     Margin="0,22,0,0">
-            <Button Content="确定"
+            <Button x:Name="ConfirmButton"
+                    Content="确定"
                     Style="{StaticResource DangerButtonStyle}"
                     Margin="0,0,10,0"
                     Click="btnOk_Click"/>
-            <Button Content="取消"
+            <Button x:Name="CancelButton"
+                    Content="取消"
                     Style="{StaticResource SecondaryButtonStyle}"
                     Click="btnCancel_Click"/>
         </StackPanel>

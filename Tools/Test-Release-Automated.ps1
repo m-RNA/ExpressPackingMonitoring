@@ -61,7 +61,8 @@ try {
 
     Write-Host "[2/7] Running an isolated WPF startup and shutdown smoke test..."
     $wpfDataRoot = Join-Path $runRoot "wpf-data"
-    New-Item -ItemType Directory -Force -Path $wpfDataRoot | Out-Null
+    $wpfAppDataRoot = Join-Path $wpfDataRoot "ExpressPackingMonitoring"
+    New-Item -ItemType Directory -Force -Path $wpfAppDataRoot | Out-Null
     $appExecutable = Join-Path $buildArtifacts "bin\ExpressPackingMonitoring\$($configurationSegment)_win-x64\ExpressPackingMonitoring.exe"
     if (-not (Test-Path $appExecutable)) { throw "Built WPF executable not found: $appExecutable" }
     $previousUserDataDir = $env:EPM_USER_DATA_DIR
@@ -70,6 +71,23 @@ try {
     $env:EPM_INSTANCE_SCOPE = "automation$PID"
     $wpfProcess = $null
     try {
+        $noCameraPort = Get-FreeTcpPort
+        $noCameraStorage = Join-Path $wpfDataRoot "recordings"
+        $noCameraConfig = @{
+            WorkstationRole = "PrintStation"
+            WebServerPort = $noCameraPort
+            StorageLocations = @(@{
+                Path = $noCameraStorage
+                ReserveGB = 0
+                Priority = 1
+            })
+            Language = "zh-Hans"
+        } | ConvertTo-Json -Depth 4
+        [System.IO.File]::WriteAllText(
+            (Join-Path $wpfAppDataRoot "config.json"),
+            $noCameraConfig,
+            [System.Text.UTF8Encoding]::new($false))
+
         $wpfProcess = Start-Process -FilePath $appExecutable -ArgumentList @("--temporary-role", "PrintStation") -PassThru -WindowStyle Hidden
         $deadline = [DateTime]::UtcNow.AddSeconds(15)
         do {
@@ -78,9 +96,10 @@ try {
             if ($wpfProcess.HasExited) { throw "The isolated WPF process exited before showing its main window." }
         } while ($wpfProcess.MainWindowHandle -eq 0 -and [DateTime]::UtcNow -lt $deadline)
         if ($wpfProcess.MainWindowHandle -eq 0) { throw "The isolated WPF main window did not appear." }
-        if ($wpfProcess.MainWindowTitle -ne "快递单打印工位") {
+        if ($wpfProcess.MainWindowTitle -ne "手机录像备份") {
             throw "Unexpected WPF window title: $($wpfProcess.MainWindowTitle)"
         }
+        Wait-ForWebServer -Url "http://127.0.0.1:$noCameraPort/"
         $wpfProcess.CloseMainWindow() | Out-Null
         if (-not $wpfProcess.WaitForExit(5000)) { throw "The isolated WPF process did not shut down cleanly." }
 
@@ -94,7 +113,7 @@ try {
             Language = "zh-Hans"
         } | ConvertTo-Json
         [System.IO.File]::WriteAllText(
-            (Join-Path $wpfDataRoot "config.json"),
+            (Join-Path $wpfAppDataRoot "config.json"),
             $cameraConfig,
             [System.Text.UTF8Encoding]::new($false))
 

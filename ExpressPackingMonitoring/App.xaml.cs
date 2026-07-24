@@ -4,6 +4,8 @@ using ExpressPackingMonitoring.Audio;
 using ExpressPackingMonitoring.Config;
 using ExpressPackingMonitoring.Localization;
 using ExpressPackingMonitoring.Services;
+using ExpressPackingMonitoring.Themes;
+using ExpressPackingMonitoring.ViewModels;
 using System;
 using System.Threading.Tasks;
 using System.Windows;
@@ -21,6 +23,17 @@ namespace ExpressPackingMonitoring
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+            if (!WorkstationNetwork.WaitForRestartParentExit(e.Args, 15000, out string restartWaitError))
+            {
+                MessageBox.Show(
+                    restartWaitError,
+                    "切换录像方式失败",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                Shutdown(1);
+                return;
+            }
+
             if (UninstallCleanupService.TryHandleCommandLine(e.Args, out int uninstallExitCode))
             {
                 Shutdown(uninstallExitCode);
@@ -31,6 +44,7 @@ namespace ExpressPackingMonitoring
             var config = WorkstationConfigStore.Load();
             AppLanguage.Initialize(config.Language);
             AppLanguage.EnableAutomaticWpfLocalization();
+            ThemeManager.ApplyConfiguredTheme(config.Theme);
             RegisterRuntimeExceptionLogging();
             RuntimeLog.Info("App", "Application startup");
             RuntimeLog.LogSessionStart(e.Args);
@@ -90,9 +104,13 @@ namespace ExpressPackingMonitoring
                 return;
 
             AutoStartService.Apply(config.AutoStartOnBoot);
+            MainViewModel.AllowLanAccessSetupOnStartup = !useTemporaryRole;
 
             Window window = string.Equals(startupRole, WorkstationRoles.PrintStation, StringComparison.OrdinalIgnoreCase)
-                ? new PrintWorkstationWindow(config)
+                ? new PrintWorkstationWindow(
+                    config,
+                    openPlaybackOnStartup: !useTemporaryRole,
+                    requestLanAccessOnStartup: !useTemporaryRole)
                 : new MainWindow();
             window.SourceInitialized += (_, _) =>
             {
@@ -137,6 +155,7 @@ namespace ExpressPackingMonitoring
             RuntimeLog.Info("App", $"Session exit session={RuntimeLog.CurrentSessionId}, pid={Environment.ProcessId}, exitCode={e.ApplicationExitCode}, source={source}, detail={detail}");
             _instanceCoordinator?.Dispose();
             _instanceCoordinator = null;
+            WorkstationNetwork.TryStartPendingRestart();
             base.OnExit(e);
         }
 

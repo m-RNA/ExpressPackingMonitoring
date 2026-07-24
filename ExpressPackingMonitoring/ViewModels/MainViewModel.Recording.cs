@@ -3,6 +3,7 @@ using ExpressPackingMonitoring.Logging;
 using ExpressPackingMonitoring.Data;
 using ExpressPackingMonitoring.Config;
 using ExpressPackingMonitoring.Audio;
+using ExpressPackingMonitoring.Services;
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -214,42 +215,7 @@ namespace ExpressPackingMonitoring.ViewModels
 
         private string ResolveBestStoragePath()
         {
-            string defaultPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Videos");
-
-            if (Config.StorageLocations == null || Config.StorageLocations.Count == 0)
-            {
-                RuntimeLog.Warn("Storage", $"No storage locations configured, fallback default path={defaultPath}");
-                EnsureDirectoryWritable(defaultPath);
-                return defaultPath;
-            }
-
-            var orderedLocations = Config.StorageLocations
-                .Where(x => !string.IsNullOrWhiteSpace(x.Path))
-                .OrderBy(x => x.Priority)
-                .ToList();
-
-            if (orderedLocations.Count == 0)
-            {
-                RuntimeLog.Warn("Storage", $"No valid storage location paths configured, fallback default path={defaultPath}");
-                EnsureDirectoryWritable(defaultPath);
-                return defaultPath;
-            }
-
-            foreach (var loc in orderedLocations)
-            {
-                var result = TryEvaluateStorageLocation(loc);
-                if (result.CanUse)
-                {
-                    RuntimeLog.Info("Storage", $"Selected storage path={result.Path}, priority={loc.Priority}, free={FormatBytesForLog(result.AvailableBytes)}, reserve={FormatBytesForLog(result.ReserveBytes)}, used={FormatBytesForLog(result.UsedBytes)}, capacity={FormatBytesForLog(result.CapacityBytes)}, remaining={FormatBytesForLog(result.RemainingBytes)}");
-                    return result.Path;
-                }
-
-                RuntimeLog.Warn("Storage", $"Skip storage path={result.Path}, priority={loc.Priority}, reason={result.Reason}");
-            }
-
-            RuntimeLog.Warn("Storage", $"No configured storage path is safe for recording, fallback default path={defaultPath}");
-            EnsureDirectoryWritable(defaultPath);
-            return defaultPath;
+            return StorageLocationResolver.Resolve(Config, allowDefaultFallback: true);
         }
 
         private StorageLocationEvaluation TryEvaluateStorageLocation(StorageLocation loc)

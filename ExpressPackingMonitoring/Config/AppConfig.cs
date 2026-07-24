@@ -76,7 +76,7 @@ namespace ExpressPackingMonitoring.Config
         // 手机扫码连接升级引导版本。旧配置缺少该字段时会在局域网服务就绪后提示一次。
         public int MobileConnectionSetupVersion { get; set; } = 0;
 
-        // 工位用途："CameraMonitor"=摄像头监控工位，"PrintStation"=快递单打印工位，空值表示首次启动需要选择。
+        // 录像方式："CameraMonitor"=使用电脑摄像头录像，"PrintStation"=不使用电脑摄像头（兼容旧配置），空值表示首次启动需要选择。
         public string WorkstationRole { get; set; } = "";
         // 主程序实际运行目录。发布包中指向 app 目录，供手动增量更新包定位安装目标。
         public string AppRootDirectory { get; set; } = "";

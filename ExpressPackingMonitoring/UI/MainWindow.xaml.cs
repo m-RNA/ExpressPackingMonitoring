@@ -448,7 +448,7 @@ namespace ExpressPackingMonitoring.UI
             if (_shutdownInProgress) return;
 
             // 1. 判断是否需要提示：只有正在录制时才提示
-            if (vm != null && vm.IsRecording)
+            if (vm != null && vm.IsRecording && !WorkstationNetwork.IsRestartPending)
             {
                 string msg = "当前正在录制，退出将自动保存当前视频。\n确定要退出程序吗？";
                 var dialog = new ConfirmDialog(msg, "正在录制 - 退出确认") { Owner = this };
@@ -490,6 +490,7 @@ namespace ExpressPackingMonitoring.UI
             if (!saved)
             {
                 _shutdownInProgress = false;
+                WorkstationNetwork.CancelPendingRestart();
                 MessageBox.Show("录像保存失败，请检查日志", "退出已取消", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -539,6 +540,9 @@ namespace ExpressPackingMonitoring.UI
             }
             finally
             {
+                // 录像、Web 服务和数据库均已释放，此时才允许按新的录像方式启动。
+                WorkstationNetwork.TryStartPendingRestart();
+
                 // 录像收尾已经完成；解除 Closing 处理器后显式退出，避免后台资源让进程残留。
                 Closing -= Window_Closing;
                 (string source, string detail) = RuntimeLog.GetShutdownRequest();

@@ -1,7 +1,7 @@
 <Window x:Class="ExpressPackingMonitoring.WorkstationSelectionWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="选择工位" Height="420" Width="720"
+        Title="选择录像方式" Height="420" Width="720"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
         Icon="/app.ico"
@@ -44,11 +44,11 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Margin="0,0,0,26">
-            <TextBlock Text="请选择这台电脑的用途"
+            <TextBlock Text="请选择录像方式"
                        FontSize="28"
                        FontWeight="Black"
                        Foreground="{DynamicResource TextPrimary}"/>
-            <TextBlock Text="按这台电脑连接的硬件选择。普通查看视频的电脑，可直接用浏览器访问监控地址。"
+            <TextBlock Text="请选择是否使用这台电脑的摄像头录像，两种方式都支持手机录像备份和网页回放"
                        Margin="0,8,0,0"
                        FontSize="14"
                        Foreground="{DynamicResource TextSecondary}"/>
@@ -69,12 +69,12 @@
                           Stretch="Uniform"
                           Fill="{DynamicResource AccentBlue}"
                           HorizontalAlignment="Left"/>
-                    <TextBlock Text="摄像头监控工位"
+                    <TextBlock Text="使用电脑摄像头录像"
                                Margin="0,20,0,0"
                                FontSize="23"
                                FontWeight="Black"
                                Foreground="{DynamicResource TextPrimary}"/>
-                    <TextBlock Text="这台电脑接摄像头，负责实时监控、扫码录像、语音播报和接收订单。"
+                    <TextBlock Text="使用这台电脑的摄像头扫码并录像，同时支持手机录像备份和局域网回放"
                                Margin="0,10,0,0"
                                FontSize="14"
                                LineHeight="22"
@@ -85,18 +85,18 @@
 
             <Button Grid.Column="2" Style="{StaticResource WorkstationButtonStyle}" Click="PrintStation_Click">
                 <StackPanel>
-                    <Path Data="{StaticResource FluentPrinterIcon}"
+                    <Path Data="{StaticResource FluentStorageIcon}"
                           Width="56"
                           Height="56"
                           Stretch="Uniform"
                           Fill="{DynamicResource AccentOrange}"
                           HorizontalAlignment="Left"/>
-                    <TextBlock Text="快递单打印工位"
+                    <TextBlock Text="我没有电脑摄像头"
                                Margin="0,20,0,0"
                                FontSize="23"
                                FontWeight="Black"
                                Foreground="{DynamicResource TextPrimary}"/>
-                    <TextBlock Text="这台电脑接打印机或使用快递助手，把订单发送到摄像头监控工位。"
+                    <TextBlock Text="不使用电脑摄像头，只接收并备份手机录像，支持本机和局域网回放"
                                Margin="0,10,0,0"
                                FontSize="14"
                                LineHeight="22"

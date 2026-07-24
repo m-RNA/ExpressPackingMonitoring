@@ -331,10 +331,10 @@ public sealed class ConfigurationAndScannerTests
     }
 
     [Theory]
-    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
     [InlineData(true, false, false)]
     [InlineData(true, true, true)]
-    public void ShouldRepairLanAccessAtStartup_RequiresCompletedSetupAndEnabledService(
+    public void ShouldRepairLanAccessAtStartup_RequiresEnabledService(
         bool setupCompleted,
         bool webServerEnabled,
         bool expected)
@@ -346,6 +346,14 @@ public sealed class ConfigurationAndScannerTests
         };
 
         Assert.Equal(expected, MainViewModel.ShouldRepairLanAccessAtStartup(config));
+    }
+
+    [Fact]
+    public void ShouldRepairLanAccessAtStartup_TemporaryAutomationCanSuppressSystemChange()
+    {
+        var config = new AppConfig { EnableWebServer = true };
+
+        Assert.False(MainViewModel.ShouldRepairLanAccessAtStartup(config, allowLanAccessSetup: false));
     }
 
 

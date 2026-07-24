@@ -1,7 +1,11 @@
 using ExpressPackingMonitoring.Config;
+using ExpressPackingMonitoring.Services;
+using ExpressPackingMonitoring.Themes;
+using ExpressPackingMonitoring.UI;
+using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
-using ExpressPackingMonitoring.ViewModels;
 
 namespace ExpressPackingMonitoring;
 
@@ -14,101 +18,98 @@ public partial class PrintWorkstationWindow : Window
         Error
     }
 
-    private readonly AppConfig _config;
+    private AppConfig _config;
+    private readonly bool _openPlaybackOnStartup;
+    private readonly bool _requestLanAccessOnStartup;
+    private readonly NoCameraWorkstationHost _host;
+    private readonly CancellationTokenSource _lifetimeCts = new();
     private readonly string _activeWorkstationRole = WorkstationRoles.PrintStation;
-    private CancellationTokenSource? _findCts;
-    private CancellationTokenSource? _heartbeatCts;
-    private string _heartbeatAddress = "";
+    private StatisticsWindow? _statisticsWindow;
+    private PlaybackWindow? _playbackWindow;
+    private bool _loaded;
 
-    public PrintWorkstationWindow(AppConfig config)
+    public PrintWorkstationWindow(
+        AppConfig config,
+        bool openPlaybackOnStartup = true,
+        bool requestLanAccessOnStartup = true)
     {
         InitializeComponent();
         _config = config;
-        AddressTextBox.Text = WorkstationNetwork.NormalizeAddress(_config.PrintStationMonitorAddress);
-        Loaded += async (_, __) => await AutoConnectAndOpenAsync();
-        Closed += (_, __) => StopConnectionHeartbeat(notifyDisconnect: true);
+        _openPlaybackOnStartup = openPlaybackOnStartup;
+        _requestLanAccessOnStartup = requestLanAccessOnStartup;
+        _host = new NoCameraWorkstationHost(config);
+        Loaded += Window_Loaded;
+        Closing += (_, _) => CloseChildWindows();
+        Closed += (_, _) =>
+        {
+            _lifetimeCts.Cancel();
+            _host.Dispose();
+            _lifetimeCts.Dispose();
+        };
     }
 
-    private async Task<bool> ReconnectAsync(bool save, bool openWhenConnected = false)
+    private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        string address = WorkstationNetwork.NormalizeAddress(AddressTextBox.Text);
-        AddressTextBox.Text = address;
-        StopConnectionHeartbeat(notifyDisconnect: true);
-        if (string.IsNullOrWhiteSpace(address))
-        {
-            SetStatus("未连接摄像头监控工位", "请自动查找，或输入摄像头监控工位底部状态栏显示的地址。", StatusVisual.Error);
-            return false;
-        }
+        if (_loaded) return;
+        _loaded = true;
+        await StartServiceAsync();
+    }
 
-        SetStatus("正在连接摄像头监控工位...", address);
-        bool ok = await WorkstationNetwork.CanConnectAsync(address);
-        if (ok)
+    private async Task StartServiceAsync()
+    {
+        SetControlsEnabled(false);
+        SetStatus("正在启动手机录像备份服务", "正在打开录像数据库和本机回放服务");
+        try
         {
-            if (save)
-            {
-                if (!WorkstationConfigStore.TryUpdate(
-                        config => config.PrintStationMonitorAddress = address,
-                        out AppConfig savedConfig,
-                        out string saveError))
-                {
-                    SetStatus("监控工位地址保存失败", $"请检查磁盘空间或配置目录权限：{saveError}", StatusVisual.Error);
-                    return false;
-                }
-                _config.PrintStationMonitorAddress = savedConfig.PrintStationMonitorAddress;
-            }
-            SetStatus("已连接到摄像头监控工位", $"已记住地址：{address}", StatusVisual.Success);
-            StartConnectionHeartbeat(address);
-            if (openWhenConnected)
-                WorkstationNetwork.OpenUrl(WorkstationNetwork.ToUrl(address));
-            return true;
+            await _host.StartAsync(
+                requestLanAccess: _requestLanAccessOnStartup,
+                cancellationToken: _lifetimeCts.Token);
+            RefreshServiceDisplay();
+            if (_openPlaybackOnStartup)
+                OpenLocalPlayback();
+        }
+        catch (Exception ex)
+        {
+            LanAddressTextBlock.Text = ex.Message;
+            SetStatus("服务启动失败", ex.Message, StatusVisual.Error);
+        }
+        finally
+        {
+            SetControlsEnabled(_host.IsRunning);
+            RepairLanButton.IsEnabled = true;
+        }
+    }
+
+    private void RefreshServiceDisplay()
+    {
+        if (_host.IsLanAvailable)
+        {
+            LanAddressTextBlock.Text = _host.LanAccessUrl;
+            SetStatus("手机录像备份服务已启动", "手机可备份录像到本机，本机和局域网设备均可回放", StatusVisual.Success);
         }
         else
         {
-            SetStatus("未找到摄像头监控工位", "请确认摄像头监控工位已打开，并且两台电脑在同一局域网。", StatusVisual.Error);
-            return false;
-        }
-    }
-
-    private void StartConnectionHeartbeat(string address)
-    {
-        _heartbeatAddress = address;
-        _heartbeatCts = new CancellationTokenSource();
-        CancellationToken token = _heartbeatCts.Token;
-        _ = Task.Run(async () =>
-        {
-            while (!token.IsCancellationRequested)
-            {
-                await WorkstationNetwork.SendConnectionHeartbeatAsync(address, _config.MobileBackupComputerId, token: token);
-                try { await Task.Delay(TimeSpan.FromSeconds(15), token); }
-                catch (OperationCanceledException) { break; }
-            }
-        }, token);
-    }
-
-    private void StopConnectionHeartbeat(bool notifyDisconnect)
-    {
-        CancellationTokenSource? previous = _heartbeatCts;
-        _heartbeatCts = null;
-        previous?.Cancel();
-        previous?.Dispose();
-
-        string address = _heartbeatAddress;
-        _heartbeatAddress = "";
-        if (notifyDisconnect && !string.IsNullOrWhiteSpace(address))
-            _ = WorkstationNetwork.SendConnectionHeartbeatAsync(address, _config.MobileBackupComputerId, connected: false);
-    }
-
-    private async Task AutoConnectAndOpenAsync()
-    {
-        string savedAddress = WorkstationNetwork.NormalizeAddress(_config.PrintStationMonitorAddress);
-        if (!string.IsNullOrWhiteSpace(savedAddress))
-        {
-            AddressTextBox.Text = savedAddress;
-            if (await ReconnectAsync(true, openWhenConnected: true))
-                return;
+            LanAddressTextBlock.Text = string.IsNullOrWhiteSpace(_host.ErrorMessage)
+                ? "仅本机可用"
+                : _host.ErrorMessage;
+            SetStatus("手机录像备份服务已启动 · 仅本机可用",
+                "本机回放不受影响；需要手机备份或局域网回放时，请点击“修复局域网”",
+                StatusVisual.Error);
         }
 
-        await FindMonitorAsync(openWhenFound: true);
+        ConnectPhoneButton.IsEnabled = _host.IsLanAvailable;
+        CopyLanAddressButton.IsEnabled = _host.IsLanAvailable;
+        RepairLanButton.Visibility = _host.IsLanAvailable ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void SetControlsEnabled(bool enabled)
+    {
+        OpenWebButton.IsEnabled = enabled;
+        StatisticsButton.IsEnabled = _host.HasDatabase;
+        PlaybackButton.IsEnabled = _host.HasDatabase;
+        SettingsButton.IsEnabled = true;
+        ConnectPhoneButton.IsEnabled = enabled && _host.IsLanAvailable;
+        CopyLanAddressButton.IsEnabled = enabled && _host.IsLanAvailable;
     }
 
     private void SetStatus(string title, string hint, StatusVisual visual = StatusVisual.Neutral)
@@ -128,127 +129,277 @@ public partial class PrintWorkstationWindow : Window
             StatusVisual.Error => "AccentRed",
             _ => "AccentBlue"
         };
-
         if (TryFindResource(iconKey) is Geometry icon)
             StatusIconPath.Data = icon;
         if (TryFindResource(brushKey) is Brush brush)
             StatusIconPath.Fill = brush;
     }
 
-    private async void Reconnect_Click(object sender, RoutedEventArgs e) => await ReconnectAsync(true, openWhenConnected: true);
-
-    private async void FindMonitor_Click(object sender, RoutedEventArgs e)
+    private void OpenLocalPlayback()
     {
-        await FindMonitorAsync(openWhenFound: true);
+        if (!WorkstationNetwork.TryOpenUrl(_host.LocalPlaybackUrl, out string error))
+            SetStatus("打开本机回放失败", error, StatusVisual.Error);
     }
 
-    private async Task FindMonitorAsync(bool openWhenFound)
+    private void OpenWeb_Click(object sender, RoutedEventArgs e) => OpenLocalPlayback();
+
+    private void OpenStatistics_Click(object sender, RoutedEventArgs e)
     {
-        _findCts?.Cancel();
-        _findCts = new CancellationTokenSource();
-        SetStatus("正在自动查找摄像头监控工位...", "查找过程可能需要几十秒。");
-        var progress = new Progress<string>(msg => StatusHintTextBlock.Text = msg);
-
-        try
+        if (_statisticsWindow is { IsLoaded: true })
         {
-            string? address = await WorkstationNetwork.FindMonitorAsync(_config.WebServerPort, progress, _findCts.Token);
-            if (address == null)
-            {
-                SetStatus("未找到摄像头监控工位", "请手动输入摄像头监控工位底部状态栏显示的地址。", StatusVisual.Error);
-                return;
-            }
-
-            AddressTextBox.Text = address;
-            await ReconnectAsync(true, openWhenConnected: openWhenFound);
-        }
-        catch (OperationCanceledException)
-        {
-            SetStatus("已取消查找", "可以重新点击自动查找。", StatusVisual.Error);
-        }
-    }
-
-    private void OpenWeb_Click(object sender, RoutedEventArgs e)
-    {
-        string address = WorkstationNetwork.NormalizeAddress(AddressTextBox.Text);
-        if (string.IsNullOrWhiteSpace(address))
-        {
-            SetStatus("未连接摄像头监控工位", "请先连接后再打开视频页面。", StatusVisual.Error);
+            _statisticsWindow.Activate();
             return;
         }
-        WorkstationNetwork.OpenUrl(WorkstationNetwork.ToUrl(address));
+
+        _statisticsWindow = new StatisticsWindow(_host.Database) { Owner = this };
+        _statisticsWindow.Closed += (_, _) => _statisticsWindow = null;
+        _statisticsWindow.Show();
+    }
+
+    private void OpenPlayback_Click(object sender, RoutedEventArgs e)
+    {
+        if (_playbackWindow is { IsLoaded: true })
+        {
+            _playbackWindow.Activate();
+            return;
+        }
+
+        _playbackWindow = new PlaybackWindow(_host.StoragePath, _host.Database, showDeletedVideos: true)
+        {
+            Owner = this
+        };
+        _playbackWindow.Closed += (_, _) => _playbackWindow = null;
+        _playbackWindow.Show();
+    }
+
+    private void OpenSettings_Click(object sender, RoutedEventArgs e)
+    {
+        AppConfig clonedConfig =
+            JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(_config)) ?? new AppConfig();
+        var context = new SettingsContext
+        {
+            Capabilities = SettingsCapabilities.ForRole(WorkstationRoles.PrintStation),
+            ApplyAsync = ApplySettingsAsync,
+            ConnectionAddressProvider = () => _host.IsLanAvailable ? _host.LanAccessUrl : _host.LocalPlaybackUrl,
+            ShowMobileConnection = ShowMobileConnection,
+            CopyMobileConnectionUrl = CopyMobileConnectionUrl
+        };
+        (double diskUsagePercent, string diskUsageText) = GetDiskUsage(_host.StoragePath);
+        var window = new SettingsWindow(
+            context,
+            clonedConfig,
+            diskUsagePercent,
+            diskUsageText)
+        {
+            Owner = this
+        };
+        window.ShowDialog();
+    }
+
+    private void ConnectPhone_Click(object sender, RoutedEventArgs e)
+    {
+        ShowMobileConnection(this);
+    }
+
+    private void ShowMobileConnection(Window owner)
+    {
+        var dialog = new MobileConnectionWindow(
+            _host.LanAccessUrl,
+            _config.RequireWebAccessKey,
+            _host.IsLanAvailable ? "" : "当前仅本机可用，请先修复局域网",
+            canOpenSettings: false)
+        {
+            Owner = owner
+        };
+        dialog.ShowDialog();
+    }
+
+    private void CopyLanAddress_Click(object sender, RoutedEventArgs e)
+    {
+        CopyMobileConnectionUrl();
+    }
+
+    private void CopyMobileConnectionUrl()
+    {
+        string address = _host.IsLanAvailable ? _host.LanAccessUrl : _host.LocalPlaybackUrl;
+        if (string.IsNullOrWhiteSpace(address)) return;
+        try
+        {
+            Clipboard.SetDataObject(address, true);
+            SetStatus(
+                _host.IsLanAvailable ? "已复制局域网地址" : "已复制本机回放地址",
+                "访问地址包含手机配对密钥，请勿转发给无关人员",
+                StatusVisual.Success);
+        }
+        catch (Exception ex)
+        {
+            SetStatus("复制局域网地址失败", ex.Message, StatusVisual.Error);
+        }
+    }
+
+    private async void RepairLan_Click(object sender, RoutedEventArgs e)
+    {
+        RepairLanButton.IsEnabled = false;
+        SetStatus("正在修复局域网", "Windows 可能会请求管理员授权");
+        bool repaired = await _host.RepairLanAccessAsync(_lifetimeCts.Token);
+        RefreshServiceDisplay();
+        RepairLanButton.IsEnabled = true;
+        if (!repaired && !_host.IsRunning)
+            SetStatus("局域网修复失败", _host.ErrorMessage, StatusVisual.Error);
+    }
+
+    private string LocalOrderAddress => $"127.0.0.1:{_config.WebServerPort}";
+
+    private async Task<bool> ApplySettingsAsync(AppConfig nextConfig)
+    {
+        AppConfig previousConfig = _config;
+        AppConfig.NormalizeAfterLoad(nextConfig);
+
+        if (!string.Equals(previousConfig.WorkstationRole, nextConfig.WorkstationRole, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!TrySaveAndActivateConfig(previousConfig, nextConfig, out string error))
+            {
+                SetStatus("设置保存失败", error, StatusVisual.Error);
+                MessageBox.Show(this, $"配置保存失败：{error}", "设置", MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
+            }
+
+            WorkstationNetwork.AskRestart(this);
+            return true;
+        }
+
+        _host.UpdateConfig(nextConfig);
+        SetControlsEnabled(false);
+        SetStatus("正在应用设置", "正在重启本机回放和手机备份服务");
+        try
+        {
+            _playbackWindow?.Close();
+            await _host.StartAsync(_requestLanAccessOnStartup, _lifetimeCts.Token);
+            if (!TrySaveAndActivateConfig(previousConfig, nextConfig, out string error))
+                throw new InvalidOperationException($"配置保存失败：{error}");
+
+            RefreshServiceDisplay();
+            SetControlsEnabled(true);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _host.UpdateConfig(previousConfig);
+            try
+            {
+                await _host.StartAsync(_requestLanAccessOnStartup, _lifetimeCts.Token);
+                RefreshServiceDisplay();
+                SetControlsEnabled(true);
+            }
+            catch
+            {
+                SetControlsEnabled(false);
+            }
+
+            RepairLanButton.IsEnabled = true;
+            SetStatus("服务重启失败", ex.Message, StatusVisual.Error);
+            MessageBox.Show(this, ex.Message, "服务重启失败", MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
+        }
+    }
+
+    private bool TrySaveAndActivateConfig(
+        AppConfig previousConfig,
+        AppConfig nextConfig,
+        out string error)
+    {
+        if (!WorkstationConfigStore.TrySave(nextConfig, out error))
+            return false;
+
+        _config = nextConfig;
+        _host.UpdateConfig(nextConfig);
+        AutoStartService.Apply(nextConfig.AutoStartOnBoot);
+        if (!string.Equals(previousConfig.Theme, nextConfig.Theme, StringComparison.Ordinal) &&
+            Enum.TryParse(nextConfig.Theme, out AppTheme theme))
+        {
+            ThemeManager.ApplyTheme(theme);
+        }
+
+        return true;
+    }
+
+    private static (double Percent, string Text) GetDiskUsage(string storagePath)
+    {
+        try
+        {
+            string? root = Path.GetPathRoot(Path.GetFullPath(storagePath));
+            if (string.IsNullOrWhiteSpace(root)) return (0, "暂不可用");
+            var drive = new DriveInfo(root);
+            if (drive.TotalSize <= 0) return (0, "暂不可用");
+            double percent = Math.Clamp(
+                (drive.TotalSize - drive.AvailableFreeSpace) * 100d / drive.TotalSize,
+                0,
+                100);
+            double usedGB = (drive.TotalSize - drive.AvailableFreeSpace) / 1024d / 1024d / 1024d;
+            double totalGB = drive.TotalSize / 1024d / 1024d / 1024d;
+            return (percent, $"{usedGB:F1} / {totalGB:F1} GB");
+        }
+        catch
+        {
+            return (0, "暂不可用");
+        }
+    }
+
+    private void CloseChildWindows()
+    {
+        try { _statisticsWindow?.Close(); } catch { }
+        try { _playbackWindow?.Close(); } catch { }
+        _statisticsWindow = null;
+        _playbackWindow = null;
     }
 
     private void InstallTool_Click(object sender, RoutedEventArgs e)
     {
-        string address = WorkstationNetwork.NormalizeAddress(AddressTextBox.Text);
-        string guidePath = PrintToolInstallGuide.CreateLocalGuide(address);
-        if (!string.IsNullOrWhiteSpace(address))
-        {
-            try { Clipboard.SetDataObject(address, true); } catch { }
-        }
-
+        string guidePath = PrintToolInstallGuide.CreateLocalGuide(LocalOrderAddress);
+        try { Clipboard.SetDataObject(LocalOrderAddress, true); } catch { }
         WorkstationNetwork.OpenUrl(new Uri(guidePath).AbsoluteUri);
-        bool hasAddress = !string.IsNullOrWhiteSpace(address);
-        SetStatus("已打开安装向导",
-            hasAddress ? $"已复制监控工位地址：{address}" : "请先连接摄像头监控工位，再按向导安装订单备注插件。",
-            hasAddress ? StatusVisual.Success : StatusVisual.Error);
+        SetStatus("已打开订单插件安装向导", "已复制本机接收地址，按向导完成安装即可", StatusVisual.Success);
     }
 
-    private async void TestSend_Click(object sender, RoutedEventArgs e)
+    private async void TestReceive_Click(object sender, RoutedEventArgs e)
     {
-        string address = WorkstationNetwork.NormalizeAddress(AddressTextBox.Text);
-        SetStatus("正在测试发送订单...", address);
-        var result = await WorkstationNetwork.SendTestOrderAsync(address);
-        if (result.MonitorConfirmed)
+        SetStatus("正在测试本机订单接收", LocalOrderAddress);
+        WorkstationNetwork.TestOrderSendResult result =
+            await WorkstationNetwork.SendTestOrderAsync(LocalOrderAddress);
+        if (result.Sent)
         {
-            SetStatus("监控端已收到测试订单", "测试订单已发送，监控端会播报“收到测试订单”。", StatusVisual.Success);
-        }
-        else if (result.Sent)
-        {
-            SetStatus("测试订单已发送", "接口已返回成功，请在监控端确认是否播报。", StatusVisual.Success);
+            SetStatus("本机已收到测试订单", "测试订单已写入录像数据库，可供手机录像关联", StatusVisual.Success);
         }
         else
         {
-            SetStatus("测试发送失败，请检查监控工位地址",
-                "请确认监控端地址正确，并且两台电脑在同一局域网。",
+            SetStatus("测试接收失败",
+                string.IsNullOrWhiteSpace(result.ErrorMessage) ? "请确认本机服务已正常启动" : result.ErrorMessage,
                 StatusVisual.Error);
         }
     }
 
     private void SwitchWorkstation_Click(object sender, RoutedEventArgs e)
     {
-        var win = new WorkstationSelectionWindow { Owner = this };
-        if (win.ShowDialog() == true && !string.IsNullOrWhiteSpace(win.SelectedRole))
-        {
-            if (string.Equals(_activeWorkstationRole, win.SelectedRole, StringComparison.OrdinalIgnoreCase))
-            {
-                if (!string.Equals(_config.WorkstationRole, _activeWorkstationRole, StringComparison.OrdinalIgnoreCase))
-                {
-                    if (!WorkstationConfigStore.TryUpdate(
-                            config => config.WorkstationRole = _activeWorkstationRole,
-                            out AppConfig savedConfig,
-                            out string saveError))
-                    {
-                        SetStatus("工位配置保存失败", saveError, StatusVisual.Error);
-                        return;
-                    }
-                    _config.WorkstationRole = savedConfig.WorkstationRole;
-                }
-                SetStatus($"当前已经是{WorkstationRoles.GetDisplayName(_activeWorkstationRole)}", "无需重启或切换。", StatusVisual.Success);
-                return;
-            }
+        var window = new WorkstationSelectionWindow { Owner = this };
+        if (window.ShowDialog() != true || string.IsNullOrWhiteSpace(window.SelectedRole))
+            return;
 
-            string selectedRole = win.SelectedRole;
-            if (!WorkstationConfigStore.TryUpdate(
-                    config => config.WorkstationRole = selectedRole,
-                    out AppConfig savedRoleConfig,
-                    out string error))
-            {
-                SetStatus("工位配置保存失败", error, StatusVisual.Error);
-                return;
-            }
-            _config.WorkstationRole = savedRoleConfig.WorkstationRole;
-            WorkstationNetwork.AskRestart(this);
+        if (string.Equals(_activeWorkstationRole, window.SelectedRole, StringComparison.OrdinalIgnoreCase))
+        {
+            SetStatus("当前已选择不使用电脑摄像头", "无需重启或更改", StatusVisual.Success);
+            return;
         }
+
+        if (!WorkstationConfigStore.TryUpdate(
+                config => config.WorkstationRole = window.SelectedRole,
+                out AppConfig savedConfig,
+                out string error))
+        {
+            SetStatus("录像方式保存失败", error, StatusVisual.Error);
+            return;
+        }
+
+        _config.WorkstationRole = savedConfig.WorkstationRole;
+        WorkstationNetwork.AskRestart(this);
     }
 }

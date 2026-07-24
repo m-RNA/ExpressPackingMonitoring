@@ -233,7 +233,7 @@ namespace ExpressPackingMonitoring.ViewModels
         private bool _pendingCameraRestart = false; // 录制中修改了摄像头配置，录制结束后重启
         private volatile bool _isEncoderDetectRunning = true; // 是否正在进行 GPU 编码器检测
         private readonly string _activeWorkstationRole = WorkstationRoles.CameraMonitor;
-        private string _workstationPrintStatusText = "快递单打印工位：未连接";
+        private string _workstationPrintStatusText = "手机备份服务：未连接";
         private string _workstationStatusToolTip = "";
         private string _connectedDeviceText = "连接服务未开启";
         private string _connectedDeviceToolTip = "开启局域网查看后可显示在线设备";
@@ -517,6 +517,7 @@ namespace ExpressPackingMonitoring.ViewModels
         public ICommand ResetEncoderDetectCommand { get; } // 重置编码器检测
         public ICommand CopyMonitorAddressCommand { get; }
         public ICommand SwitchWorkstationCommand { get; }
+        internal static bool AllowLanAccessSetupOnStartup { get; set; } = true;
 
         public MainViewModel()
         {
@@ -2210,16 +2211,20 @@ namespace ExpressPackingMonitoring.ViewModels
             _videoTask = Task.Run(() => VideoProcessLoop(_cts.Token), _cts.Token);
             Task.Run(CheckDiskAndCleanup);
             Task.Run(CameraIdleWatchdog);
-            // 新用户先完成首次配置向导，再请求局域网权限；已有用户则在权限缺失时自动修复。
-            _webServerStartupTask = RestartWebServerAsync(allowAccessSetup: ShouldRepairLanAccessAtStartup(Config));
+            // 正常启动时发现监听权限或防火墙规则缺失，会立即请求管理员授权。
+            // 自动化临时运行模式禁用该系统级变更。
+            _webServerStartupTask = RestartWebServerAsync(
+                allowAccessSetup: ShouldRepairLanAccessAtStartup(Config, AllowLanAccessSetupOnStartup));
 
             // 启动时自动将上次断电残留的 MKV 转换为 MP4
             _mkvRecoveryTask = Task.Run(RecoverOrphanedMkvAsync);
         }
 
-        internal static bool ShouldRepairLanAccessAtStartup(AppConfig config)
+        internal static bool ShouldRepairLanAccessAtStartup(
+            AppConfig config,
+            bool allowLanAccessSetup = true)
         {
-            return config?.FirstUseWizardCompleted == true && config.EnableWebServer;
+            return config?.EnableWebServer == true && allowLanAccessSetup;
         }
 
         private async Task RecoverOrphanedMkvAsync()
@@ -2354,13 +2359,13 @@ namespace ExpressPackingMonitoring.ViewModels
                 if (!Config.EnableWebServer || _db == null || _isDisposed)
                 {
                     MonitorAccessAddress = "";
-                    WorkstationPrintStatusText = "快递单打印工位：未连接";
+                    WorkstationPrintStatusText = "手机备份服务：未连接";
                     WorkstationStatusToolTip = "开启局域网查看后，可点击手机/电脑连接查看二维码或复制网址。";
                     SetConnectedDeviceUnavailable(AppLanguage.Get("Main.ConnectionServiceDisabled"), AppLanguage.Get("Main.ConnectionEmptyTip"));
                     return true;
                 }
 
-                WorkstationPrintStatusText = "快递单打印工位：等待服务启动";
+                WorkstationPrintStatusText = "手机备份服务：等待启动";
                 SetConnectedDeviceUnavailable(AppLanguage.Get("Main.ConnectionServiceStarting"), AppLanguage.Get("Main.ConnectionEmptyTip"));
                 int port = Config.WebServerPort;
                 int cacheMaxMb = Config.TranscodeCacheMaxMB;
@@ -2418,8 +2423,8 @@ namespace ExpressPackingMonitoring.ViewModels
                 try { newServer?.Dispose(); } catch { }
                 RuntimeLog.Error("Web", "LAN service start failed", ex);
                 MonitorAccessAddress = "";
-                WorkstationPrintStatusText = "快递单打印工位：Web 启动失败";
-                WorkstationStatusToolTip = $"其他电脑暂时无法连接这台摄像头监控工位。\n{ex.Message}";
+                WorkstationPrintStatusText = "手机备份服务：Web 启动失败";
+                WorkstationStatusToolTip = $"其他设备暂时无法连接这台电脑。\n{ex.Message}";
                 SetConnectedDeviceUnavailable(AppLanguage.Get("Main.ConnectionServiceUnavailable"), ex.Message);
                 ShowToast($"警告：局域网服务启动失败: {ex.Message}");
                 return false;
@@ -2436,14 +2441,14 @@ namespace ExpressPackingMonitoring.ViewModels
             if (_webServer == null)
             {
                 MonitorAccessAddress = "";
-                WorkstationPrintStatusText = "快递单打印工位：未连接";
-                WorkstationStatusToolTip = "其他电脑暂时无法连接这台摄像头监控工位。";
+                WorkstationPrintStatusText = "手机备份服务：未连接";
+                WorkstationStatusToolTip = "其他设备暂时无法连接这台电脑。";
                 SetConnectedDeviceUnavailable(AppLanguage.Get("Main.ConnectionServiceDisabled"), AppLanguage.Get("Main.ConnectionEmptyTip"));
                 return;
             }
 
             MonitorAccessAddress = "";
-            WorkstationPrintStatusText = "快递单打印工位：等待连接";
+            WorkstationPrintStatusText = "手机备份服务：等待连接";
             WorkstationStatusToolTip = "正在准备给其他电脑浏览器使用的网址。两台电脑需要在同一局域网内。";
             SetConnectedDeviceUnavailable(AppLanguage.Get("Main.ConnectionServiceStarting"), AppLanguage.Get("Main.ConnectionEmptyTip"));
 
@@ -2461,7 +2466,7 @@ namespace ExpressPackingMonitoring.ViewModels
                 return;
 
             MonitorAccessAddress = verifiedAddress;
-            WorkstationPrintStatusText = "快递单打印工位：等待连接";
+            WorkstationPrintStatusText = "手机备份服务：等待连接";
             WorkstationStatusToolTip = Config.RequireWebAccessKey
                 ? "访问保护已开启。请点击手机/电脑连接查看二维码或复制完整访问链接，再发送到需要查看录像的设备。"
                 : $"其他电脑在浏览器输入 http://{MonitorAccessAddress}，即可搜索、下载和播放视频。若打不开，请确认两台电脑在同一局域网，并检查防火墙。";

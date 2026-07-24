@@ -58,7 +58,7 @@ internal static class UninstallCleanupService
             if (WorkstationInstanceCoordinator.IsRoleRunning(WorkstationRoles.CameraMonitor) ||
                 WorkstationInstanceCoordinator.IsRoleRunning(WorkstationRoles.PrintStation))
             {
-                throw new InvalidOperationException("快递打包监控仍在运行，请关闭所有工位窗口后重试");
+                throw new InvalidOperationException("快递打包监控仍在运行，请关闭所有程序窗口后重试");
             }
 
             UninstallCleanupResult result = !string.IsNullOrWhiteSpace(planPath)
