@@ -63,6 +63,9 @@ public sealed class ReleasePackagingPolicyTests
         string innoScript = File.ReadAllText(
             Path.Combine(repositoryRoot, "Installer", "ExpressPackingMonitoring.iss"),
             Encoding.UTF8);
+        string chineseMessages = File.ReadAllText(
+            Path.Combine(repositoryRoot, "Installer", "Languages", "ChineseSimplified.isl"),
+            Encoding.UTF8);
         string buildScript = File.ReadAllText(
             Path.Combine(repositoryRoot, "Tools", "Build-Installer.ps1"),
             Encoding.UTF8);
@@ -77,6 +80,9 @@ public sealed class ReleasePackagingPolicyTests
         Assert.Contains("ArchitecturesAllowed=x64compatible", innoScript);
         Assert.Contains("CloseApplications=yes", innoScript);
         Assert.DoesNotContain("CloseApplications=force", innoScript);
+        Assert.Contains(@"MessagesFile: ""Languages\ChineseSimplified.isl""", innoScript);
+        Assert.Contains("LanguageName=简体中文", chineseMessages);
+        Assert.Contains("ButtonNext=下一步", chineseMessages);
         Assert.Contains(@"Filename: ""{app}\{#MyAppExeName}""; WorkingDir: ""{app}""", innoScript);
         Assert.Contains("--uninstall-plan-recordings", innoScript);
         Assert.Contains("--uninstall-delete-recordings", innoScript);
@@ -95,7 +101,12 @@ public sealed class ReleasePackagingPolicyTests
         Assert.Contains("SmartScreen", publishScript);
         Assert.Contains("GitHub 默认上传", publishScript);
         Assert.Contains("Gitee 手工上传", publishScript);
-        Assert.Contains("Setup 和完整 ZIP 使用 Full download page", publishScript);
+        Assert.Contains("Setup、完整 7z 和完整 ZIP 使用 Full download page", publishScript);
+        Assert.Contains("SEVEN_ZIP_EXE", publishScript);
+        Assert.Contains("winget install --id 7zip.7zip", publishScript);
+        Assert.Contains("-t7z", publishScript);
+        Assert.Contains("-m0=lzma2", publishScript);
+        Assert.Contains("-ms=on", publishScript);
     }
 
     private static string FindRepositoryRoot()

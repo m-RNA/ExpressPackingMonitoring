@@ -7,6 +7,7 @@ param(
     [string]$BaselineAppDir = "",
     [string]$BaselineLauncherPath = "",
     [string]$BaselineLauncherManifestPath = "",
+    [string]$SevenZipPath = "",
     [string]$PatchBaselineVersion = "0.0.18",
     [switch]$SkipTtsCacheGeneration,
     [switch]$ConfirmManualCoreChecks,
@@ -145,6 +146,7 @@ $zipFullPath = if ([string]::IsNullOrWhiteSpace($ZipPath)) {
 } else {
     [System.IO.Path]::GetFullPath($ZipPath)
 }
+$sevenZipFullPath = [System.IO.Path]::ChangeExtension($zipFullPath, ".7z")
 $packageArtifactRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $zipFullPath))
 $repoFullPath = [System.IO.Path]::GetFullPath($repoRoot)
 if (-not $outputFullPath.StartsWith($repoFullPath, [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -168,6 +170,9 @@ if (Test-Path $outputFullPath) {
 }
 if (Test-Path $zipFullPath) {
     Remove-Item -LiteralPath $zipFullPath -Force
+}
+if (Test-Path $sevenZipFullPath) {
+    Remove-Item -LiteralPath $sevenZipFullPath -Force
 }
 
 function Remove-PackageRuntimeState {
@@ -248,6 +253,107 @@ function Compress-PackageWithRetry {
     }
 
     throw $lastError
+}
+
+function Resolve-SevenZipExecutable {
+    if (-not [string]::IsNullOrWhiteSpace($SevenZipPath)) {
+        $candidate = [System.IO.Path]::GetFullPath($SevenZipPath)
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return $candidate
+        }
+        throw "SevenZipPath does not point to 7z.exe: $candidate"
+    }
+
+    $environmentPath = $env:SEVEN_ZIP_EXE
+    if (-not [string]::IsNullOrWhiteSpace($environmentPath)) {
+        $candidate = [System.IO.Path]::GetFullPath($environmentPath)
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return $candidate
+        }
+        throw "SEVEN_ZIP_EXE does not point to 7z.exe: $candidate"
+    }
+
+    $command = Get-Command "7z.exe" -ErrorAction SilentlyContinue
+    if ($null -ne $command) {
+        return $command.Source
+    }
+
+    foreach ($candidate in @(
+        (Join-Path $env:ProgramFiles "7-Zip\7z.exe"),
+        (Join-Path ${env:ProgramFiles(x86)} "7-Zip\7z.exe")
+    )) {
+        if (-not [string]::IsNullOrWhiteSpace($candidate) -and
+            (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            return $candidate
+        }
+    }
+
+    throw "7-Zip was not found. Install it with: winget install --id 7zip.7zip -e -s winget"
+}
+
+function Compress-Package7zWithRetry {
+    param(
+        [string]$SourceDir,
+        [string]$DestinationArchive,
+        [string]$SevenZipExecutable
+    )
+
+    $lastError = $null
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        try {
+            if (Test-Path -LiteralPath $DestinationArchive) {
+                Remove-Item -LiteralPath $DestinationArchive -Force
+            }
+
+            Push-Location $SourceDir
+            try {
+                & $SevenZipExecutable a `
+                    -t7z `
+                    -mx=9 `
+                    -m0=lzma2 `
+                    -ms=on `
+                    -mmt=on `
+                    -bso0 `
+                    -bsp0 `
+                    -- `
+                    $DestinationArchive `
+                    ".\*"
+                if ($LASTEXITCODE -ne 0) {
+                    throw "7-Zip creation failed with exit code $LASTEXITCODE"
+                }
+            }
+            finally {
+                Pop-Location
+            }
+
+            & $SevenZipExecutable t -bso0 -bsp0 -- $DestinationArchive
+            if ($LASTEXITCODE -ne 0) {
+                throw "7-Zip integrity test failed with exit code $LASTEXITCODE"
+            }
+            return
+        }
+        catch {
+            $lastError = $_
+            Start-Sleep -Milliseconds (500 * $attempt)
+        }
+    }
+
+    throw $lastError
+}
+
+function Test-SevenZipContainsEntry {
+    param(
+        [string]$ArchivePath,
+        [string]$EntryName,
+        [string]$SevenZipExecutable
+    )
+
+    $listing = @(& $SevenZipExecutable l -slt -ba -- $ArchivePath)
+    if ($LASTEXITCODE -ne 0) {
+        throw "7-Zip listing failed with exit code $LASTEXITCODE"
+    }
+    $expectedLine = "Path = " + $EntryName.Replace("/", "\")
+    return $listing -contains $expectedLine
 }
 
 function Get-NormalizedReleaseVersion {
@@ -791,14 +897,14 @@ if ($patchSupported) {
     $updateManifest["notes"] = @(
         (ConvertFrom-Utf8Base64 "6K+35aGr5YaZ5pu05paw5YaF5a65")
         "启动器会自动安装增量更新；手动下载时请完整解压，并双击《$manualInstallerCmdName》"
-        "首次安装建议从完整下载页获取《$setupFileName》；完整 ZIP 仅用于免安装和故障恢复"
+        "首次安装建议从完整下载页获取《$setupFileName》；完整 7z 是小体积免安装包，ZIP 用于系统原生解压和故障恢复"
     )
 }
 else {
     $updateManifest["patch_package"] = $null
     $updateManifest["notes"] = @(
         "本版本不支持自动增量更新，请下载《$setupFileName》完成升级"
-        "完整 ZIP 仅用于免安装和故障恢复"
+        "完整 7z 是小体积免安装包，ZIP 用于系统原生解压和故障恢复"
     )
 }
 $updateManifest["full_download_page"] = $fullDownloadPage
@@ -806,6 +912,42 @@ $updateManifest["full_download_page"] = $fullDownloadPage
 $updateManifest |
     ConvertTo-Json -Depth 6 |
     Set-Content -LiteralPath $updateJsonPath -Encoding UTF8
+
+$zipParent = Split-Path -Parent $zipFullPath
+if (-not [string]::IsNullOrWhiteSpace($zipParent)) {
+    New-Item -ItemType Directory -Force -Path $zipParent | Out-Null
+}
+Compress-PackageWithRetry -SourceDir $outputFullPath -DestinationZip $zipFullPath
+$sevenZipExecutable = Resolve-SevenZipExecutable
+Compress-Package7zWithRetry `
+    -SourceDir $outputFullPath `
+    -DestinationArchive $sevenZipFullPath `
+    -SevenZipExecutable $sevenZipExecutable
+
+if (-not (Test-ZipContainsEntry -ZipFile $zipFullPath -EntryName "ExpressPackingMonitoring.exe")) {
+    throw "Full zip validation failed: missing root launcher"
+}
+if (-not (Test-ZipContainsEntry -ZipFile $zipFullPath -EntryName "app/ExpressPackingMonitoring.exe")) {
+    throw "Full zip validation failed: missing app/ExpressPackingMonitoring.exe"
+}
+if (-not (Test-SevenZipContainsEntry -ArchivePath $sevenZipFullPath -EntryName "ExpressPackingMonitoring.exe" -SevenZipExecutable $sevenZipExecutable)) {
+    throw "Full 7z validation failed: missing root launcher"
+}
+if (-not (Test-SevenZipContainsEntry -ArchivePath $sevenZipFullPath -EntryName "app/ExpressPackingMonitoring.exe" -SevenZipExecutable $sevenZipExecutable)) {
+    throw "Full 7z validation failed: missing app/ExpressPackingMonitoring.exe"
+}
+foreach ($runtimeFile in $requiredAppRuntimeFiles) {
+    if (-not (Test-ZipContainsEntry -ZipFile $zipFullPath -EntryName "app/$runtimeFile")) {
+        throw "Full zip validation failed: missing camera barcode runtime dependency app/$runtimeFile"
+    }
+    if (-not (Test-SevenZipContainsEntry -ArchivePath $sevenZipFullPath -EntryName "app/$runtimeFile" -SevenZipExecutable $sevenZipExecutable)) {
+        throw "Full 7z validation failed: missing camera barcode runtime dependency app/$runtimeFile"
+    }
+}
+$sevenZipHash = (Get-FileHash -LiteralPath $sevenZipFullPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$sevenZipSize = (Get-Item -LiteralPath $sevenZipFullPath).Length
+$fullZipHash = (Get-FileHash -LiteralPath $zipFullPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$fullZipSize = (Get-Item -LiteralPath $zipFullPath).Length
 
 $patchReleaseInfo = if ($patchSupported) { $appPatchZipName } else { $patchReason }
 $releaseInfoCheckLine = (ConvertFrom-Utf8Base64 "5LiK5Lyg5ZCO6K+35qOA5p+lIA==") + $updateJsonName + (ConvertFrom-Utf8Base64 "IOmHjOeahCBwYXRjaF9wYWNrYWdlLnVybCDmmK/lkKbkuI4gUmVsZWFzZSDpmYTku7bkuIvovb3lnLDlnYDkuIDoh7TjgII=")
@@ -819,14 +961,15 @@ $releaseInfoLines += "Full download page: " + $fullDownloadPage
 $releaseInfoLines += ""
 $releaseInfoLines += "GitHub 默认上传："
 $releaseInfoLines += "1. Windows 安装向导（推荐）：" + $setupFileName
-$releaseInfoLines += (ConvertFrom-Utf8Base64 "Mi4g5a6M5pW05YyFIHppcO+8mg==") + (Split-Path -Leaf $zipFullPath)
-$releaseInfoLines += "3. " + (ConvertFrom-Utf8Base64 "QXBwUGF0Y2gg5YyF77ya") + $patchReleaseInfo
-$releaseInfoLines += (ConvertFrom-Utf8Base64 "NC4g5pu05paw5o+P6L+w5paH5Lu277ya") + $updateJsonName
+$releaseInfoLines += "2. 完整包 7z（小体积免安装）：" + (Split-Path -Leaf $sevenZipFullPath)
+$releaseInfoLines += "3. 完整包 ZIP（系统原生解压/故障恢复）：" + (Split-Path -Leaf $zipFullPath)
+$releaseInfoLines += "4. " + (ConvertFrom-Utf8Base64 "QXBwUGF0Y2gg5YyF77ya") + $patchReleaseInfo
+$releaseInfoLines += (ConvertFrom-Utf8Base64 "NS4g5pu05paw5o+P6L+w5paH5Lu277ya") + $updateJsonName
 $releaseInfoLines += ""
 $releaseInfoLines += "Gitee 手工上传："
 $releaseInfoLines += "1. " + (ConvertFrom-Utf8Base64 "QXBwUGF0Y2gg5YyF77ya") + $patchReleaseInfo
 $releaseInfoLines += (ConvertFrom-Utf8Base64 "Mi4g5pu05paw5o+P6L+w5paH5Lu277ya") + $updateJsonName
-$releaseInfoLines += "Setup 和完整 ZIP 使用 Full download page，不上传到 Gitee"
+$releaseInfoLines += "Setup、完整 7z 和完整 ZIP 使用 Full download page，不上传到 Gitee"
 $releaseInfoLines += "Local verification only (do not upload by default): " + $launcherManifestName
 $releaseInfoLines += ""
 $releaseInfoLines += "Setup SHA256:"
@@ -836,6 +979,14 @@ $releaseInfoLines += "Setup Authenticode status: $setupSignatureStatus"
 if (-not [string]::Equals($setupSignatureStatus, "Valid", [System.StringComparison]::OrdinalIgnoreCase)) {
     $releaseInfoLines += "WARNING: Setup is unsigned; Windows SmartScreen may show an unknown publisher warning."
 }
+$releaseInfoLines += ""
+$releaseInfoLines += "Full 7z SHA256:"
+$releaseInfoLines += $sevenZipHash
+$releaseInfoLines += "Full 7z size: $sevenZipSize bytes"
+$releaseInfoLines += ""
+$releaseInfoLines += "Full ZIP SHA256:"
+$releaseInfoLines += $fullZipHash
+$releaseInfoLines += "Full ZIP size: $fullZipSize bytes"
 $releaseInfoLines += ""
 $releaseInfoLines += $releaseInfoCheckLine
 $releaseInfoLines += ""
@@ -855,26 +1006,9 @@ if ($patchSupported) {
 $releaseInfo = $releaseInfoLines -join [Environment]::NewLine
 $releaseInfo | Set-Content -LiteralPath $releaseInfoPath -Encoding UTF8
 
-$zipParent = Split-Path -Parent $zipFullPath
-if (-not [string]::IsNullOrWhiteSpace($zipParent)) {
-    New-Item -ItemType Directory -Force -Path $zipParent | Out-Null
-}
-Compress-PackageWithRetry -SourceDir $outputFullPath -DestinationZip $zipFullPath
-
-if (-not (Test-ZipContainsEntry -ZipFile $zipFullPath -EntryName "ExpressPackingMonitoring.exe")) {
-    throw "Full zip validation failed: missing root launcher"
-}
-if (-not (Test-ZipContainsEntry -ZipFile $zipFullPath -EntryName "app/ExpressPackingMonitoring.exe")) {
-    throw "Full zip validation failed: missing app/ExpressPackingMonitoring.exe"
-}
-foreach ($runtimeFile in $requiredAppRuntimeFiles) {
-    if (-not (Test-ZipContainsEntry -ZipFile $zipFullPath -EntryName "app/$runtimeFile")) {
-        throw "Full zip validation failed: missing camera barcode runtime dependency app/$runtimeFile"
-    }
-}
-
 Write-Host "Clean package created: $outputFullPath"
 Write-Host "Installer created: $setupPath"
+Write-Host "7z package created: $sevenZipFullPath"
 Write-Host "Zip package created: $zipFullPath"
 if ($patchSupported) {
     Write-Host "AppPatch package created: $appPatchZipPath"

@@ -40,7 +40,7 @@
 - USB 摄像头
 - 键盘模式的扫码枪（可选，建议保留作后备）
 
-推荐下载 `ExpressPackingMonitoring_Setup_vX.Y.Z.exe` 安装向导。安装器无需管理员权限，会固定安装到当前用户目录并创建开始菜单快捷方式，桌面快捷方式默认勾选。完整 ZIP 是免安装和故障恢复方式。两种发布包通常都不需要额外安装 `.NET` 和 `ffmpeg.exe`；从源码运行或二次开发需要安装 `.NET 8 SDK` 和 `ffmpeg.exe`（推荐使用 Full 版本）
+推荐下载 `ExpressPackingMonitoring_Setup_vX.Y.Z.exe` 安装向导。安装器无需管理员权限，会固定安装到当前用户目录并创建开始菜单快捷方式，桌面快捷方式默认勾选。完整 7z 是体积更小的免安装包，完整 ZIP 用于 Windows 原生解压和故障恢复。发布包通常都不需要额外安装 `.NET` 和 `ffmpeg.exe`；从源码运行或二次开发需要安装 `.NET 8 SDK` 和 `ffmpeg.exe`（推荐使用 Full 版本）
 
 ## 快速开始
 

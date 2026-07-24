@@ -40,7 +40,7 @@ A packing video and shipment-risk interception tool for e-commerce sellers and p
 - USB camera
 - Barcode scanner configured as a keyboard input device (optional, but recommended as a fallback)
 
-`ExpressPackingMonitoring_Setup_vX.Y.Z.exe` is the recommended download. It installs per-user without administrator rights, always adds a Start menu shortcut, and selects the desktop shortcut by default. The full ZIP remains available as a portable and recovery option. Both distributions normally include the required .NET runtime and `ffmpeg.exe`. Running from source requires the .NET 8 SDK and `ffmpeg.exe` (the Full build is recommended).
+`ExpressPackingMonitoring_Setup_vX.Y.Z.exe` is the recommended download. It installs per-user without administrator rights, always adds a Start menu shortcut, and selects the desktop shortcut by default. The full 7z is the smaller portable package, while the full ZIP supports native Windows extraction and recovery. These distributions normally include the required .NET runtime and `ffmpeg.exe`. Running from source requires the .NET 8 SDK and `ffmpeg.exe` (the Full build is recommended).
 
 ## Quick Start
 
